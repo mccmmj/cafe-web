@@ -1,9 +1,9 @@
 'use client'
 
 import Navigation from '@/components/Navigation'
-import { Coffee, Clock, MapPin, Phone, Instagram, Facebook } from 'lucide-react'
 import Image from 'next/image'
 import { useState } from 'react'
+import { MapPin, Clock } from 'lucide-react';
 
 export default function Home() {
   // Lightbox state for gallery
@@ -82,10 +82,10 @@ export default function Home() {
                 Crafted for Your Day
               </h3>
               <p className="text-gray-600 mb-6">
-                Every drink is made to order using quality ingredients, and our pastries and sandwiches are always fresh. Whether you're stopping by for a morning coffee, a midday treat, or a quick lunch, we're here to serve you with a smile.
+                Every drink is made to order using quality ingredients, and our pastries and sandwiches are always fresh. Whether you&apos;re stopping by for a morning coffee, a midday treat, or a quick lunch, we&apos;re here to serve you with a smile.
               </p>
               <p className="text-gray-600 mb-6">
-                While we don't have a full dining area, we do have a couple of tables where you can enjoy your pastry or ice cream before heading on your way.
+                While we don&apos;t have a full dining area, we do have a couple of tables where you can enjoy your pastry or ice cream before heading on your way.
               </p>
               <div className="grid grid-cols-2 gap-6">
                 <div className="text-center">
@@ -393,7 +393,7 @@ export default function Home() {
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold text-gray-900 mb-4">Visit Us</h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              We'd love to see you! Stop by for a coffee, pastry, or a quick bite.
+              We&apos;d love to see you! Stop by for a coffee, pastry, or a quick bite.
             </p>
           </div>
 
