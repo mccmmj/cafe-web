@@ -9,11 +9,15 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@square/web-payments-sdk-types": "^1.75.1",
+    "@supabase/ssr": "^0.6.1",
+    "@supabase/supabase-js": "^2.51.0",
     "framer-motion": "^12.19.2",
     "lucide-react": "^0.525.0",
     "next": "15.3.4",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "square": "^43.0.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
