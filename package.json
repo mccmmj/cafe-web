@@ -6,17 +6,21 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "seed-square": "node scripts/seed-square-catalog-fixed.js",
+    "clear-and-reseed": "node scripts/clear-and-reseed-catalog.js"
   },
   "dependencies": {
     "@square/web-payments-sdk-types": "^1.75.1",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.51.0",
+    "dotenv": "^17.2.0",
     "framer-motion": "^12.19.2",
     "lucide-react": "^0.525.0",
     "next": "15.3.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-square-web-payments-sdk": "^3.2.4-beta.1",
     "square": "^43.0.0"
   },
   "devDependencies": {
