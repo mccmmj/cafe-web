@@ -1,4 +1,4 @@
-const { SquareClient, SquareEnvironment } = require('square')
+import { SquareClient, SquareEnvironment } from 'square'
 
 const environment = process.env.NODE_ENV === 'production' 
   ? SquareEnvironment.Production 
@@ -21,11 +21,11 @@ export const squareClient = new SquareClient({
   environment,
 })
 
-export const catalogApi = squareClient.catalogApi
-export const ordersApi = squareClient.ordersApi
-export const paymentsApi = squareClient.paymentsApi
-export const inventoryApi = squareClient.inventoryApi
-export const locationsApi = squareClient.locationsApi
+export const catalogApi = squareClient.catalog
+export const ordersApi = squareClient.orders
+export const paymentsApi = squareClient.payments
+export const inventoryApi = squareClient.inventory
+export const locationsApi = squareClient.locations
 
 export const config = {
   applicationId,

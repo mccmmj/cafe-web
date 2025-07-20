@@ -7,6 +7,7 @@ export default function TestPage() {
   const [supabaseTest, setSupabaseTest] = useState<any>(null)
   const [catalogTest, setCatalogTest] = useState<any>(null)
   const [configTest, setConfigTest] = useState<any>(null)
+  const [databaseTest, setDatabaseTest] = useState<any>(null)
   const [loading, setLoading] = useState(false)
 
   const testSquare = async () => {
@@ -61,11 +62,25 @@ export default function TestPage() {
     }
   }
 
+  const testDatabase = async () => {
+    setLoading(true)
+    try {
+      const response = await fetch('/api/test-database')
+      const result = await response.json()
+      setDatabaseTest(result)
+    } catch (error) {
+      setDatabaseTest({ success: false, error: 'Failed to test Database' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const runAllTests = async () => {
     await testConfig()
     await testSquare()
     await testSupabase()
     await testCatalog()
+    await testDatabase()
   }
 
   return (
@@ -215,17 +230,58 @@ export default function TestPage() {
               </div>
             )}
           </div>
+
+          {/* Database Test */}
+          <div className="bg-white rounded-lg p-6 shadow-md">
+            <h2 className="text-xl font-semibold mb-4">Database Test</h2>
+            <button
+              onClick={testDatabase}
+              disabled={loading}
+              className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {loading ? 'Testing...' : 'Test Database Schema'}
+            </button>
+            
+            {databaseTest && (
+              <div className="mt-4 p-4 rounded bg-gray-50">
+                <div className={`font-semibold ${databaseTest.success ? 'text-green-600' : 'text-red-600'}`}>
+                  {databaseTest.success ? '✅ Success' : '❌ Failed'}
+                </div>
+                <div className="text-sm text-gray-600 mt-2">
+                  {databaseTest.message}
+                </div>
+                {databaseTest.tables && (
+                  <div className="text-sm text-gray-600 mt-2">
+                    <div>Tables: {Object.entries(databaseTest.tables).map(([table, status]) => 
+                      `${table}: ${status}`
+                    ).join(', ')}</div>
+                  </div>
+                )}
+                {databaseTest.setup_required && (
+                  <div className="text-sm text-amber-600 mt-2 font-medium">
+                    ⚠️ Database setup required - run migrations in Supabase
+                  </div>
+                )}
+                {databaseTest.error && (
+                  <div className="text-sm text-red-600 mt-2">
+                    Error: {databaseTest.error}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="mt-8 p-4 bg-blue-50 rounded-lg">
-          <h3 className="font-semibold text-blue-900 mb-2">Phase 1 Status:</h3>
+          <h3 className="font-semibold text-blue-900 mb-2">Phase 2 Status:</h3>
           <div className="text-blue-800 space-y-2">
-            <div>✅ Supabase integration configured</div>
-            <div>✅ Square API integration working</div>
-            <div>✅ Square Catalog API accessible</div>
-            <div>✅ Environment configuration validated</div>
+            <div>✅ Database schema created</div>
+            <div>✅ Row Level Security (RLS) policies set up</div>
+            <div>✅ Authentication UI components built</div>
+            <div>✅ Navigation integration complete</div>
+            <div>✅ User profile management created</div>
             <div className="mt-4 p-3 bg-blue-100 rounded">
-              <strong>Ready for Phase 2:</strong> Database schema setup and authentication UI
+              <strong>Setup Required:</strong> Run database migrations in your Supabase dashboard, then test authentication flow
             </div>
           </div>
         </div>

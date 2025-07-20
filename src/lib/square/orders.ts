@@ -1,40 +1,54 @@
-import { ordersApi, paymentsApi, config } from './client'
-import type { CartItem, Order } from '@/types/menu'
+import { createOrder, createPayment } from './fetch-client'
 
-export async function createSquareOrder(items: CartItem[], customerEmail?: string): Promise<string> {
+interface SimpleCartItem {
+  id: string
+  name: string
+  quantity: number
+  price: number
+  variationId?: string
+  variationName?: string
+}
+
+export async function createSquareOrder(items: SimpleCartItem[], customerEmail?: string): Promise<string> {
   try {
+    console.log('Creating Square order with items:', items)
+    
     const lineItems = items.map(item => ({
       quantity: item.quantity.toString(),
-      catalogObjectId: item.id,
-      modifiers: item.selectedModifiers ? 
-        Object.entries(item.selectedModifiers).map(([modifierId, quantity]) => ({
-          catalogObjectId: modifierId,
-          quantity: quantity.toString()
-        })) : undefined
+      catalogObjectId: item.id, // Now correctly receives variation ID or item ID from frontend
+      // Remove modifiers for now until we implement proper modifier support
+      // modifiers: item.selectedModifiers ? 
+      //   Object.entries(item.selectedModifiers).map(([modifierId, quantity]) => ({
+      //     catalogObjectId: modifierId,
+      //     quantity: quantity.toString()
+      //   })) : undefined
     }))
+    
+    console.log('Square lineItems:', JSON.stringify(lineItems, null, 2))
 
-    const orderRequest = {
+    const orderData = {
       order: {
-        locationId: config.locationId!,
         lineItems,
         source: {
           name: 'Little Cafe Website'
         },
-        ...(customerEmail && {
-          fulfillments: [{
-            type: 'PICKUP' as const,
-            state: 'PROPOSED' as const,
-            pickupDetails: {
-              recipient: {
-                emailAddress: customerEmail
-              }
-            }
-          }]
-        })
+        // Simplified: remove fulfillments for now to get basic order creation working
+        // ...(customerEmail && {
+        //   fulfillments: [{
+        //     type: 'PICKUP' as const,
+        //     state: 'PROPOSED' as const,
+        //     pickup_details: {
+        //       recipient: {
+        //         email_address: customerEmail,
+        //         display_name: 'Customer'
+        //       }
+        //     }
+        //   }]
+        // })
       }
     }
 
-    const { result } = await ordersApi.createOrder(orderRequest)
+    const result = await createOrder(orderData)
     
     if (!result.order?.id) {
       throw new Error('Failed to create order: No order ID returned')
@@ -43,6 +57,20 @@ export async function createSquareOrder(items: CartItem[], customerEmail?: strin
     return result.order.id
   } catch (error) {
     console.error('Error creating Square order:', error)
+    console.error('Full error details:', JSON.stringify(error, null, 2))
+    
+    // Log more details about the error if it's a Square API error
+    if (error && typeof error === 'object') {
+      console.error('Error message:', error.message)
+      console.error('Error stack:', error.stack)
+      if (error.body) {
+        console.error('Square API error body:', error.body)
+      }
+      if (error.errors) {
+        console.error('Square API errors:', error.errors)
+      }
+    }
+    
     throw new Error('Failed to create order')
   }
 }
@@ -54,21 +82,20 @@ export async function processPayment(
   customerEmail?: string
 ): Promise<{ paymentId: string; status: string }> {
   try {
-    const paymentRequest = {
+    const paymentData = {
       sourceId: paymentToken,
       amountMoney: {
-        amount: BigInt(Math.round(amount * 100)), // Convert to cents
+        amount: Math.round(amount * 100), // Convert to cents
         currency: 'USD'
       },
       orderId,
       autocomplete: true,
-      locationId: config.locationId!,
       ...(customerEmail && {
         buyerEmailAddress: customerEmail
       })
     }
 
-    const { result } = await paymentsApi.createPayment(paymentRequest)
+    const result = await createPayment(paymentData)
     
     if (!result.payment?.id) {
       throw new Error('Failed to process payment: No payment ID returned')

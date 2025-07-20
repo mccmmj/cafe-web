@@ -78,13 +78,19 @@ export async function createOrder(orderData: any) {
         ...orderData,
         order: {
           ...orderData.order,
-          locationId: getLocationId()
+          location_id: getLocationId()
         }
       })
     })
 
     if (!response.ok) {
       const errorData = await response.text()
+      console.error('Square Orders API detailed error:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+        body: errorData
+      })
       throw new Error(`Square Orders API error: ${response.status} ${errorData}`)
     }
 
@@ -103,7 +109,7 @@ export async function createPayment(paymentData: any) {
       headers: getHeaders(),
       body: JSON.stringify({
         ...paymentData,
-        locationId: getLocationId()
+        location_id: getLocationId()
       })
     })
 
