@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createOrder } from '@/lib/square/fetch-client'
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     console.log('Testing Square order creation...')
     

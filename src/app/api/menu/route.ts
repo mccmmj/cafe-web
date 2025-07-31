@@ -1,7 +1,56 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { listCatalogObjects } from '@/lib/square/fetch-client'
 
-export async function GET(request: NextRequest) {
+interface TransformedMenuItem {
+  id: string
+  name: string
+  description: string
+  price: number
+  categoryId: string
+  imageUrl?: string
+  variations: Array<{
+    id: string
+    name: string
+    priceDifference: number
+  }>
+  isAvailable: boolean
+  modifiers: Array<{
+    id: string
+    name: string
+    price: number
+    type: 'selection'
+  }>
+}
+
+interface CatalogObject {
+  id: string
+  type: string
+  item_data?: {
+    name: string
+    description?: string
+    categories?: Array<{ id: string }>
+    variations?: Array<{
+      id: string
+      item_variation_data: {
+        name: string
+        price_money?: { amount: number }
+      }
+    }>
+    image_ids?: string[]
+    is_deleted?: boolean
+    modifier_list_info?: Array<{
+      modifier_list_id: string
+      name?: string
+    }>
+  }
+  category_data?: {
+    name: string
+    description?: string
+    ordinal?: number
+  }
+}
+
+export async function GET() {
   try {
     // Fetch items and categories from Square (excluding ITEM_VARIATION to avoid duplicates)
     const catalogData = await listCatalogObjects(['ITEM', 'CATEGORY'])
@@ -27,23 +76,34 @@ export async function GET(request: NextRequest) {
     // })))
 
     // Separate items and categories, explicitly filter out ITEM_VARIATIONS and other types
-    const items = catalogData.objects.filter((obj: any) => obj.type === 'ITEM')
-    const rawCategories = catalogData.objects.filter((obj: any) => obj.type === 'CATEGORY')
+    const items = catalogData.objects.filter((obj: CatalogObject) => obj.type === 'ITEM')
+    const rawCategories = catalogData.objects.filter((obj: CatalogObject) => obj.type === 'CATEGORY')
     
     // console.log(`Found ${items.length} items and ${rawCategories.length} categories`)
     
     // Remove duplicate categories (same ID)
-    const categories = rawCategories.filter((category: any, index: number, arr: any[]) => 
+    const categories = rawCategories.filter((category: CatalogObject, index: number, arr: CatalogObject[]) => 
       arr.findIndex(c => c.id === category.id) === index
     )
 
     // Transform Square data to our menu format
-    const transformedItems = items.map((item: any) => {
+    const transformedItems = items.map((item: CatalogObject) => {
       const itemData = item.item_data
+      if (!itemData) {
+        return {
+          id: item.id,
+          name: 'Unknown Item',
+          description: '',
+          price: 0,
+          categoryId: 'uncategorized',
+          variations: [],
+          isAvailable: false,
+          modifiers: []
+        }
+      }
+      
       const baseVariation = itemData.variations?.[0]
       const price = baseVariation?.item_variation_data?.price_money?.amount || 0
-      
-      // console.log(`Item ${itemData.name} has categoryId: ${itemData.category_id}`)
       
       // Get category ID from the new categories array structure (Square API 2024)
       const categoryId = itemData.categories?.[0]?.id || 'uncategorized'
@@ -55,13 +115,13 @@ export async function GET(request: NextRequest) {
         price: price / 100, // Convert cents to dollars
         categoryId: categoryId,
         imageUrl: itemData.image_ids?.[0] ? `/api/square/image/${itemData.image_ids[0]}` : undefined,
-        variations: itemData.variations?.map((variation: any) => ({
+        variations: itemData?.variations?.map((variation) => ({
           id: variation.id,
           name: variation.item_variation_data.name,
           priceDifference: (variation.item_variation_data.price_money?.amount || 0) / 100 - price / 100
         })) || [],
         isAvailable: !itemData.is_deleted,
-        modifiers: itemData.modifier_list_info?.map((modInfo: any) => ({
+        modifiers: itemData?.modifier_list_info?.map((modInfo) => ({
           id: modInfo.modifier_list_id,
           name: modInfo.name || 'Modifier',
           price: 0, // Modifier prices come from the modifier list details
@@ -70,14 +130,14 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    const transformedCategories = categories.map((category: any) => {
+    const transformedCategories = categories.map((category: CatalogObject) => {
       // First try exact ID match, then try name-based matching for seeded data
-      let categoryItems = transformedItems.filter((item: any) => item.categoryId === category.id)
+      let categoryItems = transformedItems.filter((item: TransformedMenuItem) => item.categoryId === category.id)
       
       // If no items found by ID, try matching by category name for common seeded categories
       if (categoryItems.length === 0) {
-        const categoryName = category.category_data.name.toLowerCase()
-        categoryItems = transformedItems.filter((item: any) => {
+        const categoryName = category.category_data?.name.toLowerCase() || ''
+        categoryItems = transformedItems.filter((item: TransformedMenuItem) => {
           const itemCategoryId = item.categoryId?.toLowerCase()
           return itemCategoryId?.includes(categoryName.replace(/\s+/g, '-')) || 
                  itemCategoryId?.includes(categoryName.replace(/\s+/g, ''))
@@ -89,16 +149,16 @@ export async function GET(request: NextRequest) {
       
       return {
         id: category.id,
-        name: category.category_data.name,
-        description: category.category_data.description || '',
+        name: category.category_data?.name || '',
+        description: category.category_data?.description || '',
         items: categoryItems,
-        sortOrder: category.category_data.ordinal || 0
+        sortOrder: category.category_data?.ordinal || 0
       }
     })
 
     // Add uncategorized items
-    const uncategorizedItems = transformedItems.filter((item: any) => 
-      !categories.some((cat: any) => cat.id === item.categoryId)
+    const uncategorizedItems = transformedItems.filter((item: TransformedMenuItem) => 
+      !categories.some((cat: CatalogObject) => cat.id === item.categoryId)
     )
 
     if (uncategorizedItems.length > 0) {
@@ -112,7 +172,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Sort categories by ordinal
-    transformedCategories.sort((a, b) => a.sortOrder - b.sortOrder)
+    transformedCategories.sort((a: { sortOrder: number }, b: { sortOrder: number }) => a.sortOrder - b.sortOrder)
 
     return NextResponse.json({
       categories: transformedCategories,
@@ -146,7 +206,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   // For future use - update menu items, manage inventory, etc.
   return NextResponse.json({ message: 'Menu updates not implemented yet' }, { status: 501 })
 }

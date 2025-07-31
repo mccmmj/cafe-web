@@ -69,6 +69,25 @@ export async function searchCatalogItems(query: any) {
 }
 
 // Orders API
+export async function getOrder(orderId: string) {
+  try {
+    const response = await fetch(`${SQUARE_BASE_URL}/v2/orders/${orderId}`, {
+      method: 'GET',
+      headers: getHeaders()
+    })
+
+    if (!response.ok) {
+      const errorData = await response.text()
+      throw new Error(`Square Get Order API error: ${response.status} ${errorData}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('Error getting order:', error)
+    throw error
+  }
+}
+
 export async function createOrder(orderData: any) {
   try {
     const response = await fetch(`${SQUARE_BASE_URL}/v2/orders`, {
@@ -115,6 +134,12 @@ export async function createPayment(paymentData: any) {
 
     if (!response.ok) {
       const errorData = await response.text()
+      console.error('Square Payments API detailed error:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+        body: errorData
+      })
       throw new Error(`Square Payments API error: ${response.status} ${errorData}`)
     }
 
@@ -141,6 +166,54 @@ export async function listLocations() {
     return await response.json()
   } catch (error) {
     console.error('Error listing locations:', error)
+    throw error
+  }
+}
+
+// Tax API
+export async function listCatalogTaxes() {
+  try {
+    const response = await fetch(`${SQUARE_BASE_URL}/v2/catalog/search`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        object_types: ['TAX']
+        // Remove the problematic exact_query - we'll filter enabled taxes in code
+      })
+    })
+
+    if (!response.ok) {
+      const errorData = await response.text()
+      throw new Error(`Square Tax Search API error: ${response.status} ${errorData}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('Error listing catalog taxes:', error)
+    throw error
+  }
+}
+
+// Create or update catalog tax
+export async function createCatalogTax(taxData: any) {
+  try {
+    const response = await fetch(`${SQUARE_BASE_URL}/v2/catalog/upsert`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        idempotency_key: `tax-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        object: taxData
+      })
+    })
+
+    if (!response.ok) {
+      const errorData = await response.text()
+      throw new Error(`Square Tax Create API error: ${response.status} ${errorData}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('Error creating catalog tax:', error)
     throw error
   }
 }

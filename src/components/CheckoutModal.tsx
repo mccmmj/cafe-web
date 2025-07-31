@@ -97,7 +97,7 @@ export default function CheckoutModal({
 
   // Get cart items for order creation
   const getCartItems = () => {
-    return Object.entries(cart).map(([cartKey, cartData]) => {
+    return Object.entries(cart).map(([, cartData]) => {
       const item = findItemById(cartData.itemId)
       if (!item) return null
 
@@ -353,38 +353,6 @@ export default function CheckoutModal({
                       postalCode: customerInfo.postalCode
                     }
                   })}
-                  callbacks={{
-                    cardNonceResponseReceived: (errors: any, nonce: any, cardData: any, billingContact: any, shippingContact: any) => {
-                      if (errors && errors.length > 0) {
-                        handleSquareError(errors)
-                        return
-                      }
-                      if (nonce) {
-                        handlePaymentToken({ token: nonce }, { billingContact, shippingContact })
-                      }
-                    },
-                    unsupportedBrowserDetected: () => {
-                      setPaymentError('Your browser is not supported for payments. Please use a modern browser like Chrome, Firefox, or Safari.')
-                    },
-                    inputEventReceived: (inputEvent: any) => {
-                      if (inputEvent.eventType === 'cardBrandChanged') {
-                        console.log('Card brand detected:', inputEvent.cardBrand)
-                        // Clear any previous errors when user starts typing
-                        if (paymentError) {
-                          setPaymentError(null)
-                        }
-                      }
-                    },
-                    paymentFormLoaded: () => {
-                      console.log('Square payment form loaded successfully')
-                    },
-                    shippingContactChanged: (shippingContact: any) => {
-                      console.log('Shipping contact changed:', shippingContact)
-                    },
-                    billingContactChanged: (billingContact: any) => {
-                      console.log('Billing contact changed:', billingContact)
-                    }
-                  }}
                 >
                   <SquareCreditCard 
                     includeInputLabels

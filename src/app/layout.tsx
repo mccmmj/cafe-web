@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { Toaster } from "react-hot-toast";
 import "./globals.css";
+import UserOnboarding from "@/components/onboarding/UserOnboarding";
+import QueryProvider from "@/providers/QueryProvider";
+import { CartModalProvider } from "@/providers/CartProvider";
+import GlobalCartModal from "@/components/cart/GlobalCartModal";
+import DynamicSquareProvider from "@/components/providers/DynamicSquareProvider";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -18,9 +24,18 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <div className="min-h-screen bg-white">
-          {children}
-        </div>
+        <QueryProvider>
+          <DynamicSquareProvider>
+            <CartModalProvider>
+              <div className="min-h-screen bg-white">
+                {children}
+                <UserOnboarding />
+                <GlobalCartModal />
+                <Toaster />
+              </div>
+            </CartModalProvider>
+          </DynamicSquareProvider>
+        </QueryProvider>
       </body>
     </html>
   );

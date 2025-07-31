@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { locationsApi, config } from '@/lib/square/client'
+import { listLocations } from '@/lib/square/fetch-client'
+import { config } from '@/lib/square/client'
 
 export async function GET() {
   try {
@@ -7,8 +8,8 @@ export async function GET() {
     console.log('Environment:', config.environment)
     console.log('Location ID:', config.locationId)
     
-    // Test basic Square API connection
-    const { result } = await locationsApi.listLocations()
+    // Test basic Square API connection using fetch client
+    const result = await listLocations()
     
     if (!result.locations || result.locations.length === 0) {
       return NextResponse.json({

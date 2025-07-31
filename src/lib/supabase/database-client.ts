@@ -53,6 +53,16 @@ export function createClientDatabaseHelpers() {
         .single()
       
       if (error) throw error
+      
+      // Map snake_case to camelCase for TypeScript
+      if (data) {
+        return {
+          ...data,
+          fullName: data.full_name,
+          createdAt: data.created_at,
+          updatedAt: data.updated_at
+        }
+      }
       return data
     },
     
@@ -60,9 +70,15 @@ export function createClientDatabaseHelpers() {
       const { data: user } = await supabase.auth.getUser()
       if (!user.user) throw new Error('Not authenticated')
       
+      // Map camelCase to snake_case for database
+      const dbUpdates: any = {}
+      if (updates.fullName !== undefined) dbUpdates.full_name = updates.fullName
+      if (updates.phone !== undefined) dbUpdates.phone = updates.phone
+      if (updates.email !== undefined) dbUpdates.email = updates.email
+      
       const { data, error } = await supabase
         .from('profiles')
-        .update(updates)
+        .update(dbUpdates)
         .eq('id', user.user.id)
         .select()
         .single()

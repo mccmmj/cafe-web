@@ -1,9 +1,10 @@
-import { createClient } from './server'
-import type { Order, UserProfile } from '@/types/menu'
+import { createClient, createServiceClient } from './server'
+import type { Order } from '@/types/orders'
+import type { UserProfile } from '@/types/menu'
 
 // Server-side database operations
 export async function createUserProfile(userId: string, email: string, fullName?: string) {
-  const supabase = createClient()
+  const supabase = await createClient()
   
   const { data, error } = await supabase
     .from('profiles')
@@ -20,7 +21,7 @@ export async function createUserProfile(userId: string, email: string, fullName?
 }
 
 export async function getUserProfile(userId: string) {
-  const supabase = createClient()
+  const supabase = await createClient()
   
   const { data, error } = await supabase
     .from('profiles')
@@ -33,7 +34,7 @@ export async function getUserProfile(userId: string) {
 }
 
 export async function updateUserProfile(userId: string, updates: Partial<UserProfile>) {
-  const supabase = createClient()
+  const supabase = await createClient()
   
   const { data, error } = await supabase
     .from('profiles')
@@ -65,50 +66,70 @@ export async function createOrder(orderData: {
     totalPrice: number
     variations?: Record<string, any>
     modifiers?: Record<string, any>
+    specialInstructions?: string
   }>
 }) {
-  const supabase = createClient()
+  const supabase = createServiceClient() // Use service role for order creation
+  
+  console.log('Creating order with data:', JSON.stringify(orderData, null, 2))
   
   // Create the order
+  const orderInsertData = {
+    user_id: orderData.userId,
+    square_order_id: orderData.squareOrderId,
+    total_amount: orderData.totalAmount,
+    tax_amount: orderData.taxAmount || 0,
+    customer_email: orderData.customerEmail,
+    customer_phone: orderData.customerPhone,
+    special_instructions: orderData.specialInstructions
+  }
+  
+  console.log('Inserting order with data:', orderInsertData)
+  
   const { data: order, error: orderError } = await supabase
     .from('orders')
-    .insert({
-      user_id: orderData.userId,
-      square_order_id: orderData.squareOrderId,
-      total_amount: orderData.totalAmount,
-      tax_amount: orderData.taxAmount || 0,
-      customer_email: orderData.customerEmail,
-      customer_phone: orderData.customerPhone,
-      special_instructions: orderData.specialInstructions
-    })
+    .insert(orderInsertData)
     .select()
     .single()
   
-  if (orderError) throw orderError
+  if (orderError) {
+    console.error('Order creation error:', orderError)
+    throw orderError
+  }
+  
+  console.log('Order created successfully:', order)
   
   // Create order items
+  const itemsInsertData = orderData.items.map(item => ({
+    order_id: order.id,
+    square_item_id: item.squareItemId,
+    item_name: item.itemName,
+    quantity: item.quantity,
+    unit_price: item.unitPrice,
+    total_price: item.totalPrice,
+    variations: item.variations || {},
+    modifiers: item.modifiers || {}
+    // Note: special_instructions not included as it's not in the schema
+  }))
+  
+  console.log('Inserting order items:', JSON.stringify(itemsInsertData, null, 2))
+  
   const { error: itemsError } = await supabase
     .from('order_items')
-    .insert(
-      orderData.items.map(item => ({
-        order_id: order.id,
-        square_item_id: item.squareItemId,
-        item_name: item.itemName,
-        quantity: item.quantity,
-        unit_price: item.unitPrice,
-        total_price: item.totalPrice,
-        variations: item.variations || {},
-        modifiers: item.modifiers || {}
-      }))
-    )
+    .insert(itemsInsertData)
   
-  if (itemsError) throw itemsError
+  if (itemsError) {
+    console.error('Order items creation error:', itemsError)
+    throw itemsError
+  }
+  
+  console.log('Order items created successfully')
   
   return order
 }
 
 export async function getOrdersForUser(userId: string) {
-  const supabase = createClient()
+  const supabase = await createClient()
   
   const { data, error } = await supabase
     .from('orders')
@@ -124,7 +145,7 @@ export async function getOrdersForUser(userId: string) {
 }
 
 export async function updateOrderStatus(orderId: string, status: string, paymentStatus?: string) {
-  const supabase = createClient()
+  const supabase = await createClient()
   
   const updates: any = { status }
   if (paymentStatus) updates.payment_status = paymentStatus

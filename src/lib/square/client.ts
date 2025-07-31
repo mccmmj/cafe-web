@@ -17,7 +17,7 @@ if (!accessToken || !applicationId) {
 }
 
 export const squareClient = new SquareClient({
-  accessToken,
+  token: accessToken,
   environment,
 })
 
@@ -26,6 +26,7 @@ export const ordersApi = squareClient.orders
 export const paymentsApi = squareClient.payments
 export const inventoryApi = squareClient.inventory
 export const locationsApi = squareClient.locations
+export const customersApi = squareClient.customers
 
 export const config = {
   applicationId,

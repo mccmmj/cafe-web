@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server'
-import { locationsApi } from '@/lib/square/client'
+import { listLocations } from '@/lib/square/fetch-client'
 
 export async function GET() {
   try {
     // Test Square connection by listing locations
-    const { result } = await locationsApi.listLocations()
+    const result = await listLocations()
     
     return NextResponse.json({
       success: true,
       message: 'Square API connection successful',
-      locations: result.locations?.map(location => ({
+      locations: result.locations?.map((location: any) => ({
         id: location.id,
         name: location.name,
         status: location.status
