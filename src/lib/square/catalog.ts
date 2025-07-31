@@ -8,7 +8,7 @@ export async function fetchMenuCategories(): Promise<MenuCategory[]> {
     
     // Get items for each category
     const categoriesWithItems = await Promise.all(
-      categories.map(async (category) => {
+      categories.map(async (category: any) => {
         const items = await fetchMenuItemsByCategory(category.id!)
         return {
           id: category.id!,
@@ -44,7 +44,7 @@ export async function fetchMenuItemsByCategory(categoryId: string): Promise<Menu
     
     // Transform Square items to our format
     return await Promise.all(
-      items.map(async (item) => {
+      items.map(async (item: any) => {
         const itemData = item.itemData!
         const basePrice = itemData.variations?.[0]?.itemVariationData?.priceMoney?.amount || BigInt(0)
         
@@ -58,13 +58,13 @@ export async function fetchMenuItemsByCategory(categoryId: string): Promise<Menu
           price: Number(basePrice) / 100, // Convert from cents to dollars
           categoryId,
           imageUrl: itemData.imageIds?.[0] ? await getImageUrl(itemData.imageIds[0]) : undefined,
-          variations: itemData.variations?.map(variation => ({
+          variations: itemData.variations?.map((variation: any) => ({
             id: variation.id!,
             name: variation.itemVariationData?.name || '',
             priceDifference: Number(variation.itemVariationData?.priceMoney?.amount || BigInt(0)) / 100 - Number(basePrice) / 100
           })),
           isAvailable,
-          modifiers: itemData.modifierListInfo?.map(modifierInfo => ({
+          modifiers: itemData.modifierListInfo?.map((modifierInfo: any) => ({
             id: modifierInfo.modifierListId!,
             name: '', // Will be populated separately if needed
             price: 0,

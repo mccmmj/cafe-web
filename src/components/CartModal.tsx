@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { X, Plus, Minus, ShoppingCart, Trash2 } from 'lucide-react'
 import type { MenuItem, MenuCategory } from '@/types/menu'
 import CheckoutModal from './CheckoutModal'
+import { useTaxInfo, calculateCartTotals } from '@/lib/tax-service'
 
 interface CartItem {
   id: string
@@ -37,6 +38,8 @@ export default function CartModal({
   onClearCart
 }: CartModalProps) {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
+  const { taxInfo, loading: taxLoading, error: taxError } = useTaxInfo()
+  
   if (!isOpen) return null
 
   // Helper function to find item by ID across all categories
@@ -82,10 +85,10 @@ export default function CartModal({
     }
   }).filter(Boolean) as (CartItem & { cartKey: string })[]
 
-  // Calculate totals
+  // Calculate totals using Square tax configuration
   const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0)
-  const tax = subtotal * 0.08 // 8% tax rate
-  const total = subtotal + tax
+  const taxRate = taxInfo?.enabled ? taxInfo.rate : 0 // Use Square tax rate if available and enabled
+  const { tax, total } = calculateCartTotals(subtotal, taxRate)
 
   const formatPrice = (price: number) => `$${price.toFixed(2)}`
 
@@ -239,8 +242,26 @@ export default function CartModal({
                 <span className="font-medium">{formatPrice(subtotal)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Tax (8%)</span>
-                <span className="font-medium">{formatPrice(tax)}</span>
+                <span className="text-gray-600 flex items-center gap-1">
+                  {taxInfo?.name || 'Tax'}
+                  {taxInfo?.enabled && taxInfo.rate > 0 && (
+                    <span className="text-xs text-gray-500">
+                      ({(taxInfo.rate * 100).toFixed(2)}%)
+                    </span>
+                  )}
+                  {taxInfo?.error && (
+                    <span className="text-xs text-red-500" title={taxInfo.error}>
+                      ⚠️
+                    </span>
+                  )}
+                </span>
+                <span className="font-medium">
+                  {taxInfo?.enabled === false ? (
+                    <span className="text-gray-500 text-xs">N/A</span>
+                  ) : (
+                    formatPrice(tax)
+                  )}
+                </span>
               </div>
               <div className="flex justify-between text-lg font-bold border-t border-gray-300 pt-2">
                 <span>Total</span>

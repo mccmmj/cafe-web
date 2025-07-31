@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 
 export async function GET() {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
     
     // Test database connection by checking if tables exist
     const { data: profiles, error: profilesError } = await supabase

@@ -13,6 +13,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Installation
 - `npm install` - Install all dependencies
 
+### Square Integration
+- `npm run seed-square` - Seed Square catalog with menu items
+- `npm run clear-and-reseed` - Clear and reseed Square catalog
+- `npm run init-taxes` - Initialize Square sandbox tax configuration
+
 ## Architecture
 
 This is a Next.js 15 cafe website built with:
