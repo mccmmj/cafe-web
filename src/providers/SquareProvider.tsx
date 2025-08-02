@@ -50,7 +50,9 @@ export function SquareProvider({
         if (!(window as any).Square) {
           await new Promise((resolve, reject) => {
             const script = document.createElement('script')
-            script.src = 'https://sandbox.web.squarecdn.com/v1/square.js'
+            script.src = environment === 'production' 
+              ? 'https://web.squarecdn.com/v1/square.js'
+              : 'https://sandbox.web.squarecdn.com/v1/square.js'
             script.onload = resolve
             script.onerror = reject
             document.head.appendChild(script)

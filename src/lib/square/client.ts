@@ -1,16 +1,11 @@
 import { SquareClient, SquareEnvironment } from 'square'
 
-const environment = process.env.NODE_ENV === 'production' 
+const environment = process.env.SQUARE_ENVIRONMENT === 'production' 
   ? SquareEnvironment.Production 
   : SquareEnvironment.Sandbox
 
-const accessToken = process.env.NODE_ENV === 'production'
-  ? process.env.SQUARE_ACCESS_TOKEN_PROD
-  : process.env.SQUARE_ACCESS_TOKEN
-
-const applicationId = process.env.NODE_ENV === 'production'
-  ? process.env.SQUARE_APPLICATION_ID_PROD
-  : process.env.SQUARE_APPLICATION_ID
+const accessToken = process.env.SQUARE_ACCESS_TOKEN
+const applicationId = process.env.SQUARE_APPLICATION_ID
 
 if (!accessToken || !applicationId) {
   throw new Error('Square configuration missing. Please check your environment variables.')
@@ -30,8 +25,6 @@ export const customersApi = squareClient.customers
 
 export const config = {
   applicationId,
-  environment,
-  locationId: process.env.NODE_ENV === 'production'
-    ? process.env.SQUARE_LOCATION_ID_PROD
-    : process.env.SQUARE_LOCATION_ID
+  environment: process.env.SQUARE_ENVIRONMENT || 'sandbox',
+  locationId: process.env.SQUARE_LOCATION_ID
 }
