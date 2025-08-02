@@ -6,9 +6,8 @@ const SQUARE_BASE_URL = process.env.SQUARE_ENVIRONMENT === 'production'
 const SQUARE_VERSION = '2024-12-18'
 
 function getHeaders() {
-  const accessToken = process.env.NODE_ENV === 'production'
-    ? process.env.SQUARE_ACCESS_TOKEN_PROD
-    : process.env.SQUARE_ACCESS_TOKEN
+  // Use the single SQUARE_ACCESS_TOKEN from .env.local (which points to live/production)
+  const accessToken = process.env.SQUARE_ACCESS_TOKEN
 
   return {
     'Square-Version': SQUARE_VERSION,
@@ -18,9 +17,8 @@ function getHeaders() {
 }
 
 function getLocationId() {
-  return process.env.NODE_ENV === 'production'
-    ? process.env.SQUARE_LOCATION_ID_PROD
-    : process.env.SQUARE_LOCATION_ID
+  // Use the single SQUARE_LOCATION_ID from .env.local (which points to live/production)
+  return process.env.SQUARE_LOCATION_ID
 }
 
 // Catalog API
@@ -220,9 +218,8 @@ export async function createCatalogTax(taxData: any) {
 
 // Configuration
 export const squareConfig = {
-  applicationId: process.env.NODE_ENV === 'production'
-    ? process.env.SQUARE_APPLICATION_ID_PROD
-    : process.env.SQUARE_APPLICATION_ID,
+  // Use the single SQUARE_APPLICATION_ID from .env.local (which points to live/production)  
+  applicationId: process.env.SQUARE_APPLICATION_ID,
   environment: process.env.SQUARE_ENVIRONMENT || 'sandbox',
   locationId: getLocationId()
 }

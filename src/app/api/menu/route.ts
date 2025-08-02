@@ -52,8 +52,19 @@ interface CatalogObject {
 
 export async function GET() {
   try {
-    // Fetch items and categories from Square (excluding ITEM_VARIATION to avoid duplicates)
-    const catalogData = await listCatalogObjects(['ITEM', 'CATEGORY'])
+    // Fetch items and categories separately due to Square API behavior
+    const [itemsData, categoriesData] = await Promise.all([
+      listCatalogObjects(['ITEM']),
+      listCatalogObjects(['CATEGORY'])
+    ])
+    
+    // Combine the results
+    const catalogData = {
+      objects: [
+        ...(itemsData.objects || []),
+        ...(categoriesData.objects || [])
+      ]
+    }
     
     if (!catalogData.objects || catalogData.objects.length === 0) {
       // Return fallback menu when Square catalog is empty
@@ -144,7 +155,7 @@ export async function GET() {
         })
       }
       
-      // console.log(`Category ${category.category_data.name} (${category.id}) has ${categoryItems.length} items:`, 
+      // console.log(`Category ${category.category_data?.name} (${category.id}) has ${categoryItems.length} items:`, 
       //   categoryItems.map(item => `${item.name} (categoryId: ${item.categoryId})`))
       
       return {
@@ -160,6 +171,12 @@ export async function GET() {
     const uncategorizedItems = transformedItems.filter((item: TransformedMenuItem) => 
       !categories.some((cat: CatalogObject) => cat.id === item.categoryId)
     )
+
+    // console.log(`Uncategorized items check:`)
+    // console.log(`- Total items: ${transformedItems.length}`)
+    // console.log(`- Available category IDs: [${categories.map(c => c.id).join(', ')}]`)
+    // console.log(`- Items with their category IDs: ${transformedItems.slice(0, 5).map(item => `${item.name}:${item.categoryId}`).join(', ')}`)
+    // console.log(`- Uncategorized items found: ${uncategorizedItems.length}`)
 
     if (uncategorizedItems.length > 0) {
       transformedCategories.push({
