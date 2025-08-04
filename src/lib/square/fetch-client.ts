@@ -66,6 +66,54 @@ export async function searchCatalogItems(query: any) {
   }
 }
 
+// Search catalog items with proper location filtering (recommended for menu API)
+export async function searchLocationCatalogItems() {
+  try {
+    const response = await fetch(`${SQUARE_BASE_URL}/v2/catalog/search-catalog-items`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        enabled_location_ids: [getLocationId()],
+        product_types: ['REGULAR']
+      })
+    })
+
+    if (!response.ok) {
+      const errorData = await response.text()
+      throw new Error(`Square Search Catalog Items API error: ${response.status} ${errorData}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('Error searching location catalog items:', error)
+    throw error
+  }
+}
+
+// Search all catalog items (alternative to listCatalogObjects for items)
+export async function searchAllCatalogItems() {
+  try {
+    const response = await fetch(`${SQUARE_BASE_URL}/v2/catalog/search`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        object_types: ['ITEM']
+        // No query filter - returns all items of type ITEM
+      })
+    })
+
+    if (!response.ok) {
+      const errorData = await response.text()
+      throw new Error(`Square Search All Items API error: ${response.status} ${errorData}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('Error searching all catalog items:', error)
+    throw error
+  }
+}
+
 // Orders API
 export async function getOrder(orderId: string) {
   try {

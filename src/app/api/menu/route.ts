@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { listCatalogObjects } from '@/lib/square/fetch-client'
+import { listCatalogObjects, searchAllCatalogItems } from '@/lib/square/fetch-client'
+import { sortMenuItems, sortMenuCategories } from '@/lib/constants/menu'
 
 interface TransformedMenuItem {
   id: string
@@ -52,13 +53,14 @@ interface CatalogObject {
 
 export async function GET() {
   try {
-    // Fetch items and categories separately due to Square API behavior
+    // Fetch items via search (to get all items including those missing from list API)
+    // and categories via list API
     const [itemsData, categoriesData] = await Promise.all([
-      listCatalogObjects(['ITEM']),
+      searchAllCatalogItems(),
       listCatalogObjects(['CATEGORY'])
     ])
     
-    // Combine the results
+    // Combine the results (search returns different structure)
     const catalogData = {
       objects: [
         ...(itemsData.objects || []),
@@ -97,8 +99,35 @@ export async function GET() {
       arr.findIndex(c => c.id === category.id) === index
     )
 
+    // Filter items for location availability and status
+    const locationId = process.env.SQUARE_LOCATION_ID
+    const availableItems = items.filter((item: CatalogObject) => {
+      const itemData = item.item_data
+      
+      // Filter out deleted and archived items
+      if (item.is_deleted || itemData?.is_deleted || itemData?.is_archived) {
+        return false
+      }
+      
+      // Filter by location availability
+      if (item.present_at_all_locations === false) {
+        // Item is location-specific, check if available at our location
+        const presentAtLocations = item.present_at_location_ids || []
+        const absentAtLocations = item.absent_at_location_ids || []
+        
+        // Must be present at our location and not absent
+        if (!presentAtLocations.includes(locationId) || absentAtLocations.includes(locationId)) {
+          return false
+        }
+      }
+      
+      return true
+    })
+
+    // console.log(`Filtered ${items.length} items to ${availableItems.length} available items for location ${locationId}`)
+
     // Transform Square data to our menu format
-    const transformedItems = items.map((item: CatalogObject) => {
+    const transformedItems = availableItems.map((item: CatalogObject) => {
       const itemData = item.item_data
       if (!itemData) {
         return {
@@ -162,7 +191,7 @@ export async function GET() {
         id: category.id,
         name: category.category_data?.name || '',
         description: category.category_data?.description || '',
-        items: categoryItems,
+        items: sortMenuItems(categoryItems), // Apply smart sorting to items
         sortOrder: category.category_data?.ordinal || 0
       }
     })
@@ -183,16 +212,16 @@ export async function GET() {
         id: 'uncategorized',
         name: 'Other Items',
         description: 'Additional menu items',
-        items: uncategorizedItems,
+        items: sortMenuItems(uncategorizedItems), // Apply smart sorting to uncategorized items too
         sortOrder: 999
       })
     }
 
-    // Sort categories by ordinal
-    transformedCategories.sort((a: { sortOrder: number }, b: { sortOrder: number }) => a.sortOrder - b.sortOrder)
+    // Sort categories using business logic priority instead of just ordinal
+    const sortedCategories = sortMenuCategories(transformedCategories)
 
     return NextResponse.json({
-      categories: transformedCategories,
+      categories: sortedCategories,
       items: transformedItems,
       lastUpdated: new Date().toISOString(),
       // debug: {
@@ -229,7 +258,7 @@ export async function POST() {
 }
 
 function getFallbackMenu() {
-  return [
+  const fallbackCategories = [
     {
       id: 'breakfast',
       name: 'Breakfast',
@@ -345,4 +374,10 @@ function getFallbackMenu() {
       sortOrder: 3
     }
   ]
+  
+  // Apply sorting to fallback menu items too
+  return fallbackCategories.map(category => ({
+    ...category,
+    items: sortMenuItems(category.items)
+  }))
 }
