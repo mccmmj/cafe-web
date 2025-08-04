@@ -34,6 +34,7 @@ interface Order {
 
 const statusColors = {
   pending: 'bg-yellow-100 text-yellow-800',
+  confirmed: 'bg-yellow-100 text-yellow-800', // Same as pending
   preparing: 'bg-blue-100 text-blue-800',
   ready: 'bg-green-100 text-green-800',
   completed: 'bg-gray-100 text-gray-800',
@@ -42,6 +43,7 @@ const statusColors = {
 
 const statusIcons = {
   pending: Clock,
+  confirmed: Clock, // Same as pending
   preparing: AlertTriangle,
   ready: CheckCircle,
   completed: CheckCircle,
@@ -170,6 +172,7 @@ export function OrdersManagement() {
 
     switch (currentStatus) {
       case 'pending':
+      case 'confirmed': // Treat confirmed same as pending
         nextStatus = 'preparing'
         buttonText = 'Start Preparing'
         buttonColor = 'bg-blue-600 hover:bg-blue-700'
@@ -233,6 +236,7 @@ export function OrdersManagement() {
             >
               <option value="all">All Orders</option>
               <option value="pending">Pending</option>
+              <option value="confirmed">Confirmed</option>
               <option value="preparing">Preparing</option>
               <option value="ready">Ready</option>
               <option value="completed">Completed</option>

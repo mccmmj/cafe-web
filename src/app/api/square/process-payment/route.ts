@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
           customer_phone: customerInfo.phone || null,
           total_amount: Math.round(squareOrderTotal * 100), // Use Square's total, convert to cents
           tax_amount: Math.round(squareOrderTax * 100), // Use Square's calculated tax, convert to cents
-          status: 'confirmed', // Order status
+          status: 'pending', // Order status - starts as pending for admin workflow
           payment_status: paymentResult.status.toLowerCase() // Convert COMPLETED to completed
         }
       ])
