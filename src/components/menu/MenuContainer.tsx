@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import type { MenuCategory, MenuItem } from '@/types/menu'
 import { useCartState, useAddToCart, useUpdateCartItem, useRemoveCartItem, useClearCart } from '@/hooks/useCartData'
 import {
@@ -10,6 +10,7 @@ import {
   MenuCategory as MenuCategoryComponent,
   MenuSearch
 } from './index'
+import MasonryGrid from './MasonryGrid'
 import Button from '@/components/ui/Button'
 
 interface MenuContainerProps {
@@ -32,27 +33,13 @@ const MenuContainer = ({ className = '', showHeader = true }: MenuContainerProps
   const removeFromCartMutation = useRemoveCartItem()
   const clearCartMutation = useClearCart()
 
-  // Local state for variations (since this is menu-specific)
-  const [selectedVariations, setSelectedVariations] = useState<Record<string, string>>({})
+  // Note: selectedVariations state moved to MenuCategory level
 
   useEffect(() => {
     fetchMenu()
   }, [])
 
-  // Initialize default variations when categories change
-  useEffect(() => {
-    if (categories.length > 0) {
-      const initialVariations: Record<string, string> = {}
-      categories.forEach((category: MenuCategory) => {
-        category.items?.forEach((item: MenuItem) => {
-          if (item.variations && item.variations.length > 0) {
-            initialVariations[item.id] = item.variations[0].id
-          }
-        })
-      })
-      setSelectedVariations(prev => ({ ...initialVariations, ...prev }))
-    }
-  }, [categories])
+  // Note: Variation initialization moved to MenuCategory level
 
   const fetchMenu = async () => {
     try {
@@ -89,13 +76,7 @@ const MenuContainer = ({ className = '', showHeader = true }: MenuContainerProps
     }))
   }
 
-  // Helper functions for cart operations
-  const selectVariation = (itemId: string, variationId: string) => {
-    setSelectedVariations(prev => ({
-      ...prev,
-      [itemId]: variationId
-    }))
-  }
+  // Note: selectVariation moved to MenuCategory level
 
   const getCurrentCartQuantity = (itemId: string): number => {
     if (!cart?.items) return 0
@@ -104,16 +85,24 @@ const MenuContainer = ({ className = '', showHeader = true }: MenuContainerProps
       .reduce((sum, item) => sum + item.quantity, 0)
   }
 
-  const addToCart = async (item: MenuItem, quantity: number = 1) => {
+  // Note: addToCart will need to be updated to get variation from MenuItem directly
+
+  // Simplified add to cart handler - variation will be handled at MenuItem level  
+  const handleAddToCart = async (itemId: string) => {
     try {
-      const variationId = selectedVariations[item.id]
+      // Find the item details from the current categories
+      const item = categories
+        .flatMap(category => category.items)
+        .find(menuItem => menuItem.id === itemId)
       
+      if (!item) {
+        console.error('Item not found:', itemId)
+        return
+      }
+
       await addToCartMutation.mutateAsync({
         itemId: item.id,
-        quantity,
-        variationId,
-        customizations: {},
-        specialInstructions: '',
+        quantity: 1,
         itemDetails: {
           name: item.name,
           price: item.price,
@@ -123,15 +112,6 @@ const MenuContainer = ({ className = '', showHeader = true }: MenuContainerProps
       })
     } catch (error) {
       console.error('Failed to add item to cart:', error)
-    }
-  }
-
-  // Adapter function to match MenuCategory component's expected signature
-  const handleAddToCart = (itemId: string) => {
-    // Find the menu item by ID
-    const item = categories.flatMap(cat => cat.items).find(item => item.id === itemId)
-    if (item) {
-      addToCart(item, 1) // Default quantity of 1
     }
   }
 
@@ -204,6 +184,7 @@ const MenuContainer = ({ className = '', showHeader = true }: MenuContainerProps
 
   const currentQuantities = getCurrentQuantities()
   const totalItems = getTotalCartItems()
+  
 
   return (
     <section className={showHeader ? "py-20 bg-gray-50" : "py-8 bg-gray-50"}>
@@ -234,21 +215,25 @@ const MenuContainer = ({ className = '', showHeader = true }: MenuContainerProps
           </div>
         )}
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+
+        {/* Masonry Layout for Better Space Utilization */}
+        <MasonryGrid 
+          minColumnWidth={350}
+          gap={32}
+          className="w-full"
+        >
           {displayCategories.map((category) => (
             <MenuCategoryComponent
               key={category.id}
               category={category}
               isExpanded={expandedCategories[category.id]}
-              selectedVariations={selectedVariations}
               currentQuantities={currentQuantities}
               onToggleExpanded={toggleCategory}
-              onSelectVariation={selectVariation}
               onAddToCart={handleAddToCart}
               onRemoveFromCart={removeFromCartCurrent}
             />
           ))}
-        </div>
+        </MasonryGrid>
 
         {/* Use global cart modal instead of floating button */}
         {getTotalCartItems() > 0 && (

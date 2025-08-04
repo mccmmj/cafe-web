@@ -1,16 +1,17 @@
 'use client'
 
+import React, { useState, useEffect } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import type { MenuCategory as MenuCategoryType } from '@/types/menu'
 import MenuItem from './MenuItem'
+import BrandIndicator from './BrandIndicator'
+import { isStarbucksCategory } from '@/lib/constants/menu'
 
 interface MenuCategoryProps {
   category: MenuCategoryType
   isExpanded: boolean
-  selectedVariations: Record<string, string>
   currentQuantities: Record<string, number>
   onToggleExpanded: (categoryId: string) => void
-  onSelectVariation: (itemId: string, variationId: string) => void
   onAddToCart: (itemId: string) => void
   onRemoveFromCart: (itemId: string) => void
 }
@@ -18,13 +19,33 @@ interface MenuCategoryProps {
 const MenuCategory = ({
   category,
   isExpanded,
-  selectedVariations,
   currentQuantities,
   onToggleExpanded,
-  onSelectVariation,
   onAddToCart,
   onRemoveFromCart
 }: MenuCategoryProps) => {
+  // Local state for variations within this category
+  const [selectedVariations, setSelectedVariations] = useState<Record<string, string>>({})
+
+  // Initialize variations when category items change
+  useEffect(() => {
+    const initialVariations: Record<string, string> = {}
+    category.items?.forEach((item) => {
+      if (item.variations && item.variations.length > 0) {
+        // Set the first variation as default
+        initialVariations[item.id] = item.variations[0].id
+      }
+    })
+    setSelectedVariations(initialVariations)
+  }, [category.items])
+
+  // Handle variation selection
+  const handleSelectVariation = (itemId: string, variationId: string) => {
+    setSelectedVariations(prev => ({
+      ...prev,
+      [itemId]: variationId
+    }))
+  }
   return (
     <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
       {/* Category Header - Clickable */}
@@ -35,9 +56,14 @@ const MenuCategory = ({
       >
         <div className="flex items-center justify-between">
           <div className="flex-1">
-            <h3 className="text-2xl font-semibold text-gray-900 mb-2">
-              {category.name}
-            </h3>
+            <div className="flex items-center gap-3 mb-2">
+              <h3 className="text-2xl font-semibold text-gray-900">
+                {category.name}
+              </h3>
+              {isStarbucksCategory(category.name) && (
+                <BrandIndicator brand="starbucks" size="md" position="badge" />
+              )}
+            </div>
             {category.description && (
               <p className="text-gray-600 text-sm">
                 {category.description}
@@ -63,21 +89,26 @@ const MenuCategory = ({
       {/* Category Items - Collapsible */}
       {isExpanded && (
         <div className="px-8 pb-8 space-y-4">
-          {category.items.map((item) => (
-            <MenuItem
-              key={item.id}
-              item={item}
-              selectedVariationId={selectedVariations[item.id]}
-              currentQuantity={currentQuantities[item.id] || 0}
-              onSelectVariation={onSelectVariation}
-              onAddToCart={onAddToCart}
-              onRemoveFromCart={onRemoveFromCart}
-            />
-          ))}
+          {category.items.map((item) => {
+            const selectedVariationId = selectedVariations[item.id]
+            
+            
+            return (
+              <MenuItem
+                key={`${item.id}-${selectedVariationId || 'default'}`}
+                item={item}
+                selectedVariationId={selectedVariationId}
+                currentQuantity={currentQuantities[item.id] || 0}
+                onSelectVariation={handleSelectVariation}
+                onAddToCart={onAddToCart}
+                onRemoveFromCart={onRemoveFromCart}
+              />
+            )
+          })}
         </div>
       )}
     </div>
   )
 }
 
-export default MenuCategory
+export default React.memo(MenuCategory)

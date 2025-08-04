@@ -191,7 +191,16 @@ export default function SquarePaymentForm({
       if (tokenResult.status === 'OK') {
         const { token, details } = tokenResult
 
-        console.log('Payment tokenized successfully:', { token: token.substring(0, 10) + '...', details })
+        console.log('Payment tokenized successfully:', { 
+          tokenLength: token.length,
+          tokenPrefix: token.substring(0, 10) + '...',
+          tokenType: typeof token,
+          details: {
+            card: details?.card,
+            billing: details?.billing,
+            digital_wallet: details?.digital_wallet
+          }
+        })
 
         // Verify buyer if needed (for SCA compliance)
         // Skip buyer verification for now to avoid issues with incomplete billing address

@@ -1,4 +1,4 @@
-import { createOrder, createPayment, getOrder } from './fetch-client'
+import { createOrder, createPayment, getOrder, searchAllCatalogItems } from './fetch-client'
 import { validateTaxConfiguration } from './tax-validation'
 
 interface SimpleCartItem {
@@ -8,6 +8,51 @@ interface SimpleCartItem {
   price: number
   variationId?: string
   variationName?: string
+}
+
+// Cache for catalog items to avoid repeated API calls
+let catalogItemsCache: any[] | null = null
+let cacheTimestamp = 0
+const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
+
+async function getCatalogItems() {
+  const now = Date.now()
+  
+  // Return cached items if cache is fresh
+  if (catalogItemsCache && (now - cacheTimestamp) < CACHE_DURATION) {
+    return catalogItemsCache
+  }
+  
+  try {
+    const result = await searchAllCatalogItems()
+    const items = result.objects?.filter((obj: any) => obj.type === 'ITEM') || []
+    
+    catalogItemsCache = items
+    cacheTimestamp = now
+    return items
+  } catch (error) {
+    console.error('Error fetching catalog items:', error)
+    return catalogItemsCache || [] // Return cached items or empty array on error
+  }
+}
+
+async function getVariationIdForItem(itemId: string): Promise<string> {
+  try {
+    const catalogItems = await getCatalogItems()
+    const item = catalogItems.find((obj: any) => obj.id === itemId)
+    
+    if (item && item.item_data?.variations && item.item_data.variations.length > 0) {
+      const firstVariationId = item.item_data.variations[0].id
+      console.log(`Using first variation for item ${itemId}: ${firstVariationId}`)
+      return firstVariationId
+    } else {
+      console.warn(`No variations found for item ${itemId}, using item ID as fallback`)
+      return itemId // Fallback to item ID
+    }
+  } catch (error) {
+    console.error(`Error getting variation for item ${itemId}:`, error)
+    return itemId // Fallback to item ID
+  }
 }
 
 export async function previewSquareOrder(items: SimpleCartItem[]): Promise<{
@@ -21,9 +66,14 @@ export async function previewSquareOrder(items: SimpleCartItem[]): Promise<{
     // Validate tax configuration - REQUIRED for order creation
     const taxConfig = await validateTaxConfiguration()
     
-    const lineItems = items.map(item => ({
-      quantity: item.quantity.toString(),
-      catalog_object_id: item.variationId || item.id // Use snake_case for Square API
+    // For order creation, we need to use variation IDs, not item IDs
+    const lineItems = await Promise.all(items.map(async (item) => {
+      const catalogObjectId = item.variationId || await getVariationIdForItem(item.id)
+      
+      return {
+        quantity: item.quantity.toString(),
+        catalog_object_id: catalogObjectId
+      }
     }))
 
     const orderData = {
@@ -115,16 +165,15 @@ export async function createSquareOrder(items: SimpleCartItem[], customerEmail?:
     const taxConfig = await validateTaxConfiguration()
     console.log('Tax configuration validated:', taxConfig)
     
-    const lineItems = items.map(item => ({
-      quantity: item.quantity.toString(),
-      catalog_object_id: item.variationId || item.id // Use snake_case for Square API
-      // Don't include base_price_money - let Square use the catalog price automatically
-      // Remove modifiers for now until we implement proper modifier support
-      // modifiers: item.selectedModifiers ? 
-      //   Object.entries(item.selectedModifiers).map(([modifierId, quantity]) => ({
-      //     catalog_object_id: modifierId,
-      //     quantity: quantity.toString()
-      //   })) : undefined
+    const lineItems = await Promise.all(items.map(async (item) => {
+      const catalogObjectId = item.variationId || await getVariationIdForItem(item.id)
+      
+      return {
+        quantity: item.quantity.toString(),
+        catalog_object_id: catalogObjectId
+        // Don't include base_price_money - let Square use the catalog price automatically
+        // Remove modifiers for now until we implement proper modifier support
+      }
     }))
     
     console.log('Square lineItems:', JSON.stringify(lineItems, null, 2))
