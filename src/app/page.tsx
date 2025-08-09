@@ -18,7 +18,7 @@ export default function Home() {
       <SmoothScrollNav sections={scrollSections} />
       
       {/* Hero Section */}
-      <section id="hero" className="pt-16 min-h-screen flex items-center justify-center bg-gradient-to-br from-amber-50 to-orange-100">
+      <section id="hero" className="pt-16 min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-green-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <div className="mb-8">
             <div className="flex justify-center mb-6">
@@ -33,7 +33,7 @@ export default function Home() {
             </div>
             <h1 className="text-5xl md:text-7xl font-bold text-gray-900 mb-6">
               Welcome to{' '}
-              <span className="text-amber-600">Little Cafe</span>
+              <span className="text-primary-600">Little Cafe</span>
             </h1>
             <p className="text-xl md:text-2xl text-gray-600 mb-8 max-w-3xl mx-auto">
               Where every cup tells a story. Experience the perfect blend of comfort, 
@@ -42,13 +42,13 @@ export default function Home() {
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link
                 href="/menu"
-                className="bg-amber-600 text-white px-8 py-3 rounded-lg text-lg font-semibold hover:bg-amber-700 transition-colors duration-200 inline-block text-center"
+                className="bg-primary-600 text-white px-8 py-3 rounded-lg text-lg font-semibold hover:bg-primary-700 transition-colors duration-200 inline-block text-center"
               >
                 View Our Menu
               </Link>
               <Link
                 href="/contact"
-                className="border-2 border-amber-600 text-amber-600 px-8 py-3 rounded-lg text-lg font-semibold hover:bg-amber-600 hover:text-white transition-colors duration-200 inline-block text-center"
+                className="border-2 border-primary-600 text-primary-600 px-8 py-3 rounded-lg text-lg font-semibold hover:bg-primary-600 hover:text-white transition-colors duration-200 inline-block text-center"
               >
                 Visit Us Today
               </Link>
@@ -69,7 +69,7 @@ export default function Home() {
           
           <div className="grid md:grid-cols-3 gap-8">
             <div className="text-center">
-              <div className="bg-amber-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+              <div className="bg-primary-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
                 <span className="text-2xl">☕</span>
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">Quality Coffee</h3>
@@ -77,7 +77,7 @@ export default function Home() {
             </div>
             
             <div className="text-center">
-              <div className="bg-amber-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+              <div className="bg-primary-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
                 <span className="text-2xl">🥐</span>
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">Fresh Pastries</h3>
@@ -85,7 +85,7 @@ export default function Home() {
             </div>
             
             <div className="text-center">
-              <div className="bg-amber-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+              <div className="bg-primary-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
                 <span className="text-2xl">📍</span>
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">Convenient Location</h3>
@@ -96,7 +96,7 @@ export default function Home() {
           <div className="text-center mt-12">
             <Link
               href="/about"
-              className="text-amber-600 font-semibold hover:text-amber-700 transition-colors"
+              className="text-primary-600 font-semibold hover:text-primary-700 transition-colors"
             >
               Learn more about our story →
             </Link>
@@ -107,7 +107,7 @@ export default function Home() {
       {/* Footer */}
       <footer id="contact" className="bg-gray-900 text-white py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h3 className="text-2xl font-bold text-amber-400 mb-4">Little Cafe</h3>
+          <h3 className="text-2xl font-bold text-primary-400 mb-4">Little Cafe</h3>
           <p className="text-gray-400 mb-6">
             Where every cup tells a story. Thank you for being part of our community.
           </p>

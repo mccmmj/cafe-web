@@ -49,8 +49,8 @@ const MenuItemVariations = ({
               onClick={() => onSelectVariation(itemId, variation.id)}
               className={`${compact ? 'px-2 py-0.5' : 'px-3 py-1'} rounded-full text-xs font-medium transition-colors ${
                 isSelected
-                  ? 'bg-amber-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-amber-100 hover:text-amber-700'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-primary-100 hover:text-primary-700'
               }`}
             >
               {compact ? variation.name : `${variation.name} • ${formatPrice(variationPrice)}`}

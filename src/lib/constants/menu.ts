@@ -78,22 +78,31 @@ export const PRICE_FORMAT = {
 export const BRAND_SETTINGS = {
   // Starbucks category configuration
   STARBUCKS_CATEGORIES: [
-    // Add category names or IDs that should display Starbucks branding
-    // Examples (update these based on your actual category names):
-    // 'Coffee & Espresso',
-    // 'Frappuccinos', 
-    // 'Cold Brew & Iced Coffee',
-    // 'Hot Teas',
-    // 'Iced Teas & Lemonades',
-    // 'Refreshers',
-    // 'Pastries & Bakery'
-    'Espresso',
-    'Tea',
-    'Frappuccino',
-    'Smoothies',
+    // Official WPS Starbucks Categories - Based on Mobile Ordering Guidelines
+    // PRIMARY STARBUCKS CATEGORIES (exact names from guidelines)
+    'ESPRESSO, COFFEE & MORE',
+    'TEAVANA® HANDCRAFTED TEA', 
+    'STARBUCKS REFRESHERS® ICED BEVERAGES',
+    'FRAPPUCCINO® BLENDED BEVERAGES',
+    
+    // SUBCATEGORIES (for hierarchical categories)
+    'COFFEE', // Frappuccino subcategory
+    'CREME',  // Frappuccino subcategory
+    
+    // SEASONAL CATEGORIES (when authorized)
     'Seasonal',
+    'SEASONAL FAVORITES',
+    'HOLIDAY BEVERAGES',
+    'LIMITED TIME OFFERS',
+    
+    // LEGACY/ALTERNATE NAMING (for backward compatibility)
+    'Espresso',
+    'Coffee',
+    'Tea', 
+    'Frappuccino',
     'Refreshers',
-    'Coffee'
+    'Cold Brew',
+    'Iced Coffee'
   ],
   
   // Brand display settings

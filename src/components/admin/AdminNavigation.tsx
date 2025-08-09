@@ -60,7 +60,7 @@ export function AdminNavigation() {
       {/* Logo */}
       <div className="flex items-center justify-center h-16 px-4 bg-gray-800">
         <div className="flex items-center">
-          <Coffee className="w-8 h-8 text-amber-500" />
+          <Coffee className="w-8 h-8 text-primary-500" />
           <span className="ml-2 text-xl font-bold text-white">Little Cafe</span>
         </div>
       </div>
@@ -95,7 +95,7 @@ export function AdminNavigation() {
       <div className="absolute bottom-0 left-0 right-0 p-4 bg-gray-800">
         <div className="flex items-center">
           <div className="flex-shrink-0">
-            <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center">
+            <div className="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center">
               <span className="text-sm font-medium text-white">
                 {user?.email?.charAt(0).toUpperCase() || 'A'}
               </span>

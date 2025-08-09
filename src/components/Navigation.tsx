@@ -100,7 +100,7 @@ const Navigation = () => {
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <div className="flex-shrink-0">
-            <Link href="/" className="text-2xl font-bold text-amber-800 hover:text-amber-900 transition-colors">
+            <Link href="/" className="text-2xl font-bold text-primary-800 hover:text-primary-900 transition-colors">
               Little Cafe
             </Link>
           </div>
@@ -114,8 +114,8 @@ const Navigation = () => {
                   href={item.href}
                   className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${
                     pathname === item.href
-                      ? 'text-amber-600 bg-amber-50'
-                      : 'text-gray-700 hover:text-amber-600'
+                      ? 'text-primary-600 bg-primary-50'
+                      : 'text-gray-700 hover:text-primary-600'
                   }`}
                 >
                   {item.name}
@@ -128,7 +128,7 @@ const Navigation = () => {
               {/* Search */}
               <button
                 onClick={() => setShowSearch(true)}
-                className="text-gray-700 hover:text-amber-600 p-2 rounded-md transition-colors"
+                className="text-gray-700 hover:text-primary-600 p-2 rounded-md transition-colors"
                 title="Search"
               >
                 <Search size={18} />
@@ -145,7 +145,7 @@ const Navigation = () => {
               {user && (
                 <Link href="/favorites">
                   <button
-                    className="text-gray-700 hover:text-amber-600 p-2 rounded-md transition-colors"
+                    className="text-gray-700 hover:text-primary-600 p-2 rounded-md transition-colors"
                     title="View Favorites"
                   >
                     <Heart size={20} />
@@ -156,7 +156,7 @@ const Navigation = () => {
               {/* Cart Icon */}
               <button
                 onClick={openCart}
-                className="text-gray-700 hover:text-amber-600 p-2 rounded-md transition-colors relative"
+                className="text-gray-700 hover:text-primary-600 p-2 rounded-md transition-colors relative"
                 title="View Cart"
               >
                 <ShoppingCart size={20} />
@@ -164,7 +164,7 @@ const Navigation = () => {
                   <motion.span
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
-                    className="absolute -top-1 -right-1 bg-amber-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium"
+                    className="absolute -top-1 -right-1 bg-primary-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium"
                   >
                     {itemCount}
                   </motion.span>
@@ -177,7 +177,7 @@ const Navigation = () => {
                 <div className="flex items-center space-x-2">
                   {/* Notifications */}
                   <button
-                    className="text-gray-700 hover:text-amber-600 p-2 rounded-md transition-colors relative"
+                    className="text-gray-700 hover:text-primary-600 p-2 rounded-md transition-colors relative"
                     title="Notifications"
                   >
                     <Bell size={18} />
@@ -210,14 +210,14 @@ const Navigation = () => {
             {/* Mobile Cart Icon */}
             <button
               onClick={openCart}
-              className="text-gray-700 hover:text-amber-600 p-2 rounded-md transition-colors relative"
+              className="text-gray-700 hover:text-primary-600 p-2 rounded-md transition-colors relative"
             >
               <ShoppingCart size={20} />
               {itemCount > 0 && (
                 <motion.span
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
-                  className="absolute -top-1 -right-1 bg-amber-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium"
+                  className="absolute -top-1 -right-1 bg-primary-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium"
                 >
                   {itemCount}
                 </motion.span>
@@ -226,7 +226,7 @@ const Navigation = () => {
             
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="text-gray-700 hover:text-amber-600 p-2 rounded-md"
+              className="text-gray-700 hover:text-primary-600 p-2 rounded-md"
             >
               {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
@@ -256,8 +256,8 @@ const Navigation = () => {
                       onClick={closeMenu}
                       className={`block px-3 py-3 rounded-lg text-base font-medium transition-all duration-200 ${
                         pathname === item.href
-                          ? 'text-amber-600 bg-amber-50 border-l-4 border-amber-600'
-                          : 'text-gray-700 hover:text-amber-600 hover:bg-amber-50'
+                          ? 'text-primary-600 bg-primary-50 border-l-4 border-primary-600'
+                          : 'text-gray-700 hover:text-primary-600 hover:bg-primary-50'
                       }`}
                     >
                       {item.name}

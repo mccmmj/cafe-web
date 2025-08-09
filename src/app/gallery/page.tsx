@@ -20,10 +20,10 @@ export default function Gallery() {
       <Breadcrumbs />
       
       {/* Hero Section */}
-      <section className="pt-16 py-20 bg-gradient-to-br from-amber-50 to-orange-100">
+      <section className="pt-16 py-20 bg-gradient-to-br from-primary-50 to-green-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h1 className="text-4xl md:text-6xl font-bold text-gray-900 mb-6">
-            Our <span className="text-amber-600">Gallery</span>
+            Our <span className="text-primary-600">Gallery</span>
           </h1>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
             Starbucks Slideshow: A look at our drinks, treats, and cafe moments! Click any image to see it larger.
@@ -38,7 +38,7 @@ export default function Gallery() {
             {galleryImages.map((filename) => (
               <button
                 key={filename}
-                className="bg-gradient-to-br from-amber-100 to-orange-200 rounded-2xl p-4 h-72 flex items-center justify-center overflow-hidden focus:outline-none hover:shadow-lg transition-shadow duration-200"
+                className="bg-gradient-to-br from-primary-100 to-green-200 rounded-2xl p-4 h-72 flex items-center justify-center overflow-hidden focus:outline-none hover:shadow-lg transition-shadow duration-200"
                 onClick={() => {
                   setLightboxImg(`/images/starbucks-slideshow/${filename}`);
                   setLightboxOpen(true);
@@ -71,7 +71,7 @@ export default function Gallery() {
           role="dialog"
         >
           <button
-            className="absolute top-6 right-6 text-white text-3xl font-bold focus:outline-none hover:text-amber-400 transition-colors"
+            className="absolute top-6 right-6 text-white text-3xl font-bold focus:outline-none hover:text-primary-400 transition-colors"
             onClick={e => { e.stopPropagation(); setLightboxOpen(false); }}
             aria-label="Close"
             type="button"
@@ -97,7 +97,7 @@ export default function Gallery() {
       {/* Footer */}
       <footer className="bg-gray-900 text-white py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h3 className="text-2xl font-bold text-amber-400 mb-4">Little Cafe</h3>
+          <h3 className="text-2xl font-bold text-primary-400 mb-4">Little Cafe</h3>
           <p className="text-gray-400 mb-6">
             Where every cup tells a story. Thank you for being part of our community.
           </p>

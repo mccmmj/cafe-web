@@ -97,12 +97,12 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-green-100 flex items-center justify-center px-4">
       <div className="max-w-md w-full">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center mb-4">
-            <div className="bg-amber-600 p-3 rounded-full">
+            <div className="bg-primary-600 p-3 rounded-full">
               <Coffee className="w-8 h-8 text-white" />
             </div>
           </div>
@@ -127,7 +127,7 @@ export default function AdminLoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   placeholder="admin@littlecafe.com"
                 />
               </div>
@@ -146,7 +146,7 @@ export default function AdminLoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="pl-10 pr-10 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  className="pl-10 pr-10 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   placeholder="Enter your password"
                 />
                 <button
@@ -177,7 +177,7 @@ export default function AdminLoginPage() {
             <Button
               type="submit"
               disabled={loading || !email || !password}
-              className="w-full bg-amber-600 hover:bg-amber-700 text-white py-2 px-4 rounded-md font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-primary-600 hover:bg-primary-700 text-white py-2 px-4 rounded-md font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Signing In...' : 'Sign In to Admin Dashboard'}
             </Button>
@@ -189,7 +189,7 @@ export default function AdminLoginPage() {
               type="button"
               onClick={handleForgotPassword}
               disabled={isResetting || !email}
-              className="text-sm text-amber-600 hover:text-amber-700 font-medium disabled:text-gray-400"
+              className="text-sm text-primary-600 hover:text-primary-700 font-medium disabled:text-gray-400"
             >
               {isResetting ? 'Sending...' : 'Forgot your password?'}
             </button>
@@ -202,7 +202,7 @@ export default function AdminLoginPage() {
             </p>
             <button
               onClick={() => router.push('/')}
-              className="text-amber-600 hover:text-amber-700 text-sm font-medium mt-2"
+              className="text-primary-600 hover:text-primary-700 text-sm font-medium mt-2"
             >
               ← Back to Customer Site
             </button>

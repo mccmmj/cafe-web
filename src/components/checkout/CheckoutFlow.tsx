@@ -402,7 +402,7 @@ export default function CheckoutFlow({ customerInfo, onSuccess, onCancel }: Chec
         className="max-w-md mx-auto text-center py-16"
       >
         <Card variant="default" className="p-8">
-          <Loader2 className="w-16 h-16 text-amber-600 animate-spin mx-auto mb-4" />
+          <Loader2 className="w-16 h-16 text-primary-600 animate-spin mx-auto mb-4" />
           <h3 className="text-xl font-semibold text-gray-900 mb-2">Processing Payment</h3>
           <p className="text-gray-600 mb-4">Please wait while we process your payment securely...</p>
           <div className="text-sm text-gray-500">This may take a few moments</div>
@@ -442,7 +442,7 @@ export default function CheckoutFlow({ customerInfo, onSuccess, onCancel }: Chec
             <div className="font-medium text-gray-900">Total Amount</div>
             <div className="text-sm text-gray-600">{cart?.itemCount} items</div>
           </div>
-          <div className="text-2xl font-bold text-amber-600">
+          <div className="text-2xl font-bold text-primary-600">
             {squareTotals.loading ? (
               <span className="text-gray-500">Calculating...</span>
             ) : (
@@ -464,7 +464,7 @@ export default function CheckoutFlow({ customerInfo, onSuccess, onCancel }: Chec
               value="card"
               checked={paymentMethod === 'card'}
               onChange={(e) => setPaymentMethod(e.target.value as any)}
-              className="text-amber-600 focus:ring-amber-500"
+              className="text-primary-600 focus:ring-primary-500"
             />
             <CreditCard className="w-6 h-6 text-gray-600" />
             <span className="text-sm font-medium">Credit Card</span>
@@ -477,7 +477,7 @@ export default function CheckoutFlow({ customerInfo, onSuccess, onCancel }: Chec
               value="mobile"
               checked={paymentMethod === 'mobile'}
               onChange={(e) => setPaymentMethod(e.target.value as any)}
-              className="text-amber-600 focus:ring-amber-500"
+              className="text-primary-600 focus:ring-primary-500"
             />
             <div className="text-2xl">📱</div>
             <span className="text-sm font-medium">Mobile Pay</span>
@@ -490,7 +490,7 @@ export default function CheckoutFlow({ customerInfo, onSuccess, onCancel }: Chec
               value="cash"
               checked={paymentMethod === 'cash'}
               onChange={(e) => setPaymentMethod(e.target.value as any)}
-              className="text-amber-600 focus:ring-amber-500"
+              className="text-primary-600 focus:ring-primary-500"
             />
             <div className="text-2xl">💵</div>
             <span className="text-sm font-medium">Pay in Store</span>
@@ -524,7 +524,7 @@ export default function CheckoutFlow({ customerInfo, onSuccess, onCancel }: Chec
                             value={card.id}
                             checked={selectedSavedCard === card.id}
                             onChange={() => loadSavedCard(card.id)}
-                            className="text-amber-600 focus:ring-amber-500"
+                            className="text-primary-600 focus:ring-primary-500"
                           />
                           <div className="flex-1">
                             <div className="flex items-center space-x-2">
@@ -542,7 +542,7 @@ export default function CheckoutFlow({ customerInfo, onSuccess, onCancel }: Chec
                           setSelectedSavedCard('')
                           setShowSquareForm(true)
                         }}
-                        className="text-sm text-amber-600 hover:text-amber-700 font-medium"
+                        className="text-sm text-primary-600 hover:text-primary-700 font-medium"
                       >
                         + Use a different card
                       </button>

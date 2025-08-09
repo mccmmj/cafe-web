@@ -134,7 +134,7 @@ export default function CheckoutPage() {
       <div className="min-h-screen bg-gray-50">
         <Navigation />
         <div className="pt-20 flex items-center justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
         </div>
       </div>
     )
@@ -183,9 +183,9 @@ export default function CheckoutPage() {
       {/* Progress Steps */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between mb-8">
-          <div className={`flex items-center ${step === 'customer-info' ? 'text-amber-600' : 'text-gray-400'}`}>
+          <div className={`flex items-center ${step === 'customer-info' ? 'text-primary-600' : 'text-gray-400'}`}>
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-              step === 'customer-info' ? 'bg-amber-600 text-white' : 
+              step === 'customer-info' ? 'bg-primary-600 text-white' : 
               step === 'payment' || step === 'success' ? 'bg-green-500 text-white' : 'bg-gray-200'
             }`}>
               {step === 'payment' || step === 'success' ? '✓' : '1'}
@@ -195,9 +195,9 @@ export default function CheckoutPage() {
           
           <div className="flex-1 h-px bg-gray-200 mx-4"></div>
           
-          <div className={`flex items-center ${step === 'payment' ? 'text-amber-600' : 'text-gray-400'}`}>
+          <div className={`flex items-center ${step === 'payment' ? 'text-primary-600' : 'text-gray-400'}`}>
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-              step === 'payment' ? 'bg-amber-600 text-white' : 
+              step === 'payment' ? 'bg-primary-600 text-white' : 
               step === 'success' ? 'bg-green-500 text-white' : 'bg-gray-200'
             }`}>
               {step === 'success' ? '✓' : '2'}
@@ -227,7 +227,7 @@ export default function CheckoutPage() {
                 className="bg-white rounded-lg shadow-sm border border-gray-200 p-6"
               >
                 <div className="flex items-center space-x-3 mb-6">
-                  <User className="text-amber-600" size={24} />
+                  <User className="text-primary-600" size={24} />
                   <h2 className="text-xl font-semibold text-gray-900">Customer Information</h2>
                 </div>
 
@@ -240,7 +240,7 @@ export default function CheckoutPage() {
                       type="text"
                       value={customerInfo.name}
                       onChange={(e) => setCustomerInfo(prev => ({ ...prev, name: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                       placeholder="Enter your full name"
                       required
                     />
@@ -254,7 +254,7 @@ export default function CheckoutPage() {
                       type="email"
                       value={customerInfo.email}
                       onChange={(e) => setCustomerInfo(prev => ({ ...prev, email: e.target.value }))} 
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                       placeholder="Enter your email address"
                       required
                     />
@@ -319,7 +319,7 @@ export default function CheckoutPage() {
           <div className="lg:col-span-1">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sticky top-8">
               <div className="flex items-center space-x-3 mb-6">
-                <ShoppingCart className="text-amber-600" size={20} />
+                <ShoppingCart className="text-primary-600" size={20} />
                 <h3 className="text-lg font-semibold text-gray-900">Order Summary</h3>
               </div>
 
@@ -363,13 +363,13 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
-              <div className="mt-6 p-4 bg-amber-50 rounded-lg">
+              <div className="mt-6 p-4 bg-primary-50 rounded-lg">
                 <div className="flex items-start space-x-3">
-                  <MapPin className="text-amber-600 mt-0.5" size={16} />
+                  <MapPin className="text-primary-600 mt-0.5" size={16} />
                   <div className="text-sm">
-                    <p className="font-medium text-amber-800">Little Cafe</p>
-                    <p className="text-amber-600">10400 E Alameda Ave, Denver, CO</p>
-                    <p className="text-amber-600">Hours: 8AM-6PM Mon-Fri</p>
+                    <p className="font-medium text-primary-800">Little Cafe</p>
+                    <p className="text-primary-600">10400 E Alameda Ave, Denver, CO</p>
+                    <p className="text-primary-600">Hours: 8AM-6PM Mon-Fri</p>
                   </div>
                 </div>
               </div>

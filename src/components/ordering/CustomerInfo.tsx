@@ -131,7 +131,7 @@ export default function CustomerInfo({ onPrevious, onSubmit, initialData }: Cust
         {/* Personal Information */}
         <Card variant="default" className="p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <User className="w-5 h-5 mr-2 text-amber-600" />
+            <User className="w-5 h-5 mr-2 text-primary-600" />
             Personal Information
           </h3>
           
@@ -207,7 +207,7 @@ export default function CustomerInfo({ onPrevious, onSubmit, initialData }: Cust
         {/* Order Details */}
         <Card variant="default" className="p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <MapPin className="w-5 h-5 mr-2 text-amber-600" />
+            <MapPin className="w-5 h-5 mr-2 text-primary-600" />
             Order Details
           </h3>
           
@@ -225,7 +225,7 @@ export default function CustomerInfo({ onPrevious, onSubmit, initialData }: Cust
                     value="pickup"
                     checked={formData.orderType === 'pickup'}
                     onChange={(e) => handleInputChange('orderType', e.target.value)}
-                    className="text-amber-600 focus:ring-amber-500"
+                    className="text-primary-600 focus:ring-primary-500"
                   />
                   <div>
                     <div className="font-medium">Pickup</div>
@@ -240,7 +240,7 @@ export default function CustomerInfo({ onPrevious, onSubmit, initialData }: Cust
                     value="dine_in"
                     checked={formData.orderType === 'dine_in'}
                     onChange={(e) => handleInputChange('orderType', e.target.value)}
-                    className="text-amber-600 focus:ring-amber-500"
+                    className="text-primary-600 focus:ring-primary-500"
                   />
                   <div>
                     <div className="font-medium">Dine In</div>
@@ -262,7 +262,7 @@ export default function CustomerInfo({ onPrevious, onSubmit, initialData }: Cust
                     id="pickupTime"
                     value={formData.pickupTime}
                     onChange={(e) => handleInputChange('pickupTime', e.target.value)}
-                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                     required
                   >
                     <option value="">Select pickup time</option>
@@ -301,7 +301,7 @@ export default function CustomerInfo({ onPrevious, onSubmit, initialData }: Cust
         {/* Payment Method */}
         <Card variant="default" className="p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <CreditCard className="w-5 h-5 mr-2 text-amber-600" />
+            <CreditCard className="w-5 h-5 mr-2 text-primary-600" />
             Payment Method
           </h3>
           
@@ -313,7 +313,7 @@ export default function CustomerInfo({ onPrevious, onSubmit, initialData }: Cust
                 value="card"
                 checked={formData.paymentMethod === 'card'}
                 onChange={(e) => handleInputChange('paymentMethod', e.target.value)}
-                className="text-amber-600 focus:ring-amber-500"
+                className="text-primary-600 focus:ring-primary-500"
               />
               <div className="text-center">
                 <div className="text-2xl mb-1">💳</div>
@@ -328,7 +328,7 @@ export default function CustomerInfo({ onPrevious, onSubmit, initialData }: Cust
                 value="cash"
                 checked={formData.paymentMethod === 'cash'}
                 onChange={(e) => handleInputChange('paymentMethod', e.target.value)}
-                className="text-amber-600 focus:ring-amber-500"
+                className="text-primary-600 focus:ring-primary-500"
               />
               <div className="text-center">
                 <div className="text-2xl mb-1">💵</div>
@@ -343,7 +343,7 @@ export default function CustomerInfo({ onPrevious, onSubmit, initialData }: Cust
                 value="mobile"
                 checked={formData.paymentMethod === 'mobile'}
                 onChange={(e) => handleInputChange('paymentMethod', e.target.value)}
-                className="text-amber-600 focus:ring-amber-500"
+                className="text-primary-600 focus:ring-primary-500"
               />
               <div className="text-center">
                 <div className="text-2xl mb-1">📱</div>
@@ -363,7 +363,7 @@ export default function CustomerInfo({ onPrevious, onSubmit, initialData }: Cust
             value={formData.specialRequests}
             onChange={(e) => handleInputChange('specialRequests', e.target.value)}
             placeholder="Any special dietary requirements, allergies, or other requests..."
-            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none"
+            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
             rows={4}
             maxLength={500}
           />

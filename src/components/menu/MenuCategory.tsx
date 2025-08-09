@@ -51,7 +51,7 @@ const MenuCategory = ({
       {/* Category Header - Clickable */}
       <button
         onClick={() => onToggleExpanded(category.id)}
-        className="w-full p-8 text-left hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-inset"
+        className="w-full p-8 text-left hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-inset"
         aria-expanded={isExpanded}
       >
         <div className="flex items-center justify-between">
@@ -79,7 +79,12 @@ const MenuCategory = ({
           </div>
         </div>
         <div className="mt-4 flex items-center text-sm text-gray-500">
-          <span>{category.items.length} items</span>
+          <span>
+            {category.subcategories && category.subcategories.length > 0 
+              ? `${category.subcategories.reduce((total, sub) => total + sub.items.length, 0)} items in ${category.subcategories.length} categories`
+              : `${category.items.length} items`
+            }
+          </span>
           {!isExpanded && (
             <span className="ml-2">• Click to expand</span>
           )}
@@ -88,23 +93,59 @@ const MenuCategory = ({
       
       {/* Category Items - Collapsible */}
       {isExpanded && (
-        <div className="px-8 pb-8 space-y-4">
-          {category.items.map((item) => {
-            const selectedVariationId = selectedVariations[item.id]
-            
-            
-            return (
-              <MenuItem
-                key={`${item.id}-${selectedVariationId || 'default'}`}
-                item={item}
-                selectedVariationId={selectedVariationId}
-                currentQuantity={currentQuantities[item.id] || 0}
-                onSelectVariation={handleSelectVariation}
-                onAddToCart={onAddToCart}
-                onRemoveFromCart={onRemoveFromCart}
-              />
-            )
-          })}
+        <div className="px-8 pb-8 space-y-6">
+          {/* Render subcategories if they exist */}
+          {category.subcategories && category.subcategories.length > 0 ? (
+            category.subcategories.map((subcategory) => (
+              <div key={subcategory.id}>
+                {/* Subcategory Header */}
+                <div className="mb-4">
+                  <h4 className="text-lg font-semibold text-gray-800 mb-1">
+                    {subcategory.name}
+                  </h4>
+                  {subcategory.description && (
+                    <p className="text-sm text-gray-600">
+                      {subcategory.description}
+                    </p>
+                  )}
+                </div>
+                
+                {/* Subcategory Items */}
+                <div className="space-y-4">
+                  {subcategory.items.map((item) => {
+                    const selectedVariationId = selectedVariations[item.id]
+                    return (
+                      <MenuItem
+                        key={`${item.id}-${selectedVariationId || 'default'}`}
+                        item={item}
+                        selectedVariationId={selectedVariationId}
+                        currentQuantity={currentQuantities[item.id] || 0}
+                        onSelectVariation={handleSelectVariation}
+                        onAddToCart={onAddToCart}
+                        onRemoveFromCart={onRemoveFromCart}
+                      />
+                    )
+                  })}
+                </div>
+              </div>
+            ))
+          ) : (
+            /* Render items directly if no subcategories */
+            category.items.map((item) => {
+              const selectedVariationId = selectedVariations[item.id]
+              return (
+                <MenuItem
+                  key={`${item.id}-${selectedVariationId || 'default'}`}
+                  item={item}
+                  selectedVariationId={selectedVariationId}
+                  currentQuantity={currentQuantities[item.id] || 0}
+                  onSelectVariation={handleSelectVariation}
+                  onAddToCart={onAddToCart}
+                  onRemoveFromCart={onRemoveFromCart}
+                />
+              )
+            })
+          )}
         </div>
       )}
     </div>

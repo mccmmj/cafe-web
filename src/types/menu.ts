@@ -93,6 +93,7 @@ export interface MenuCategory {
   name: string
   description?: string
   items: MenuItem[]
+  subcategories?: MenuSubcategory[]
   sortOrder?: number
   isActive?: boolean
   displayHours?: {
@@ -102,6 +103,14 @@ export interface MenuCategory {
   squareCategoryId?: string
   createdAt?: string
   updatedAt?: string
+}
+
+export interface MenuSubcategory {
+  id: string
+  name: string
+  description?: string
+  items: MenuItem[]
+  sortOrder?: number
 }
 
 // CartItem is defined in cart.ts to avoid conflicts

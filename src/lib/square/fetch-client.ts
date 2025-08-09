@@ -97,8 +97,8 @@ export async function searchAllCatalogItems() {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({
-        object_types: ['ITEM']
-        // No query filter - returns all items of type ITEM
+        object_types: ['ITEM', 'CATEGORY']
+        // No query filter - returns all items and categories
       })
     })
 

@@ -225,7 +225,7 @@ export default function CartReview({ onPrevious, onContinue, canContinue }: Cart
                   value="pickup"
                   checked={orderType === 'pickup'}
                   onChange={(e) => setOrderType(e.target.value as 'pickup' | 'dine_in')}
-                  className="text-amber-600 focus:ring-amber-500"
+                  className="text-primary-600 focus:ring-primary-500"
                 />
                 <div className="flex items-center space-x-2">
                   <MapPin className="w-4 h-4 text-gray-500" />
@@ -239,7 +239,7 @@ export default function CartReview({ onPrevious, onContinue, canContinue }: Cart
                   value="dine_in"
                   checked={orderType === 'dine_in'}
                   onChange={(e) => setOrderType(e.target.value as 'pickup' | 'dine_in')}
-                  className="text-amber-600 focus:ring-amber-500"
+                  className="text-primary-600 focus:ring-primary-500"
                 />
                 <div className="flex items-center space-x-2">
                   <span>🍽️</span>
@@ -252,7 +252,7 @@ export default function CartReview({ onPrevious, onContinue, canContinue }: Cart
           {/* Estimated Time */}
           <Card variant="outline" className="p-4">
             <div className="flex items-center space-x-3">
-              <Clock className="w-5 h-5 text-amber-600" />
+              <Clock className="w-5 h-5 text-primary-600" />
               <div>
                 <div className="text-sm font-medium text-gray-900">Estimated Time</div>
                 <div className="text-sm text-gray-600">
@@ -269,7 +269,7 @@ export default function CartReview({ onPrevious, onContinue, canContinue }: Cart
               value={specialInstructions}
               onChange={(e) => setSpecialInstructions(e.target.value)}
               placeholder="Any special requests or dietary notes..."
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none"
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
               rows={3}
               maxLength={500}
             />
@@ -293,7 +293,7 @@ export default function CartReview({ onPrevious, onContinue, canContinue }: Cart
               <div className="border-t pt-3">
                 <div className="flex justify-between text-lg font-semibold">
                   <span>Total</span>
-                  <span className="text-amber-600">${cart?.total.toFixed(2)}</span>
+                  <span className="text-primary-600">${cart?.total.toFixed(2)}</span>
                 </div>
               </div>
             </div>
