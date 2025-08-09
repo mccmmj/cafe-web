@@ -190,7 +190,7 @@ export default function MenuSelection({ onContinue, canContinue }: MenuSelection
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               <option value="name">Sort by Name</option>
               <option value="price">Sort by Price</option>
@@ -216,7 +216,7 @@ export default function MenuSelection({ onContinue, canContinue }: MenuSelection
               onClick={() => setSelectedCategory(category)}
               className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                 selectedCategory === category
-                  ? 'bg-amber-600 text-white'
+                  ? 'bg-primary-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
@@ -266,7 +266,7 @@ export default function MenuSelection({ onContinue, canContinue }: MenuSelection
                   )}
                   
                   {item.isPopular && (
-                    <div className="absolute top-2 left-2 bg-amber-600 text-white px-2 py-1 rounded-full text-xs font-medium">
+                    <div className="absolute top-2 left-2 bg-primary-600 text-white px-2 py-1 rounded-full text-xs font-medium">
                       Popular
                     </div>
                   )}
@@ -283,7 +283,7 @@ export default function MenuSelection({ onContinue, canContinue }: MenuSelection
                 <div className="p-4">
                   <div className="flex justify-between items-start mb-2">
                     <h3 className="font-semibold text-gray-900 text-lg">{item.name}</h3>
-                    <div className="text-lg font-bold text-amber-600">${item.price.toFixed(2)}</div>
+                    <div className="text-lg font-bold text-primary-600">${item.price.toFixed(2)}</div>
                   </div>
                   
                   <p className="text-gray-600 text-sm mb-3 line-clamp-2">{item.description}</p>

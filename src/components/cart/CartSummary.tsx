@@ -49,7 +49,7 @@ const CartSummary = ({ subtotal, tax, total, itemCount, taxInfo }: CartSummaryPr
       <div className="border-t border-gray-200 pt-2">
         <div className="flex justify-between text-base font-semibold">
           <span>Total</span>
-          <span className="text-amber-600">{formatPrice(total)}</span>
+          <span className="text-primary-600">{formatPrice(total)}</span>
         </div>
       </div>
     </div>

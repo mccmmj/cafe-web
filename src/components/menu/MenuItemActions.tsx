@@ -26,7 +26,7 @@ const MenuItemActions = ({
     <div className={`flex items-center ${compact ? 'gap-1' : 'gap-2'} justify-end`}>
       <button
         onClick={() => onAddToCart(item.id)}
-        className={`bg-amber-600 text-white ${compact ? 'p-1' : 'p-1'} rounded-full hover:bg-amber-700 transition-colors`}
+        className={`bg-primary-600 text-white ${compact ? 'p-1' : 'p-1'} rounded-full hover:bg-primary-700 transition-colors`}
         title={`Add ${item.name}${selectedVariation ? ` (${selectedVariation.name})` : ''} to cart`}
       >
         <Plus className={compact ? "h-3 w-3" : "h-4 w-4"} />

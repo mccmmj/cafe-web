@@ -240,7 +240,7 @@ const MenuContainer = ({ className = '', showHeader = true }: MenuContainerProps
           <div className="fixed bottom-6 right-6 z-40">
             <Button
               onClick={openCart}
-              className="bg-amber-600 text-white p-4 rounded-full shadow-lg hover:bg-amber-700 transition-colors"
+              className="bg-primary-600 text-white p-4 rounded-full shadow-lg hover:bg-primary-700 transition-colors"
             >
               <div className="flex items-center gap-2">
                 <span>View Cart ({getTotalCartItems()})</span>

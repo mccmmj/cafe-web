@@ -9,8 +9,11 @@
     "start": "next start",
     "lint": "next lint",
     "seed-square": "node scripts/seed-square-catalog-fixed.js",
+    "seed-wps": "node scripts/seed-wps-starbucks-catalog.js",
     "clear-and-reseed": "node scripts/clear-and-reseed-catalog.js",
+    "clear-and-reseed-wps": "node scripts/clear-and-reseed-wps-catalog.js",
     "init-taxes": "node scripts/init-square-taxes.js",
+    "init-catalog-taxes": "node scripts/init-catalog-taxes.js",
     "debug-square": "node scripts/debug-square-env.js"
   },
   "dependencies": {

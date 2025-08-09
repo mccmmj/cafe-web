@@ -95,7 +95,7 @@ const MenuItem = ({
             itemName={item.name}
             size="sm"
           />
-          <span className="text-amber-600 font-bold">
+          <span className="text-primary-600 font-bold">
             {formatPrice(getDisplayPrice())}
           </span>
         </div>

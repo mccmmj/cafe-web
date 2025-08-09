@@ -13,7 +13,7 @@ const CartFloatingButton = ({ totalItems, onClick }: CartFloatingButtonProps) =>
   return (
     <button
       onClick={onClick}
-      className="fixed bottom-6 right-6 bg-amber-600 text-white p-4 rounded-full shadow-lg hover:bg-amber-700 transition-colors z-40"
+      className="fixed bottom-6 right-6 bg-primary-600 text-white p-4 rounded-full shadow-lg hover:bg-primary-700 transition-colors z-40"
       title="View Cart"
     >
       <div className="flex items-center gap-2">

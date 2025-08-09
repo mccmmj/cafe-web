@@ -11,10 +11,10 @@ export default function Cart() {
       <Breadcrumbs />
       
       {/* Hero Section */}
-      <section className="pt-16 py-20 bg-gradient-to-br from-amber-50 to-orange-100">
+      <section className="pt-16 py-20 bg-gradient-to-br from-primary-50 to-green-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h1 className="text-4xl md:text-6xl font-bold text-gray-900 mb-6">
-            Your <span className="text-amber-600">Cart</span>
+            Your <span className="text-primary-600">Cart</span>
           </h1>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
             Review your order and proceed to checkout when you&apos;re ready.
@@ -34,7 +34,7 @@ export default function Cart() {
             </p>
             <Link
               href="/menu"
-              className="bg-amber-600 text-white px-8 py-3 rounded-lg text-lg font-semibold hover:bg-amber-700 transition-colors duration-200 inline-block"
+              className="bg-primary-600 text-white px-8 py-3 rounded-lg text-lg font-semibold hover:bg-primary-700 transition-colors duration-200 inline-block"
             >
               Browse Menu
             </Link>
@@ -45,7 +45,7 @@ export default function Cart() {
       {/* Footer */}
       <footer className="bg-gray-900 text-white py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h3 className="text-2xl font-bold text-amber-400 mb-4">Little Cafe</h3>
+          <h3 className="text-2xl font-bold text-primary-400 mb-4">Little Cafe</h3>
           <p className="text-gray-400 mb-6">
             Where every cup tells a story. Thank you for being part of our community.
           </p>

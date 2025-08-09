@@ -45,7 +45,7 @@ const OrderStatusTracker = ({
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'pending':
-        return <Clock className="w-5 h-5 text-amber-500" />
+        return <Clock className="w-5 h-5 text-primary-500" />
       case 'confirmed':
         return <CheckCircle className="w-5 h-5 text-blue-500" />
       case 'preparing':
@@ -64,7 +64,7 @@ const OrderStatusTracker = ({
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending':
-        return 'border-l-amber-500 bg-amber-50'
+        return 'border-l-primary-500 bg-primary-50'
       case 'confirmed':
         return 'border-l-blue-500 bg-blue-50'
       case 'preparing':
@@ -135,12 +135,12 @@ const OrderStatusTracker = ({
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <Package className="w-5 h-5 text-amber-600" />
+            <Package className="w-5 h-5 text-primary-600" />
             <h3 className="font-semibold text-gray-900">
               {showOnlyActive ? 'Active Orders' : 'Recent Orders'}
             </h3>
             {activeOrders.length > 0 && (
-              <span className="bg-amber-100 text-amber-800 text-xs font-medium px-2 py-1 rounded-full">
+              <span className="bg-primary-100 text-primary-800 text-xs font-medium px-2 py-1 rounded-full">
                 {activeOrders.length}
               </span>
             )}
@@ -158,7 +158,7 @@ const OrderStatusTracker = ({
               className="p-1"
             >
               {notificationsEnabled ? (
-                <Bell className="w-4 h-4 text-amber-600" />
+                <Bell className="w-4 h-4 text-primary-600" />
               ) : (
                 <BellOff className="w-4 h-4 text-gray-400" />
               )}
@@ -240,7 +240,7 @@ const OrderStatusTracker = ({
                       <div className="w-full bg-gray-200 rounded-full h-1.5">
                         <div
                           className={`h-1.5 rounded-full transition-all duration-500 ${
-                            order.status === 'pending' ? 'w-1/4 bg-amber-500' :
+                            order.status === 'pending' ? 'w-1/4 bg-primary-500' :
                             order.status === 'confirmed' ? 'w-2/4 bg-blue-500' :
                             order.status === 'preparing' ? 'w-3/4 bg-purple-500' :
                             order.status === 'ready' ? 'w-full bg-green-500' :

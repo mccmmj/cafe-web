@@ -31,7 +31,7 @@ const CartItem = ({ item, onUpdateQuantity, onRemoveItem }: CartItemProps) => {
         {item.variationName && (
           <p className="text-sm text-gray-500">{item.variationName}</p>
         )}
-        <p className="text-sm font-medium text-amber-600">
+        <p className="text-sm font-medium text-primary-600">
           {formatPrice(displayPrice)} each
         </p>
       </div>
