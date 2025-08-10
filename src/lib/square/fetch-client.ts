@@ -264,6 +264,122 @@ export async function createCatalogTax(taxData: any) {
   }
 }
 
+// Create or update catalog item
+export async function upsertCatalogItem(itemData: any) {
+  try {
+    const response = await fetch(`${SQUARE_BASE_URL}/v2/catalog/batch-upsert`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        idempotency_key: `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        batches: [
+          {
+            objects: [itemData]
+          }
+        ]
+      })
+    })
+
+    if (!response.ok) {
+      const errorData = await response.text()
+      throw new Error(`Square Item Upsert API error: ${response.status} ${errorData}`)
+    }
+
+    const result = await response.json()
+    console.log('🔧 Item upsert result:', JSON.stringify(result, null, 2))
+    // Return first object from batch result to match expected format
+    return {
+      catalog_object: result.objects?.[0] || null
+    }
+  } catch (error) {
+    console.error('Error upserting catalog item:', error)
+    throw error
+  }
+}
+
+// Create or update catalog category
+export async function upsertCatalogCategory(categoryData: any) {
+  try {
+    const response = await fetch(`${SQUARE_BASE_URL}/v2/catalog/batch-upsert`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        idempotency_key: `category-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        batches: [
+          {
+            objects: [categoryData]
+          }
+        ]
+      })
+    })
+
+    if (!response.ok) {
+      const errorData = await response.text()
+      throw new Error(`Square Category Upsert API error: ${response.status} ${errorData}`)
+    }
+
+    const result = await response.json()
+    // Return first object from batch result to match expected format
+    return {
+      catalog_object: result.objects?.[0] || null
+    }
+  } catch (error) {
+    console.error('Error upserting catalog category:', error)
+    throw error
+  }
+}
+
+// Delete catalog object
+export async function deleteCatalogObject(objectId: string) {
+  try {
+    const response = await fetch(`${SQUARE_BASE_URL}/v2/catalog/delete`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        object_id: objectId
+      })
+    })
+
+    if (!response.ok) {
+      const errorData = await response.text()
+      throw new Error(`Square Delete API error: ${response.status} ${errorData}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('Error deleting catalog object:', error)
+    throw error
+  }
+}
+
+// Batch upsert multiple catalog objects
+export async function batchUpsertCatalogObjects(objects: any[]) {
+  try {
+    const batches = objects.map(obj => ({
+      object: obj,
+      idempotency_key: `batch-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    }))
+
+    const response = await fetch(`${SQUARE_BASE_URL}/v2/catalog/batch-upsert`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        batches
+      })
+    })
+
+    if (!response.ok) {
+      const errorData = await response.text()
+      throw new Error(`Square Batch Upsert API error: ${response.status} ${errorData}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('Error batch upserting catalog objects:', error)
+    throw error
+  }
+}
+
 // Configuration
 export const squareConfig = {
   // Use the single SQUARE_APPLICATION_ID from .env.local (which points to live/production)  

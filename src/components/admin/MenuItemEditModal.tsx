@@ -30,6 +30,7 @@ interface MenuItem {
 interface UpdateItemData {
   name?: string
   description?: string
+  categoryId?: string
   isAvailable?: boolean
   variations?: Array<{
     id: string
@@ -43,12 +44,14 @@ interface MenuItemEditModalProps {
   onClose: () => void
   onSave: (updateData: UpdateItemData) => void
   isLoading: boolean
+  categories?: Array<{ id: string; name: string }>
 }
 
-const MenuItemEditModal = ({ item, onClose, onSave, isLoading }: MenuItemEditModalProps) => {
+const MenuItemEditModal = ({ item, onClose, onSave, isLoading, categories = [] }: MenuItemEditModalProps) => {
   const [formData, setFormData] = useState({
     name: item.name,
     description: item.description,
+    categoryId: item.categoryId || '',
     isAvailable: item.isAvailable,
     variations: item.variations.map(v => ({
       id: v.id,
@@ -64,6 +67,7 @@ const MenuItemEditModal = ({ item, onClose, onSave, isLoading }: MenuItemEditMod
     // Check if form data has changed from original item data
     const nameChanged = formData.name !== item.name
     const descriptionChanged = formData.description !== item.description
+    const categoryChanged = formData.categoryId !== (item.categoryId || '')
     const availabilityChanged = formData.isAvailable !== item.isAvailable
     
     // Check if any variation prices or names have changed
@@ -78,11 +82,12 @@ const MenuItemEditModal = ({ item, onClose, onSave, isLoading }: MenuItemEditMod
       return priceChanged || nameChanged
     })
 
-    const hasDataChanged = nameChanged || descriptionChanged || availabilityChanged || variationsChanged
+    const hasDataChanged = nameChanged || descriptionChanged || categoryChanged || availabilityChanged || variationsChanged
     
     console.log('Change detection:', {
       nameChanged,
-      descriptionChanged, 
+      descriptionChanged,
+      categoryChanged,
       availabilityChanged,
       variationsChanged,
       hasDataChanged,
@@ -114,6 +119,9 @@ const MenuItemEditModal = ({ item, onClose, onSave, isLoading }: MenuItemEditMod
     }
     if (formData.description !== item.description && !isStarbucks) {
       updateData.description = formData.description
+    }
+    if (formData.categoryId !== (item.categoryId || '')) {
+      updateData.categoryId = formData.categoryId
     }
     if (formData.isAvailable !== item.isAvailable) {
       updateData.isAvailable = formData.isAvailable
@@ -230,14 +238,30 @@ const MenuItemEditModal = ({ item, onClose, onSave, isLoading }: MenuItemEditMod
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Category
                 </label>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-900">{item.categoryName}</span>
-                  {isStarbucks && (
+                {isStarbucks ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-900">{item.categoryName}</span>
                     <span className="text-xs bg-primary-100 text-primary-700 px-2 py-0.5 rounded">
                       Starbucks
                     </span>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <select
+                    value={formData.categoryId}
+                    onChange={(e) => setFormData(prev => ({ ...prev, categoryId: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  >
+                    <option value="">Select a category...</option>
+                    {categories.map(category => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {!isStarbucks && formData.categoryId === '' && (
+                  <p className="text-xs text-amber-600 mt-1">Item will be uncategorized if no category is selected</p>
+                )}
               </div>
             </div>
 

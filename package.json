@@ -13,8 +13,14 @@
     "clear-and-reseed": "node scripts/clear-and-reseed-catalog.js",
     "clear-and-reseed-wps": "node scripts/clear-and-reseed-wps-catalog.js",
     "init-taxes": "node scripts/init-square-taxes.js",
+    "seed-inventory": "node scripts/seed-inventory.js",
     "init-catalog-taxes": "node scripts/init-catalog-taxes.js",
-    "debug-square": "node scripts/debug-square-env.js"
+    "debug-square": "node scripts/debug-square-env.js",
+    "setup-inventory": "node scripts/setup-inventory-system.js",
+    "db:migrate": "npx supabase db push",
+    "db:reset": "npx supabase db reset", 
+    "db:generate": "npx supabase gen types typescript --local",
+    "db:link": "npx supabase link"
   },
   "dependencies": {
     "@square/web-payments-sdk-types": "^1.75.1",
@@ -44,6 +50,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.3.4",
+    "supabase": "^2.33.9",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
