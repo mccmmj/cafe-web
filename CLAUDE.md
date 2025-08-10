@@ -5,7 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ### Development
-- `npm run dev` - Start development server with Turbopack (runs on http://localhost:3000)
+- `npm run dev:webpack` - Start development server with webpack (recommended for stability)
+- `npm run dev` - Start development server with Turbopack (may have API runtime issues)
 - `npm run build` - Build the production application
 - `npm start` - Start production server
 - `npm run lint` - Run ESLint to check code quality
@@ -17,6 +18,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run seed-square` - Seed Square catalog with menu items
 - `npm run clear-and-reseed` - Clear and reseed Square catalog
 - `npm run init-taxes` - Initialize Square sandbox tax configuration
+
+### Inventory Management
+- `npm run seed-inventory` - Seed database with inventory items matching menu items
+
+### Admin Features
+- **Inventory Management**: Complete inventory tracking with stock levels, alerts, and restock functionality
+- **Suppliers Management**: Full CRUD operations for suppliers with contact information and payment terms
+- **Menu Management**: Square integration for menu items and categories management
+- **Order Management**: View and manage customer orders with status tracking
 
 ## Architecture
 

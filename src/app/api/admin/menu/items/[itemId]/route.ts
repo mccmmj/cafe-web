@@ -18,6 +18,7 @@ function getHeaders() {
 interface UpdateItemRequest {
   name?: string
   description?: string
+  categoryId?: string
   isAvailable?: boolean
   variations?: Array<{
     id: string
@@ -73,6 +74,9 @@ export async function PUT(
         ...currentItem.item_data,
         ...(updateData.name && { name: updateData.name }),
         ...(updateData.description !== undefined && { description: updateData.description }),
+        ...(updateData.categoryId !== undefined && { 
+          categories: updateData.categoryId ? [{ id: updateData.categoryId }] : []
+        }),
         ...(updateData.isAvailable !== undefined && { 
           available_for_pickup: updateData.isAvailable,
           available_online: updateData.isAvailable 

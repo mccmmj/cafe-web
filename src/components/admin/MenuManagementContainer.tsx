@@ -7,6 +7,8 @@ import { Button } from '@/components/ui'
 import { Search, Filter, RefreshCw, Plus } from 'lucide-react'
 import MenuItemsList from './MenuItemsList'
 import MenuItemEditModal from './MenuItemEditModal'
+import MenuItemCreateModal from './MenuItemCreateModal'
+import CategoryManagement from './CategoryManagement'
 import toast from 'react-hot-toast'
 
 interface MenuItem {
@@ -44,7 +46,9 @@ const MenuManagementContainer = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null)
+  const [creatingItem, setCreatingItem] = useState(false)
   const [view, setView] = useState<'grid' | 'table'>('table')
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
   
   const queryClient = useQueryClient()
 
@@ -116,8 +120,40 @@ const MenuManagementContainer = () => {
     }
   })
 
+  // Create item mutation
+  const createItemMutation = useMutation({
+    mutationFn: async (itemData: any) => {
+      const response = await fetch('/api/admin/menu/items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(itemData)
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to create item')
+      }
+      
+      return response.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-menu-items'] })
+      toast.success('Menu item created successfully')
+      setCreatingItem(false)
+    },
+    onError: (error) => {
+      toast.error(`Failed to create item: ${error.message}`)
+    }
+  })
+
   const items: MenuItem[] = itemsData?.items || []
   const categories = [...new Set(items.map(item => item.categoryName))].sort()
+  
+  // Get category data for create modal
+  const categoryOptions = itemsData?.categories?.map((cat: any) => ({
+    id: cat.id,
+    name: cat.category_data?.name || cat.name
+  })) || []
 
   // Filter items based on search and category
   const filteredItems = items.filter(item => {
@@ -146,6 +182,33 @@ const MenuManagementContainer = () => {
 
   const handleBulkAvailability = (itemIds: string[], isAvailable: boolean) => {
     bulkAvailabilityMutation.mutate({ itemIds, isAvailable })
+  }
+
+  const handleSelectItem = (itemId: string, selected: boolean) => {
+    setSelectedItems(prev => {
+      const newSet = new Set(prev)
+      if (selected) {
+        newSet.add(itemId)
+      } else {
+        newSet.delete(itemId)
+      }
+      return newSet
+    })
+  }
+
+  const handleSelectAll = (selected: boolean) => {
+    if (selected) {
+      setSelectedItems(new Set(filteredItems.map(item => item.id)))
+    } else {
+      setSelectedItems(new Set())
+    }
+  }
+
+  const handleBulkAvailabilityFromToolbar = (isAvailable: boolean) => {
+    if (selectedItems.size > 0) {
+      handleBulkAvailability(Array.from(selectedItems), isAvailable)
+      setSelectedItems(new Set())
+    }
   }
 
   if (error) {
@@ -179,11 +242,26 @@ const MenuManagementContainer = () => {
             <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
+          <Button
+            onClick={() => setCreatingItem(true)}
+            className="bg-primary-600 hover:bg-primary-700"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Create Item
+          </Button>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+      {/* Tabs for different views */}
+      <Tabs defaultValue="items" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="items">Menu Items</TabsTrigger>
+          <TabsTrigger value="categories">Categories</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="items" className="space-y-6">
+          {/* Filters */}
+          <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
         <div className="flex flex-col sm:flex-row gap-4">
           {/* Search */}
           <div className="flex-1">
@@ -253,18 +331,66 @@ const MenuManagementContainer = () => {
         </div>
       </div>
 
-      {/* Menu Items Display */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <MenuItemsList
-          items={filteredItems}
-          view={view}
-          isLoading={isLoading}
-          onEditItem={handleEditItem}
-          onToggleAvailability={handleToggleAvailability}
-          onBulkAvailability={handleBulkAvailability}
-          isUpdating={updateItemMutation.isPending || bulkAvailabilityMutation.isPending}
-        />
-      </div>
+          {/* Bulk Operations Toolbar */}
+          {selectedItems.size > 0 && (
+            <div className="bg-primary-50 border border-primary-200 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <span className="text-sm font-medium text-primary-700">
+                    {selectedItems.size} item{selectedItems.size > 1 ? 's' : ''} selected
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedItems(new Set())}
+                    className="text-primary-600 border-primary-300"
+                  >
+                    Clear Selection
+                  </Button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleBulkAvailabilityFromToolbar(true)}
+                    className="text-green-600 border-green-300 hover:bg-green-50"
+                  >
+                    Make Available
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleBulkAvailabilityFromToolbar(false)}
+                    className="text-red-600 border-red-300 hover:bg-red-50"
+                  >
+                    Make Unavailable
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Menu Items Display */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            <MenuItemsList
+              items={filteredItems}
+              view={view}
+              isLoading={isLoading}
+              onEditItem={handleEditItem}
+              onToggleAvailability={handleToggleAvailability}
+              onBulkAvailability={handleBulkAvailability}
+              isUpdating={updateItemMutation.isPending || bulkAvailabilityMutation.isPending}
+              selectedItems={selectedItems}
+              onSelectItem={handleSelectItem}
+              onSelectAll={handleSelectAll}
+            />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="categories" className="space-y-6">
+          <CategoryManagement />
+        </TabsContent>
+      </Tabs>
 
       {/* Edit Modal */}
       {editingItem && (
@@ -273,8 +399,18 @@ const MenuManagementContainer = () => {
           onClose={() => setEditingItem(null)}
           onSave={handleUpdateItem}
           isLoading={updateItemMutation.isPending}
+          categories={categoryOptions}
         />
       )}
+
+      {/* Create Modal */}
+      <MenuItemCreateModal
+        isOpen={creatingItem}
+        onClose={() => setCreatingItem(false)}
+        onSubmit={createItemMutation.mutateAsync}
+        categories={categoryOptions}
+        isLoading={createItemMutation.isPending}
+      />
     </div>
   )
 }

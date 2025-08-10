@@ -34,6 +34,9 @@ interface MenuItemsListProps {
   onToggleAvailability: (itemId: string, isAvailable: boolean) => void
   onBulkAvailability: (itemIds: string[], isAvailable: boolean) => void
   isUpdating: boolean
+  selectedItems?: Set<string>
+  onSelectItem?: (itemId: string, selected: boolean) => void
+  onSelectAll?: (selected: boolean) => void
 }
 
 const MenuItemsList = ({
@@ -43,21 +46,26 @@ const MenuItemsList = ({
   onEditItem,
   onToggleAvailability,
   onBulkAvailability,
-  isUpdating
+  isUpdating,
+  selectedItems = new Set(),
+  onSelectItem,
+  onSelectAll
 }: MenuItemsListProps) => {
-  const [selectedItems, setSelectedItems] = useState<string[]>([])
 
   const handleSelectAll = (checked: boolean) => {
-    setSelectedItems(checked ? items.map(item => item.id) : [])
+    if (onSelectAll) {
+      onSelectAll(checked)
+    }
   }
 
   const handleSelectItem = (itemId: string, checked: boolean) => {
-    setSelectedItems(prev => 
-      checked 
-        ? [...prev, itemId]
-        : prev.filter(id => id !== itemId)
-    )
+    if (onSelectItem) {
+      onSelectItem(itemId, checked)
+    }
   }
+
+  const isAllSelected = selectedItems.size > 0 && selectedItems.size === items.length
+  const isSomeSelected = selectedItems.size > 0 && selectedItems.size < items.length
 
   const getDefaultPrice = (item: MenuItem) => {
     const defaultVariation = item.variations.find(v => v.isDefault) || item.variations[0]
@@ -259,7 +267,10 @@ const MenuItemsList = ({
               <th className="px-6 py-3 text-left">
                 <input
                   type="checkbox"
-                  checked={selectedItems.length === items.length}
+                  checked={isAllSelected}
+                  ref={(input) => {
+                    if (input) input.indeterminate = isSomeSelected
+                  }}
                   onChange={(e) => handleSelectAll(e.target.checked)}
                 />
               </th>
@@ -292,7 +303,7 @@ const MenuItemsList = ({
                 <td className="px-6 py-4">
                   <input
                     type="checkbox"
-                    checked={selectedItems.includes(item.id)}
+                    checked={selectedItems.has(item.id)}
                     onChange={(e) => handleSelectItem(item.id, e.target.checked)}
                   />
                 </td>
