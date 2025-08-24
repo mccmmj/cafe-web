@@ -194,6 +194,21 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to update order' }, { status: 500 })
     }
     
+    // Create notification for order status update
+    if (updatedOrder && updatedOrder.user_id) {
+      try {
+        await supabase.rpc('create_order_notification', {
+          p_user_id: updatedOrder.user_id,
+          p_order_id: updatedOrder.id,
+          p_status: status,
+          p_order_number: updatedOrder.order_number || updatedOrder.id.substring(0, 8).toUpperCase()
+        })
+      } catch (notificationError) {
+        console.error('Error creating notification:', notificationError)
+        // Don't fail the order update if notification creation fails
+      }
+    }
+    
     // TODO: Send notification email to customer about status change
     // if (updatedOrder.customer_email) {
     //   await sendOrderStatusEmail(updatedOrder)

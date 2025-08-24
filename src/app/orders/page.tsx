@@ -11,6 +11,7 @@ import { useCartState } from '@/hooks/useCartData'
 import { useOrderUpdates } from '@/hooks/useOrderUpdates'
 import OrderStatusTracker from '@/components/ordering/OrderStatusTracker'
 import { toast } from 'react-hot-toast'
+import { useRouter } from 'next/navigation'
 
 interface OrderItem {
   id: string
@@ -45,11 +46,13 @@ export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [filteredOrders, setFilteredOrders] = useState<any[]>([])
   
+  const router = useRouter()
   const supabase = createClient()
   const { openCart } = useCartState()
   
   // Use the real-time order updates hook
   const { orders, isLoading, refreshOrders } = useOrderUpdates(user?.id)
+  
 
   useEffect(() => {
     loadUser()
@@ -338,6 +341,7 @@ export default function OrdersPage() {
                           variant="ghost"
                           size="sm"
                           className="flex items-center"
+                          onClick={() => router.push(`/orders/${order.id}`)}
                         >
                           View Details
                           <ChevronRight className="w-4 h-4 ml-1" />

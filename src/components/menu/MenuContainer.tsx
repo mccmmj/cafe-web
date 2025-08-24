@@ -54,10 +54,11 @@ const MenuContainer = ({ className = '', showHeader = true }: MenuContainerProps
       } else {
         setCategories(data.categories || [])
         
-        // Initialize all categories as expanded by default
+        // Initialize categories - expand first few, collapse others for better UX
         const initialExpanded: Record<string, boolean> = {}
-        data.categories?.forEach((category: MenuCategory) => {
-          initialExpanded[category.id] = true
+        data.categories?.forEach((category: MenuCategory, index: number) => {
+          // Expand first 3 categories, collapse the rest
+          initialExpanded[category.id] = index < 3
         })
         setExpandedCategories(initialExpanded)
       }
@@ -216,12 +217,8 @@ const MenuContainer = ({ className = '', showHeader = true }: MenuContainerProps
         )}
 
 
-        {/* Masonry Layout for Better Space Utilization */}
-        <MasonryGrid 
-          minColumnWidth={350}
-          gap={32}
-          className="w-full"
-        >
+        {/* Simple Grid Layout - Temporary fix for state update issue */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {displayCategories.map((category) => (
             <MenuCategoryComponent
               key={category.id}
@@ -233,7 +230,7 @@ const MenuContainer = ({ className = '', showHeader = true }: MenuContainerProps
               onRemoveFromCart={removeFromCartCurrent}
             />
           ))}
-        </MasonryGrid>
+        </div>
 
         {/* Use global cart modal instead of floating button */}
         {getTotalCartItems() > 0 && (

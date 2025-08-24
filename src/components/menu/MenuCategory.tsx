@@ -1,11 +1,8 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
 import type { MenuCategory as MenuCategoryType } from '@/types/menu'
 import MenuItem from './MenuItem'
-import BrandIndicator from './BrandIndicator'
-import { isStarbucksCategory } from '@/lib/constants/menu'
 
 interface MenuCategoryProps {
   category: MenuCategoryType
@@ -51,30 +48,20 @@ const MenuCategory = ({
       {/* Category Header - Clickable */}
       <button
         onClick={() => onToggleExpanded(category.id)}
-        className="w-full p-8 text-left hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-inset"
+        className="w-full p-8 text-left bg-gradient-to-r from-green-50 to-amber-50 hover:from-green-100 hover:to-amber-100 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-inset"
         aria-expanded={isExpanded}
       >
         <div className="flex items-center justify-between">
           <div className="flex-1">
-            <div className="flex items-center gap-3 mb-2">
+            <div className="mb-2">
               <h3 className="text-2xl font-semibold text-gray-900">
                 {category.name}
               </h3>
-              {isStarbucksCategory(category.name) && (
-                <BrandIndicator brand="starbucks" size="md" position="badge" />
-              )}
             </div>
             {category.description && (
               <p className="text-gray-600 text-sm">
                 {category.description}
               </p>
-            )}
-          </div>
-          <div className="ml-4 flex-shrink-0">
-            {isExpanded ? (
-              <ChevronDown className="h-6 w-6 text-gray-400" />
-            ) : (
-              <ChevronRight className="h-6 w-6 text-gray-400" />
             )}
           </div>
         </div>

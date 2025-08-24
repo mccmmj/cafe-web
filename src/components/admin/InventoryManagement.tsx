@@ -205,74 +205,74 @@ const InventoryManagement = () => {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+      <div className="flex flex-wrap gap-4" style={{display: 'flex', flexWrap: 'wrap', gap: '1rem'}}>
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 flex-1 min-w-48" style={{flex: '1 1 200px', minWidth: '200px'}}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Items</p>
-              <p className="text-2xl font-bold text-gray-900">{totalItems}</p>
+              <p className="text-xs font-medium text-gray-600">Total Items</p>
+              <p className="text-lg font-bold text-gray-900">{totalItems}</p>
             </div>
-            <Package className="w-8 h-8 text-blue-600" />
+            <Package className="w-6 h-6 text-blue-600" />
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 flex-1 min-w-48" style={{flex: '1 1 200px', minWidth: '200px'}}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Low Stock</p>
-              <p className="text-2xl font-bold text-amber-600">{lowStockItems}</p>
+              <p className="text-xs font-medium text-gray-600">Low Stock</p>
+              <p className="text-lg font-bold text-amber-600">{lowStockItems}</p>
             </div>
-            <TrendingDown className="w-8 h-8 text-amber-600" />
+            <TrendingDown className="w-6 h-6 text-amber-600" />
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 flex-1 min-w-48" style={{flex: '1 1 200px', minWidth: '200px'}}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Critical</p>
-              <p className="text-2xl font-bold text-red-600">{criticalStockItems}</p>
+              <p className="text-xs font-medium text-gray-600">Critical</p>
+              <p className="text-lg font-bold text-red-600">{criticalStockItems}</p>
             </div>
-            <AlertTriangle className="w-8 h-8 text-red-600" />
+            <AlertTriangle className="w-6 h-6 text-red-600" />
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 flex-1 min-w-48" style={{flex: '1 1 200px', minWidth: '200px'}}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Out of Stock</p>
-              <p className="text-2xl font-bold text-red-600">{outOfStockItems}</p>
+              <p className="text-xs font-medium text-gray-600">Out of Stock</p>
+              <p className="text-lg font-bold text-red-600">{outOfStockItems}</p>
             </div>
-            <Package className="w-8 h-8 text-red-600" />
+            <Package className="w-6 h-6 text-red-600" />
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 flex-1 min-w-48" style={{flex: '1 1 200px', minWidth: '200px'}}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Value</p>
-              <p className="text-2xl font-bold text-green-600">${totalValue.toFixed(2)}</p>
+              <p className="text-xs font-medium text-gray-600">Total Value</p>
+              <p className="text-lg font-bold text-green-600">${totalValue.toFixed(2)}</p>
             </div>
-            <TrendingUp className="w-8 h-8 text-green-600" />
+            <TrendingUp className="w-6 h-6 text-green-600" />
           </div>
         </div>
       </div>
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="overview" className="flex items-center gap-2">
+        <TabsList className="flex w-full h-12" style={{display: 'flex', width: '100%', height: '48px'}}>
+          <TabsTrigger value="overview" className="flex items-center gap-2 flex-1" style={{flex: '1'}}>
             <Package className="w-4 h-4" />
             Stock Overview
           </TabsTrigger>
-          <TabsTrigger value="suppliers" className="flex items-center gap-2">
+          <TabsTrigger value="suppliers" className="flex items-center gap-2 flex-1" style={{flex: '1'}}>
             <Building2 className="w-4 h-4" />
             Suppliers
           </TabsTrigger>
-          <TabsTrigger value="orders" className="flex items-center gap-2">
+          <TabsTrigger value="orders" className="flex items-center gap-2 flex-1" style={{flex: '1'}}>
             <ClipboardList className="w-4 h-4" />
             Purchase Orders
           </TabsTrigger>
-          <TabsTrigger value="settings" className="flex items-center gap-2">
+          <TabsTrigger value="settings" className="flex items-center gap-2 flex-1" style={{flex: '1'}}>
             <Settings className="w-4 h-4" />
             Settings
           </TabsTrigger>
@@ -280,7 +280,7 @@ const InventoryManagement = () => {
 
         <TabsContent value="overview" className="space-y-6">
           {/* Filters */}
-          <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 flex-1 min-w-48" style={{flex: '1 1 200px', minWidth: '200px'}}>
             <div className="flex flex-col sm:flex-row gap-4">
               {/* Search */}
               <div className="flex-1">

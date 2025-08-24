@@ -13,7 +13,8 @@ import {
   Users,
   Settings,
   LogOut,
-  Bell
+  Bell,
+  FileText
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -22,6 +23,7 @@ const navigation = [
   { name: 'Orders', href: '/admin/orders', icon: ShoppingBag },
   { name: 'Menu Management', href: '/admin/menu', icon: MenuIcon },
   { name: 'Inventory', href: '/admin/inventory', icon: Package },
+  { name: 'Invoice Import', href: '/admin/invoices', icon: FileText },
   { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
   { name: 'Customers', href: '/admin/customers', icon: Users },
   { name: 'Settings', href: '/admin/settings', icon: Settings },
