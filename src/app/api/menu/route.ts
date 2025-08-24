@@ -175,21 +175,56 @@ export async function GET() {
     const topLevelCategories: CatalogObject[] = []
     const childCategories: CatalogObject[] = []
     
+    // Organize categories by parent-child relationships
+    
     categories.forEach((category: CatalogObject) => {
-      // Check if category has a valid parent ID (not null/empty)
-      const parentId = category.category_data?.parent_category?.id
+      const parentCategory = category.category_data?.parent_category
+      const parentId = parentCategory?.id
+      const categoryOrdinal = category.category_data?.ordinal
+      
       if (parentId && parentId.trim() !== '') {
+        // Production environment: has proper parent ID
         childCategories.push(category)
       } else {
-        topLevelCategories.push(category)
+        // For sandbox environment, check if there's a category with ordinal immediately before this one
+        // that could be the parent (e.g., FRAPPUCCINO=20, COFFEE=21, CREME=22)
+        const potentialParent = categories.find((potentialParent: CatalogObject) => {
+          const parentOrdinal = potentialParent.category_data?.ordinal
+          // Look for a category with an ordinal exactly 1 or 2 less than this category
+          // and that could logically be a parent (like FRAPPUCCINO for COFFEE/CREME)
+          return parentOrdinal && categoryOrdinal && 
+                 (categoryOrdinal - parentOrdinal >= 1 && categoryOrdinal - parentOrdinal <= 2) &&
+                 potentialParent.id !== category.id
+        })
+        
+        if (potentialParent) {
+          childCategories.push(category)
+        } else {
+          topLevelCategories.push(category)
+        }
       }
     })
+    
 
     const transformedCategories = topLevelCategories.map((category: CatalogObject) => {
       // Find child categories for this parent
-      const children = childCategories.filter((child: CatalogObject) => 
-        child.category_data?.parent_category?.id === category.id
-      )
+      const children = childCategories.filter((child: CatalogObject) => {
+        const childParentId = child.category_data?.parent_category?.id
+        const categoryOrdinal = category.category_data?.ordinal
+        const childOrdinal = child.category_data?.ordinal
+        
+        // Production: match by parent ID
+        if (childParentId === category.id) {
+          return true
+        }
+        
+        // Sandbox: match by ordinal proximity (child ordinal is 1-2 more than parent)
+        if (categoryOrdinal && childOrdinal) {
+          return (childOrdinal - categoryOrdinal >= 1 && childOrdinal - categoryOrdinal <= 2)
+        }
+        
+        return false
+      })
       
       // Get direct items for this category
       let categoryItems = transformedItems.filter((item: TransformedMenuItem) => item.categoryId === category.id)
@@ -228,7 +263,7 @@ export async function GET() {
         id: category.id,
         name: category.category_data?.name || '',
         description: category.category_data?.description || '',
-        items: sortMenuItems([...categoryItems, ...childItems]), // Combine parent and child items
+        items: sortMenuItems(categoryItems), // Only include direct parent items, not child items
         subcategories: subcategories.length > 0 ? subcategories : undefined,
         sortOrder: category.category_data?.ordinal || 0
       }

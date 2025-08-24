@@ -49,10 +49,10 @@ interface TabsListProps {
   className?: string
 }
 
-export const TabsList = ({ children, className }: TabsListProps) => {
+export const TabsList = ({ children, className }: TabsListProps) => {    
   return (
     <div className={cn(
-      'inline-flex h-10 items-center justify-center rounded-md bg-gray-100 p-1 text-gray-500',
+      'h-10 items-center justify-center rounded-md bg-gray-100 p-1 text-gray-500',
       className
     )}>
       {children}

@@ -31,10 +31,13 @@ export default function Home() {
                 priority
               />
             </div>
-            <h1 className="text-5xl md:text-7xl font-bold text-gray-900 mb-6">
+            <h1 className="text-5xl md:text-7xl font-bold text-gray-900 mb-4">
               Welcome to{' '}
               <span className="text-primary-600">Little Cafe</span>
             </h1>
+            <p className="text-lg text-gray-500 font-medium mb-6">
+              We Proudly Serve Starbucks®
+            </p>
             <p className="text-xl md:text-2xl text-gray-600 mb-8 max-w-3xl mx-auto">
               Where every cup tells a story. Experience the perfect blend of comfort, 
               community, and exceptional coffee in our warm and inviting space.
@@ -107,10 +110,13 @@ export default function Home() {
       {/* Footer */}
       <footer id="contact" className="bg-gray-900 text-white py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h3 className="text-2xl font-bold text-primary-400 mb-4">Little Cafe</h3>
-          <p className="text-gray-400 mb-6">
-            Where every cup tells a story. Thank you for being part of our community.
-          </p>
+          <div className="mb-6">
+            <h3 className="text-2xl font-bold text-primary-400 mb-1">Little Cafe</h3>
+            <p className="text-sm text-gray-500 mb-4">We Proudly Serve Starbucks®</p>
+            <p className="text-gray-400">
+              Where every cup tells a story. Thank you for being part of our community.
+            </p>
+          </div>
           <div className="border-t border-gray-800 pt-6">
             <p className="text-gray-400 text-sm">
               © 2024 Little Cafe. All rights reserved.

@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Menu, X, ShoppingCart, User, Search, Bell, Heart } from 'lucide-react'
+import { Menu, X, ShoppingCart, User, Search, Bell, Heart, Coffee } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { AuthContainer, UserDropdown } from './auth'
 import { Button } from './ui'
 import { useCartState } from '@/hooks/useCartData'
+import NotificationDropdown from './notifications/NotificationDropdown'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -100,8 +101,13 @@ const Navigation = () => {
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <div className="flex-shrink-0">
-            <Link href="/" className="text-2xl font-bold text-primary-800 hover:text-primary-900 transition-colors">
-              Little Cafe
+            <Link href="/" className="hover:opacity-80 transition-opacity">
+              <div className="text-2xl font-bold text-primary-800">
+                Little Cafe
+              </div>
+              <div className="text-xs text-gray-600 font-medium -mt-1">
+                We Proudly Serve Starbucks®
+              </div>
             </Link>
           </div>
 
@@ -134,11 +140,14 @@ const Navigation = () => {
                 <Search size={18} />
               </button>
 
-              {/* Order Button */}
+              {/* Order Now Icon */}
               <Link href="/menu">
-                <Button variant="outline" size="sm" className="font-medium">
-                  Order Now
-                </Button>
+                <button
+                  className="text-gray-700 hover:text-primary-600 p-2 rounded-md transition-colors"
+                  title="Order Now"
+                >
+                  <Coffee size={20} />
+                </button>
               </Link>
               
               {/* Favorites Icon - only show if user is logged in */}
@@ -176,13 +185,7 @@ const Navigation = () => {
               ) : user ? (
                 <div className="flex items-center space-x-2">
                   {/* Notifications */}
-                  <button
-                    className="text-gray-700 hover:text-primary-600 p-2 rounded-md transition-colors relative"
-                    title="Notifications"
-                  >
-                    <Bell size={18} />
-                    <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-                  </button>
+                  <NotificationDropdown user={user} />
                   <UserDropdown user={user} />
                 </div>
               ) : (
