@@ -40,7 +40,7 @@ export async function PATCH(request: NextRequest) {
     console.log(`Admin bulk updating availability for ${itemIds.length} items to ${isAvailable}`)
 
     // Fetch current items to preserve their structure
-    const fetchPromises = itemIds.map(async (itemId) => {
+    const fetchPromises = itemIds.map(async (itemId: any) => {
       const response = await fetch(`${SQUARE_BASE_URL}/v2/catalog/object/${itemId}`, {
         method: 'GET',
         headers: getHeaders()
@@ -63,7 +63,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Update availability for all items
-    const updatedItems = currentItems.map(item => ({
+    const updatedItems = currentItems.map((item: any) => ({
       ...item,
       item_data: {
         ...item.item_data,

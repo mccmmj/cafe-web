@@ -30,15 +30,22 @@ export async function requireAdmin() {
 }
 
 /**
- * Client-side admin check hook
+ * Client-side admin check hook - enhanced with security
  */
-export async function checkAdminRole(userId: string): Promise<boolean> {
+export async function checkAdminRole(): Promise<boolean> {
   try {
     const response = await fetch('/api/admin/check-role', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId })
+      method: 'GET',
+      headers: { 
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest' // CSRF protection
+      },
+      credentials: 'include' // Include cookies for auth
     })
+    
+    if (!response.ok) {
+      return false
+    }
     
     const data = await response.json()
     return data.isAdmin || false

@@ -117,10 +117,10 @@ export async function GET(request: NextRequest) {
         csvSections.push([
           date.toLocaleDateString(),
           date.toLocaleTimeString(),
-          `"${movement.inventory_items.item_name}"`,
+          `"${(movement.inventory_items as any)?.item_name || 'Unknown'}"`,
           movement.movement_type.toUpperCase(),
           movement.quantity_change,
-          `"${movement.inventory_items.unit_type}"`,
+          `"${(movement.inventory_items as any)?.unit_type || 'each'}"`,
           `"${movement.reference_type || ''}"`,
           `"${movement.notes || ''}"`
         ].join(','))
@@ -149,7 +149,7 @@ export async function GET(request: NextRequest) {
         
         csvSections.push([
           `"${order.order_number}"`,
-          `"${order.suppliers.name}"`,
+          `"${(order.suppliers as any)?.name || 'Unknown Supplier'}"`,
           order.status.toUpperCase(),
           orderDate.toLocaleDateString(),
           expectedDate ? expectedDate.toLocaleDateString() : '',

@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { orderId: string } }
+  { params }: { params: Promise<{ orderId: string }> }
 ) {
   try {
     // Verify admin authentication
@@ -13,7 +13,8 @@ export async function GET(
       return authResult
     }
 
-    const { orderId } = params
+    const resolvedParams = await params
+    const { orderId } = resolvedParams
     if (!orderId) {
       return NextResponse.json(
         { error: 'Order ID is required' },
@@ -94,7 +95,7 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { orderId: string } }
+  { params }: { params: Promise<{ orderId: string }> }
 ) {
   try {
     // Verify admin authentication
@@ -103,7 +104,8 @@ export async function PATCH(
       return authResult
     }
 
-    const { orderId } = params
+    const resolvedParams = await params
+    const { orderId } = resolvedParams
     if (!orderId) {
       return NextResponse.json(
         { error: 'Order ID is required' },
@@ -214,7 +216,7 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { orderId: string } }
+  { params }: { params: Promise<{ orderId: string }> }
 ) {
   try {
     // Verify admin authentication
@@ -223,7 +225,8 @@ export async function DELETE(
       return authResult
     }
 
-    const { orderId } = params
+    const resolvedParams = await params
+    const { orderId } = resolvedParams
     if (!orderId) {
       return NextResponse.json(
         { error: 'Order ID is required' },

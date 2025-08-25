@@ -139,7 +139,7 @@ export async function previewSquareOrder(items: SimpleCartItem[]): Promise<{
     
     try {
       const taxConfig = await validateTaxConfiguration()
-      const tax = subtotal * (taxConfig.percentage / 100)
+      const tax = subtotal * ((taxConfig.percentage as unknown as number) / 100)
       return {
         subtotal,
         tax,

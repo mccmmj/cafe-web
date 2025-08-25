@@ -105,17 +105,17 @@ const MenuItemsList = ({
   if (view === 'grid') {
     return (
       <div className="p-6">
-        {selectedItems.length > 0 && (
+        {selectedItems.size > 0 && (
           <div className="mb-4 p-3 bg-primary-50 border border-primary-200 rounded-lg">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-primary-800">
-                {selectedItems.length} items selected
+                {selectedItems.size} items selected
               </span>
               <div className="flex gap-2">
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => onBulkAvailability(selectedItems, true)}
+                  onClick={() => onBulkAvailability(Array.from(selectedItems), true)}
                   disabled={isUpdating}
                 >
                   <Power className="w-4 h-4 mr-1" />
@@ -124,7 +124,7 @@ const MenuItemsList = ({
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => onBulkAvailability(selectedItems, false)}
+                  onClick={() => onBulkAvailability(Array.from(selectedItems), false)}
                   disabled={isUpdating}
                 >
                   <PowerOff className="w-4 h-4 mr-1" />
@@ -133,7 +133,7 @@ const MenuItemsList = ({
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => setSelectedItems([])}
+                  onClick={() => onSelectAll?.(false)}
                 >
                   Clear
                 </Button>
@@ -153,7 +153,7 @@ const MenuItemsList = ({
               <div className="flex items-start justify-between mb-3">
                 <input
                   type="checkbox"
-                  checked={selectedItems.includes(item.id)}
+                  checked={selectedItems?.has(item.id) || false}
                   onChange={(e) => handleSelectItem(item.id, e.target.checked)}
                   className="mt-1"
                 />
@@ -223,17 +223,17 @@ const MenuItemsList = ({
   // Table view
   return (
     <div className="overflow-hidden">
-      {selectedItems.length > 0 && (
+      {selectedItems?.size > 0 && (
         <div className="px-6 py-3 bg-primary-50 border-b border-primary-200">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-primary-800">
-              {selectedItems.length} items selected
+              {selectedItems?.size} items selected
             </span>
             <div className="flex gap-2">
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => onBulkAvailability(selectedItems, true)}
+                onClick={() => onBulkAvailability(Array.from(selectedItems!), true)}
                 disabled={isUpdating}
               >
                 <Power className="w-4 h-4 mr-1" />
@@ -242,7 +242,7 @@ const MenuItemsList = ({
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => onBulkAvailability(selectedItems, false)}
+                onClick={() => onBulkAvailability(Array.from(selectedItems!), false)}
                 disabled={isUpdating}
               >
                 <PowerOff className="w-4 h-4 mr-1" />
@@ -251,7 +251,7 @@ const MenuItemsList = ({
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => setSelectedItems([])}
+                onClick={() => onSelectAll?.(false)}
               >
                 Clear Selection
               </Button>

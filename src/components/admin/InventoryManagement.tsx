@@ -259,20 +259,20 @@ const InventoryManagement = () => {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="flex w-full h-12" style={{display: 'flex', width: '100%', height: '48px'}}>
-          <TabsTrigger value="overview" className="flex items-center gap-2 flex-1" style={{flex: '1'}}>
+        <TabsList className="flex w-full h-12">
+          <TabsTrigger value="overview" className="flex items-center gap-2 flex-1">
             <Package className="w-4 h-4" />
             Stock Overview
           </TabsTrigger>
-          <TabsTrigger value="suppliers" className="flex items-center gap-2 flex-1" style={{flex: '1'}}>
+          <TabsTrigger value="suppliers" className="flex items-center gap-2 flex-1">
             <Building2 className="w-4 h-4" />
             Suppliers
           </TabsTrigger>
-          <TabsTrigger value="orders" className="flex items-center gap-2 flex-1" style={{flex: '1'}}>
+          <TabsTrigger value="orders" className="flex items-center gap-2 flex-1">
             <ClipboardList className="w-4 h-4" />
             Purchase Orders
           </TabsTrigger>
-          <TabsTrigger value="settings" className="flex items-center gap-2 flex-1" style={{flex: '1'}}>
+          <TabsTrigger value="settings" className="flex items-center gap-2 flex-1">
             <Settings className="w-4 h-4" />
             Settings
           </TabsTrigger>

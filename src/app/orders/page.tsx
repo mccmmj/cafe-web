@@ -9,7 +9,6 @@ import Breadcrumbs from '@/components/layout/Breadcrumbs'
 import { createClient } from '@/lib/supabase/client'
 import { useCartState } from '@/hooks/useCartData'
 import { useOrderUpdates } from '@/hooks/useOrderUpdates'
-import OrderStatusTracker from '@/components/ordering/OrderStatusTracker'
 import { toast } from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
 
@@ -192,10 +191,27 @@ export default function OrdersPage() {
       <section className="py-12">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           
-          {/* Real-time Order Status Tracker */}
-          {user && (
+          {/* Active Orders Summary */}
+          {user && filteredOrders.filter(order => !['completed', 'cancelled'].includes(order.status)).length > 0 && (
             <div className="mb-8">
-              <OrderStatusTracker userId={user.id} showOnlyActive={true} />
+              <Card className="p-6 bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-amber-900">Active Orders</h3>
+                    <p className="text-amber-700 text-sm">
+                      You have {filteredOrders.filter(order => !['completed', 'cancelled'].includes(order.status)).length} active orders
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={refreshOrders}
+                    className="border-amber-300 text-amber-700 hover:bg-amber-100"
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Refresh
+                  </Button>
+                </div>
+              </Card>
             </div>
           )}
           

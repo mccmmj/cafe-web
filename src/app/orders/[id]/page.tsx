@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { 
@@ -17,14 +17,15 @@ import {
   XCircle,
   AlertCircle,
   Loader,
-  Copy
+  Copy,
+  Printer
 } from 'lucide-react'
 import { Button, Card } from '@/components/ui'
 import Navigation from '@/components/Navigation'
 import Breadcrumbs from '@/components/layout/Breadcrumbs'
 import { createClient } from '@/lib/supabase/client'
-import OrderStatusTracker from '@/components/ordering/OrderStatusTracker'
 import { toast } from 'react-hot-toast'
+import PrintableReceipt from '@/components/receipt/PrintableReceipt'
 
 interface OrderItem {
   id: string
@@ -63,6 +64,8 @@ export default function OrderDetailsPage() {
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<any>(null)
+  const [emailingReceipt, setEmailingReceipt] = useState(false)
+  const receiptRef = useRef<HTMLDivElement>(null)
   
   const supabase = createClient()
   const orderId = params.id as string
@@ -175,6 +178,66 @@ export default function OrderDetailsPage() {
     }
   }
 
+  const printReceipt = () => {
+    if (!receiptRef.current) return
+    
+    // Create a new window with just the receipt
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) {
+      toast.error('Please allow popups to print receipt')
+      return
+    }
+    
+    const receiptHTML = receiptRef.current.innerHTML
+    
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Receipt - Order #${order?.order_number || order?.id.slice(-8)}</title>
+        </head>
+        <body>
+          ${receiptHTML}
+          <script>
+            window.onload = function() {
+              window.print();
+              window.onafterprint = function() {
+                window.close();
+              }
+            }
+          </script>
+        </body>
+      </html>
+    `)
+    
+    printWindow.document.close()
+  }
+
+  const emailReceipt = async () => {
+    if (!order) return
+    
+    try {
+      setEmailingReceipt(true)
+      
+      const response = await fetch(`/api/orders/${order.id}/email-receipt`, {
+        method: 'POST',
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to send receipt')
+      }
+      
+      const data = await response.json()
+      toast.success(`Receipt sent to ${data.email}`)
+    } catch (error) {
+      console.error('Error emailing receipt:', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to email receipt')
+    } finally {
+      setEmailingReceipt(false)
+    }
+  }
+
   if (loading) {
     return (
       <main className="min-h-screen">
@@ -261,14 +324,82 @@ export default function OrderDetailsPage() {
         </div>
       </section>
 
-      {/* Order Status Tracker */}
-      {user && (
-        <section className="py-8">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-            <OrderStatusTracker userId={user.id} orderId={order.id} />
-          </div>
-        </section>
-      )}
+      {/* Order Status Progress */}
+      <section className="py-8">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Card className="p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Order Progress</h2>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex-1">
+                <div className="flex items-center">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                    ['pending', 'confirmed', 'preparing', 'ready', 'completed'].includes(order.status) 
+                      ? 'bg-green-500 text-white' 
+                      : 'bg-gray-300 text-gray-600'
+                  }`}>
+                    <CheckCircle className="w-4 h-4" />
+                  </div>
+                  <div className={`flex-1 h-1 mx-4 ${
+                    ['confirmed', 'preparing', 'ready', 'completed'].includes(order.status)
+                      ? 'bg-green-500'
+                      : 'bg-gray-300'
+                  }`}></div>
+                </div>
+                <p className="text-sm text-center mt-2">Order Placed</p>
+              </div>
+              
+              <div className="flex-1">
+                <div className="flex items-center">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                    ['preparing', 'ready', 'completed'].includes(order.status)
+                      ? 'bg-green-500 text-white'
+                      : 'bg-gray-300 text-gray-600'
+                  }`}>
+                    <Clock className="w-4 h-4" />
+                  </div>
+                  <div className={`flex-1 h-1 mx-4 ${
+                    ['ready', 'completed'].includes(order.status)
+                      ? 'bg-green-500'
+                      : 'bg-gray-300'
+                  }`}></div>
+                </div>
+                <p className="text-sm text-center mt-2">Preparing</p>
+              </div>
+              
+              <div className="flex-1">
+                <div className="flex items-center">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                    ['ready', 'completed'].includes(order.status)
+                      ? 'bg-green-500 text-white'
+                      : 'bg-gray-300 text-gray-600'
+                  }`}>
+                    <Package className="w-4 h-4" />
+                  </div>
+                  <div className={`flex-1 h-1 mx-4 ${
+                    order.status === 'completed'
+                      ? 'bg-green-500'
+                      : 'bg-gray-300'
+                  }`}></div>
+                </div>
+                <p className="text-sm text-center mt-2">Ready</p>
+              </div>
+              
+              <div className="flex-1">
+                <div className="flex items-center justify-end">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                    order.status === 'completed'
+                      ? 'bg-green-500 text-white'
+                      : 'bg-gray-300 text-gray-600'
+                  }`}>
+                    <CheckCircle className="w-4 h-4" />
+                  </div>
+                </div>
+                <p className="text-sm text-center mt-2">Completed</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </section>
 
       {/* Order Details */}
       <section className="py-8">
@@ -497,18 +628,35 @@ export default function OrderDetailsPage() {
                   
                   <Button
                     variant="outline"
-                    onClick={() => window.print()}
+                    onClick={printReceipt}
                     className="w-full flex items-center justify-center"
                   >
-                    <Receipt className="w-4 h-4 mr-2" />
+                    <Printer className="w-4 h-4 mr-2" />
                     Print Receipt
                   </Button>
+                  
+                  {order.customer_email && (
+                    <Button
+                      variant="outline"
+                      onClick={emailReceipt}
+                      disabled={emailingReceipt}
+                      className="w-full flex items-center justify-center"
+                    >
+                      <Mail className="w-4 h-4 mr-2" />
+                      {emailingReceipt ? 'Sending...' : 'Email Receipt'}
+                    </Button>
+                  )}
                 </div>
               </Card>
             </div>
           </div>
         </div>
       </section>
+
+      {/* Hidden receipt for printing */}
+      <div style={{ display: 'none' }}>
+        <PrintableReceipt ref={receiptRef} order={order} />
+      </div>
     </main>
   )
 }

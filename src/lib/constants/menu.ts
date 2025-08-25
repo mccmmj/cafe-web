@@ -153,7 +153,7 @@ export const ITEM_SORTING = {
 
 // Helper function to check if a category should show Starbucks branding
 export const isStarbucksCategory = (categoryName: string): boolean => {
-  return BRAND_SETTINGS.STARBUCKS_CATEGORIES.includes(categoryName)
+  return BRAND_SETTINGS.STARBUCKS_CATEGORIES.includes(categoryName as any)
 }
 
 // Helper function to get item group and priority

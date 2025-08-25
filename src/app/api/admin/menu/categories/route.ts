@@ -23,12 +23,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Separate categories and items
-    const allCategories = catalogResult.objects.filter(obj => obj.type === 'CATEGORY')
-    const allItems = catalogResult.objects.filter(obj => obj.type === 'ITEM')
+    const allCategories = catalogResult.objects.filter((obj: any) => obj.type === 'CATEGORY')
+    const allItems = catalogResult.objects.filter((obj: any) => obj.type === 'ITEM')
     
     // Create item count map by category
     const itemCountMap = new Map()
-    allItems.forEach(item => {
+    allItems.forEach((item: any) => {
       const categoryId = item.item_data.categories?.[0]?.id || item.item_data.category_id
       if (categoryId) {
         itemCountMap.set(categoryId, (itemCountMap.get(categoryId) || 0) + 1)
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     })
 
     // Process categories for management view
-    const categories = allCategories.map(category => ({
+    const categories = allCategories.map((category: any) => ({
       id: category.id,
       name: category.category_data.name,
       ordinal: category.category_data.ordinal || 0,
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
     }))
 
     // Sort by ordinal then by name
-    categories.sort((a, b) => {
+    categories.sort((a: any, b: any) => {
       if (a.ordinal !== b.ordinal) {
         return a.ordinal - b.ordinal
       }
@@ -153,7 +153,7 @@ export async function PUT(request: NextRequest) {
 
     // Fetch the current category to get its version
     const catalogResult = await listCatalogObjects(['CATEGORY'])
-    const existingCategory = catalogResult.objects?.find(cat => cat.id === categoryId)
+    const existingCategory = catalogResult.objects?.find((cat: any) => cat.id === categoryId)
     
     if (!existingCategory) {
       return NextResponse.json(
@@ -222,7 +222,7 @@ export async function DELETE(request: NextRequest) {
 
     // Fetch the category to check if it exists and has items
     const catalogResult = await listCatalogObjects(['CATEGORY', 'ITEM'])
-    const existingCategory = catalogResult.objects?.find(obj => obj.type === 'CATEGORY' && obj.id === categoryId)
+    const existingCategory = catalogResult.objects?.find((obj: any) => obj.type === 'CATEGORY' && obj.id === categoryId)
     
     if (!existingCategory) {
       return NextResponse.json(
@@ -232,7 +232,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Check if category has items
-    const categoryItems = catalogResult.objects?.filter(obj => 
+    const categoryItems = catalogResult.objects?.filter((obj: any) => 
       obj.type === 'ITEM' && 
       (obj.item_data.categories?.[0]?.id === categoryId || obj.item_data.category_id === categoryId)
     )

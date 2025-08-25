@@ -47,12 +47,12 @@ export async function GET(request: NextRequest) {
     }
     
     if (startDate) {
-      query = query.gte('created_at', startDate)
+      const startDateTime = new Date(startDate + 'T00:00:00.000Z')
+      query = query.gte('created_at', startDateTime.toISOString())
     }
     
     if (endDate) {
-      const endDateTime = new Date(endDate)
-      endDateTime.setHours(23, 59, 59, 999)
+      const endDateTime = new Date(endDate + 'T23:59:59.999Z')
       query = query.lte('created_at', endDateTime.toISOString())
     }
     
@@ -96,12 +96,12 @@ export async function GET(request: NextRequest) {
     }
     
     if (startDate) {
-      countQuery = countQuery.gte('created_at', startDate)
+      const startDateTime = new Date(startDate + 'T00:00:00.000Z')
+      countQuery = countQuery.gte('created_at', startDateTime.toISOString())
     }
     
     if (endDate) {
-      const endDateTime = new Date(endDate)
-      endDateTime.setHours(23, 59, 59, 999)
+      const endDateTime = new Date(endDate + 'T23:59:59.999Z')
       countQuery = countQuery.lte('created_at', endDateTime.toISOString())
     }
     

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Cart } from '@/types/cart'
+import { CartItem } from '@/types/cart'
 
 interface SquareCartTotals {
   subtotal: number
@@ -13,7 +13,7 @@ interface SquareCartTotals {
  * Hook to get accurate cart totals from Square
  * This replaces frontend tax estimation with Square's actual calculations
  */
-export function useSquareCartTotals(cart: Cart | null): SquareCartTotals {
+export function useSquareCartTotals(cart: any[] | null): SquareCartTotals {
   const [totals, setTotals] = useState<SquareCartTotals>({
     subtotal: 0,
     tax: 0,
@@ -84,10 +84,10 @@ export function useSquareCartTotals(cart: Cart | null): SquareCartTotals {
   }, [])
 
   useEffect(() => {
-    if (cart?.items) {
+    if (cart) {
       // Debounce the API call to avoid too many requests
       const timeoutId = setTimeout(() => {
-        fetchSquareTotals(cart.items)
+        fetchSquareTotals(cart)
       }, 300)
 
       return () => clearTimeout(timeoutId)
@@ -99,7 +99,7 @@ export function useSquareCartTotals(cart: Cart | null): SquareCartTotals {
         loading: false
       })
     }
-  }, [cart?.items, fetchSquareTotals])
+  }, [cart, fetchSquareTotals])
 
   return totals
 }

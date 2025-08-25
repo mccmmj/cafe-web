@@ -23,19 +23,19 @@ export async function GET(request: NextRequest) {
     }
 
     // Separate items and categories
-    const allItems = catalogResult.objects.filter(obj => obj.type === 'ITEM')
-    const allCategories = catalogResult.objects.filter(obj => obj.type === 'CATEGORY')
+    const allItems = catalogResult.objects.filter((obj: any) => obj.type === 'ITEM')
+    const allCategories = catalogResult.objects.filter((obj: any) => obj.type === 'CATEGORY')
     
     // Create category lookup map
     const categoryMap = new Map()
-    allCategories.forEach(category => {
+    allCategories.forEach((category: any) => {
       categoryMap.set(category.id, category.category_data.name)
     })
 
     console.log('📂 Found categories:', Array.from(categoryMap.entries()))
 
     // Process items for admin management view
-    const items = allItems.map(item => {
+    const items = allItems.map((item: any) => {
       // Get category name from category lookup
       const categoryId = item.item_data.categories?.[0]?.id || item.item_data.category_id
       const categoryName = categoryId ? categoryMap.get(categoryId) || 'Uncategorized' : 'Uncategorized'
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
         categoryId: categoryId,
         categoryName: categoryName,
         isAvailable: item.item_data.available_for_pickup !== false && item.item_data.available_online !== false,
-        variations: item.item_data.variations?.map(variation => ({
+        variations: item.item_data.variations?.map((variation: any) => ({
           id: variation.id,
           name: variation.item_variation_data.name,
           price: variation.item_variation_data.price_money?.amount || 0,
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
     })
 
     // Sort items by category and name
-    items.sort((a, b) => {
+    items.sort((a: any, b: any) => {
       if (a.categoryName !== b.categoryName) {
         return a.categoryName.localeCompare(b.categoryName)
       }
@@ -161,7 +161,7 @@ export async function POST(request: NextRequest) {
     try {
       // Fetch the current category
       const categoriesResult = await listCatalogObjects(['CATEGORY'])
-      const targetCategory = categoriesResult.objects?.find(cat => cat.id === categoryId)
+      const targetCategory = categoriesResult.objects?.find((cat: any) => cat.id === categoryId)
       
       if (targetCategory) {
         console.log('📂 Updating category to include new item...')

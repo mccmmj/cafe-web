@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { supplierId: string } }
+  { params }: { params: Promise<{ supplierId: string }> }
 ) {
   try {
     // Verify admin authentication
@@ -13,7 +13,8 @@ export async function PUT(
       return authResult
     }
 
-    const { supplierId } = params
+    const resolvedParams = await params
+    const { supplierId } = resolvedParams
     if (!supplierId) {
       return NextResponse.json(
         { error: 'Supplier ID is required' },
@@ -98,7 +99,7 @@ export async function PUT(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { supplierId: string } }
+  { params }: { params: Promise<{ supplierId: string }> }
 ) {
   try {
     // Verify admin authentication
@@ -107,7 +108,8 @@ export async function PATCH(
       return authResult
     }
 
-    const { supplierId } = params
+    const resolvedParams = await params
+    const { supplierId } = resolvedParams
     if (!supplierId) {
       return NextResponse.json(
         { error: 'Supplier ID is required' },
@@ -177,7 +179,7 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { supplierId: string } }
+  { params }: { params: Promise<{ supplierId: string }> }
 ) {
   try {
     // Verify admin authentication
@@ -186,7 +188,8 @@ export async function DELETE(
       return authResult
     }
 
-    const { supplierId } = params
+    const resolvedParams = await params
+    const { supplierId } = resolvedParams
     if (!supplierId) {
       return NextResponse.json(
         { error: 'Supplier ID is required' },

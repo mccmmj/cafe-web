@@ -3,6 +3,9 @@ import { createSquareOrder, processPayment } from '@/lib/square/orders'
 import { TaxConfigurationError } from '@/lib/square/tax-validation'
 import { getOrder } from '@/lib/square/fetch-client'
 import { createClient } from '@/lib/supabase/server'
+import { rateLimiters } from '@/lib/security/rate-limiter'
+import { validateAmount, validateCustomerInfo, ValidationError, sanitizeString } from '@/lib/security/input-validation'
+import { addSecurityHeaders } from '@/lib/security/headers'
 
 interface CartItem {
   id: string
@@ -30,18 +33,58 @@ interface PaymentRequest {
 
 export async function POST(request: NextRequest) {
   try {
+    // Apply strict rate limiting for payment processing
+    const rateLimitResult = rateLimiters.payment(request)
+    if (!rateLimitResult.success) {
+      const response = NextResponse.json(
+        { error: rateLimitResult.error },
+        { status: 429 }
+      )
+      Object.entries(rateLimitResult.headers || {}).forEach(([key, value]) => {
+        response.headers.set(key, value)
+      })
+      return addSecurityHeaders(response)
+    }
+
     const body: PaymentRequest = await request.json()
     const { paymentToken, customerInfo, cartItems, useSavedCard } = body
     
     // Fix floating point precision issues by rounding to 2 decimal places
     const amount = Math.round(body.amount * 100) / 100
 
-    // Validate required fields
-    if (!paymentToken || !amount || !customerInfo.email || !cartItems.length) {
-      return NextResponse.json(
-        { error: 'Missing required payment information' },
-        { status: 400 }
-      )
+    // Enhanced validation using security utilities
+    try {
+      if (!paymentToken || typeof paymentToken !== 'string') {
+        throw new ValidationError('Invalid payment token')
+      }
+      
+      if (!validateAmount(amount)) {
+        throw new ValidationError('Invalid payment amount')
+      }
+      
+      if (!validateCustomerInfo(customerInfo)) {
+        throw new ValidationError('Invalid customer information')
+      }
+      
+      if (!cartItems || !Array.isArray(cartItems) || cartItems.length === 0) {
+        throw new ValidationError('Invalid cart items')
+      }
+      
+      // Sanitize customer info
+      customerInfo.name = sanitizeString(customerInfo.name, 100)
+      customerInfo.email = sanitizeString(customerInfo.email, 254)
+      if (customerInfo.phone) {
+        customerInfo.phone = sanitizeString(customerInfo.phone, 20)
+      }
+      
+    } catch (validationError) {
+      if (validationError instanceof ValidationError) {
+        return addSecurityHeaders(NextResponse.json(
+          { error: validationError.message },
+          { status: 400 }
+        ))
+      }
+      throw validationError
     }
 
     // Create Square order with catalog items
@@ -84,14 +127,14 @@ export async function POST(request: NextRequest) {
       
       // Handle tax configuration errors specifically
       if (orderError instanceof TaxConfigurationError) {
-        return NextResponse.json(
+        return addSecurityHeaders(NextResponse.json(
           { 
             error: 'Tax configuration required',
             details: orderError.message,
             taxConfigurationRequired: true
           },
           { status: 422 } // Unprocessable Entity - configuration issue
-        )
+        ))
       }
       
       console.error('Order error details:', JSON.stringify(orderError, null, 2))
@@ -139,13 +182,13 @@ export async function POST(request: NextRequest) {
     if (orderError) {
       console.error('Database order creation error:', orderError)
       // Payment succeeded but database failed - this is a critical error
-      return NextResponse.json(
+      return addSecurityHeaders(NextResponse.json(
         { 
           error: 'Payment processed but order recording failed',
           paymentId: paymentResult.paymentId
         },
         { status: 500 }
-      )
+      ))
     }
 
     // Create order items (match actual database schema)
@@ -209,12 +252,12 @@ export async function POST(request: NextRequest) {
       // Don't fail the payment if email fails
     }
 
-    return NextResponse.json({
+    return addSecurityHeaders(NextResponse.json({
       success: true,
       paymentId: paymentResult.paymentId,
       status: paymentResult.status,
       databaseOrderId: orderData.id
-    })
+    }))
 
   } catch (error) {
     console.error('Payment processing error:', error)
@@ -225,14 +268,13 @@ export async function POST(request: NextRequest) {
       console.error('Error stack:', error.stack)
     }
     
-    // Return detailed error information for debugging (should be removed in production)
-    return NextResponse.json(
+    // Return limited error information for security
+    return addSecurityHeaders(NextResponse.json(
       { 
         error: 'Payment processing failed', 
-        details: error instanceof Error ? error.message : 'Unknown error',
-        debug: process.env.NODE_ENV === 'development' ? error : undefined
+        message: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 400 }
-    )
+    ))
   }
 }
