@@ -40,10 +40,7 @@ export default function FavoritesList() {
       await addToCart.mutateAsync({
         itemId: foundItem.id,
         variationId: variationId,
-        name: foundItem.name,
-        price: foundItem.price,
-        quantity: 1,
-        category: 'favorites'
+        quantity: 1
       })
       
       toast.success(`Added ${favorite.item_name} to cart`)

@@ -29,7 +29,7 @@ interface UpdateItemRequest {
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { itemId: string } }
+  { params }: { params: Promise<{ itemId: string }> }
 ) {
   try {
     // Verify admin authentication
@@ -38,7 +38,8 @@ export async function PUT(
       return authResult
     }
 
-    const { itemId } = params
+    const resolvedParams = await params
+    const { itemId } = resolvedParams
     const updateData: UpdateItemRequest = await request.json()
 
     console.log(`Admin updating menu item ${itemId}:`, updateData)
@@ -86,7 +87,7 @@ export async function PUT(
 
     // Update variations if provided
     if (updateData.variations && updateData.variations.length > 0) {
-      updatedItem.item_data.variations = currentItem.item_data.variations?.map(variation => {
+      updatedItem.item_data.variations = currentItem.item_data.variations?.map((variation: any) => {
         const updateVariation = updateData.variations?.find(v => v.id === variation.id)
         if (updateVariation) {
           return {
@@ -146,7 +147,7 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { itemId: string } }
+  { params }: { params: Promise<{ itemId: string }> }
 ) {
   try {
     // Verify admin authentication
@@ -155,7 +156,8 @@ export async function DELETE(
       return authResult
     }
 
-    const { itemId } = params
+    const resolvedParams = await params
+    const { itemId } = resolvedParams
 
     console.log(`Admin deleting menu item ${itemId}`)
 

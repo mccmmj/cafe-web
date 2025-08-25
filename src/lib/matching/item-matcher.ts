@@ -6,6 +6,7 @@ async function getMatchingLibraries() {
   if (!Fuse || !stringSimilarity) {
     try {
       Fuse = (await import('fuse.js')).default
+      // @ts-ignore
       stringSimilarity = await import('string-similarity')
     } catch (error) {
       console.error('Failed to load matching libraries:', error)

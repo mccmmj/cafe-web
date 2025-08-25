@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { findItemMatches } from '@/lib/matching/item-matcher'
 
 interface RouteContext {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 export async function POST(request: NextRequest, context: RouteContext) {
@@ -15,7 +15,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return authResult
     }
 
-    const { id } = context.params
+    const resolvedParams = await context.params
+    const { id } = resolvedParams
     const supabase = await createClient()
 
     console.log('🔍 Starting item matching for invoice:', id)
@@ -89,7 +90,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       current_stock: item.current_stock,
       unit_cost: item.unit_cost,
       unit_type: item.unit_type,
-      supplier_name: item.suppliers?.name,
+      supplier_name: (item.suppliers as any)?.name,
       square_item_id: item.square_item_id
     }))
 
@@ -112,7 +113,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         },
         formattedInventoryItems,
         {
-          supplier_name: invoice.suppliers?.name,
+          supplier_name: (invoice.suppliers as any)?.name,
           fuzzy_threshold: 0.6,
           max_suggestions: 5
         }
@@ -180,7 +181,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       success: true,
       data: {
         invoice_id: id,
-        supplier_name: invoice.suppliers?.name,
+        supplier_name: (invoice.suppliers as any)?.name,
         matching_results: matchingResults,
         statistics
       },
@@ -207,7 +208,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
       return authResult
     }
 
-    const { id } = context.params
+    const resolvedParams = await context.params
+    const { id } = resolvedParams
     const supabase = await createClient()
 
     // Get existing matches for the invoice
@@ -248,10 +250,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
       quantity: item.quantity,
       unit_price: item.unit_price,
       matched_item: item.inventory_items ? {
-        id: item.inventory_items.id,
-        item_name: item.inventory_items.item_name,
-        current_stock: item.inventory_items.current_stock,
-        unit_cost: item.inventory_items.unit_cost
+        id: (item.inventory_items as any)?.id,
+        item_name: (item.inventory_items as any)?.item_name,
+        current_stock: (item.inventory_items as any)?.current_stock,
+        unit_cost: (item.inventory_items as any)?.unit_cost
       } : null,
       match_confidence: item.match_confidence,
       match_method: item.match_method
@@ -261,7 +263,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       success: true,
       data: {
         invoice_id: id,
-        supplier_name: invoice.suppliers?.name,
+        supplier_name: (invoice.suppliers as any)?.name,
         matching_results: matchingResults
       }
     })

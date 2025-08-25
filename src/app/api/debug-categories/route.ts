@@ -34,8 +34,8 @@ export async function GET() {
     }))
 
     // Group by parent-child relationships
-    const topLevel = categoryAnalysis.filter(cat => !cat.hasParent)
-    const childCategories = categoryAnalysis.filter(cat => cat.hasParent)
+    const topLevel = categoryAnalysis.filter((cat: any) => !cat.hasParent)
+    const childCategories = categoryAnalysis.filter((cat: any) => cat.hasParent)
 
     return NextResponse.json({
       success: true,

@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
       .from('low_stock_alerts')
       .update({
         is_acknowledged: acknowledged,
-        acknowledged_by: acknowledged ? authResult.userId : null,
+        acknowledged_by: acknowledged ? (authResult as any).userId : null,
         acknowledged_at: acknowledged ? new Date().toISOString() : null
       })
       .in('id', alertIds)

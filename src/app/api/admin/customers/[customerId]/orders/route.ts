@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { customerId: string } }
+  { params }: { params: Promise<{ customerId: string }> }
 ) {
   try {
     const supabase = await createClient()
@@ -26,7 +26,8 @@ export async function GET(
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
     
-    const customerId = params.customerId
+    const resolvedParams = await params
+    const customerId = resolvedParams.customerId
     
     // Fetch orders for the specific customer
     const { data: orders, error: ordersError } = await supabase

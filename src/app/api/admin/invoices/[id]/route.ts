@@ -3,7 +3,7 @@ import { requireAdminAuth } from '@/lib/admin/middleware'
 import { createClient } from '@/lib/supabase/server'
 
 interface RouteContext {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 export async function GET(request: NextRequest, context: RouteContext) {
@@ -14,7 +14,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
       return authResult
     }
 
-    const { id } = context.params
+    const resolvedParams = await context.params
+    const { id } = resolvedParams
     const supabase = await createClient()
 
     // Get invoice with related data
@@ -124,7 +125,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       return authResult
     }
 
-    const { id } = context.params
+    const resolvedParams = await context.params
+    const { id } = resolvedParams
     const body = await request.json()
     const {
       invoice_number,
@@ -153,7 +155,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     // Add processing metadata if status is being updated
     if (status && ['parsed', 'matched', 'confirmed'].includes(status)) {
       updateData.processed_at = new Date().toISOString()
-      updateData.processed_by = authResult.userId
+      updateData.processed_by = (authResult as any).userId
     }
 
     const { data: updatedInvoice, error } = await supabase
@@ -215,7 +217,8 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       return authResult
     }
 
-    const { id } = context.params
+    const resolvedParams = await context.params
+    const { id } = resolvedParams
     const supabase = await createClient()
 
     // Check if invoice exists and get file info for cleanup

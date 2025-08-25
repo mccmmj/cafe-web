@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
         id: inv.id,
         invoice_number: inv.invoice_number,
         status: inv.status,
-        supplier: inv.suppliers?.name
+        supplier: (inv.suppliers as any)?.name
       })),
       statusCounts,
       totalInvoices: invoices.length

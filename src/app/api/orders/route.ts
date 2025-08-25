@@ -1,38 +1,64 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createOrder } from '@/lib/supabase/database'
 import { createOrderSchema } from '@/lib/validations/order'
+import { rateLimiters } from '@/lib/security/rate-limiter'
+import { validateOrderItem, validateCustomerInfo, ValidationError } from '@/lib/security/input-validation'
+import { addSecurityHeaders } from '@/lib/security/headers'
 
 export async function POST(request: NextRequest) {
   try {
+    // Apply rate limiting
+    const rateLimitResult = rateLimiters.api(request)
+    if (!rateLimitResult.success) {
+      const response = NextResponse.json(
+        { error: rateLimitResult.error },
+        { status: 429 }
+      )
+      Object.entries(rateLimitResult.headers || {}).forEach(([key, value]) => {
+        response.headers.set(key, value)
+      })
+      return addSecurityHeaders(response)
+    }
+
     const body = await request.json()
     console.log('Received order data:', JSON.stringify(body, null, 2))
     
-    // Basic validation - ensure required fields are present
-    if (!body.totalAmount || !body.items || !Array.isArray(body.items) || body.items.length === 0) {
-      console.log('Validation failed:', { totalAmount: body.totalAmount, items: body.items })
-      return NextResponse.json(
-        { error: 'Invalid order data: totalAmount and items are required' },
-        { status: 400 }
-      )
+    // Enhanced validation using security utilities
+    try {
+      // Validate customer info if provided
+      if (body.customerInfo && !validateCustomerInfo(body.customerInfo)) {
+        throw new ValidationError('Invalid customer information')
+      }
+      
+      // Validate required fields
+      if (!body.totalAmount || !body.items || !Array.isArray(body.items) || body.items.length === 0) {
+        throw new ValidationError('Invalid order data: totalAmount and items are required')
+      }
+      
+      // Validate each item
+      for (let i = 0; i < body.items.length; i++) {
+        if (!validateOrderItem(body.items[i])) {
+          throw new ValidationError(`Invalid item data at index ${i}`)
+        }
+      }
+      
+    } catch (validationError) {
+      if (validationError instanceof ValidationError) {
+        console.log('Validation failed:', validationError.message)
+        return addSecurityHeaders(NextResponse.json(
+          { error: validationError.message },
+          { status: 400 }
+        ))
+      }
+      throw validationError
     }
     
-    // Validate each item has required fields
-    for (let i = 0; i < body.items.length; i++) {
-      const item = body.items[i]
-      if (!item.squareItemId || !item.itemName || !item.quantity || !item.unitPrice) {
-        console.log(`Item validation failed at index ${i}:`, item)
-        return NextResponse.json(
-          { error: `Invalid item data at index ${i}: missing required fields` },
-          { status: 400 }
-        )
-      }
-    }
     
     // Create the order directly with database function
     console.log('Calling createOrder with data:', body)
     const order = await createOrder(body)
     
-    return NextResponse.json(order)
+    return addSecurityHeaders(NextResponse.json(order))
   } catch (error) {
     console.error('Error creating order:', error)
     
@@ -48,14 +74,13 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    return NextResponse.json(
+    return addSecurityHeaders(NextResponse.json(
       { 
         error: 'Failed to create order', 
-        message: error instanceof Error ? error.message : 'Unknown error',
-        details: error
+        message: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }
-    )
+    ))
   }
 }
 

@@ -3,7 +3,7 @@ import { requireAdminAuth } from '@/lib/admin/middleware'
 import { createClient } from '@/lib/supabase/server'
 
 interface RouteContext {
-  params: { itemId: string }
+  params: Promise<{ itemId: string }>
 }
 
 export async function PUT(request: NextRequest, context: RouteContext) {
@@ -14,7 +14,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       return authResult
     }
 
-    const { itemId } = context.params
+    const resolvedParams = await context.params
+    const { itemId } = resolvedParams
     const body = await request.json()
     const {
       matched_item_id,
@@ -124,7 +125,8 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       return authResult
     }
 
-    const { itemId } = context.params
+    const resolvedParams = await context.params
+    const { itemId } = resolvedParams
     const supabase = await createClient()
 
     // Remove the match from the invoice item

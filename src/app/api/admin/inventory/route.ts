@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
         new_stock: current_stock,
         unit_cost: unit_cost || 0,
         notes: 'Initial stock entry',
-        created_by: authResult.userId
+        created_by: (authResult as any).userId
       })
 
     if (movementError) {

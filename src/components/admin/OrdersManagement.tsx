@@ -104,10 +104,13 @@ export function OrdersManagement() {
       const response = await fetch(`/api/admin/orders?${params}`)
       
       if (!response.ok) {
-        throw new Error('Failed to fetch orders')
+        const errorText = await response.text()
+        console.error('Orders API error:', response.status, errorText)
+        throw new Error(`Failed to fetch orders: ${response.status}`)
       }
 
       const data = await response.json()
+      console.log('Orders fetched:', data.orders?.length || 0, 'total:', data.pagination?.total || 0)
       setOrders(data.orders)
       setPagination(prev => ({
         ...prev,

@@ -2,6 +2,7 @@
 
 import { ShoppingCart, Plus, Minus, Trash2 } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { useRouter } from 'next/navigation'
 import { useCartState, useUpdateCartItem, useRemoveCartItem, useClearCart } from '@/hooks/useCartData'
 import { useSquareCartTotals } from '@/hooks/useSquareCartTotals'
 import Button from '@/components/ui/Button'
@@ -9,8 +10,9 @@ import Modal from '@/components/ui/Modal'
 import { toast } from 'react-hot-toast'
 
 export default function GlobalCartModal() {
+  const router = useRouter()
   const { cart, isOpen, closeCart, itemCount } = useCartState()
-  const squareTotals = useSquareCartTotals(cart)
+  const squareTotals = useSquareCartTotals(cart?.items || null)
   const updateCartItem = useUpdateCartItem()
   const removeFromCart = useRemoveCartItem()
   const clearCart = useClearCart()
@@ -48,9 +50,10 @@ export default function GlobalCartModal() {
   }
 
   const handleCheckout = () => {
-    // Navigate to checkout or open checkout modal
-    // For now, we'll redirect to the orders page or implement checkout flow
-    window.location.href = '/checkout'
+    // Close cart modal first to prevent any state conflicts
+    closeCart()
+    // Use Next.js router for proper client-side navigation
+    router.push('/checkout')
   }
 
   const formatPrice = (price: number) => price.toFixed(2)
@@ -70,7 +73,7 @@ export default function GlobalCartModal() {
           <p className="text-gray-600 mb-6">Start adding items from our menu!</p>
           <Button onClick={() => {
             closeCart()
-            window.location.href = '/menu'
+            router.push('/menu')
           }}>
             Browse Menu
           </Button>

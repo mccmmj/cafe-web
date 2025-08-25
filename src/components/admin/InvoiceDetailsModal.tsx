@@ -37,8 +37,8 @@ interface InvoiceItem {
   }
 }
 
-interface DetailedInvoice extends Invoice {
-  invoice_items: InvoiceItem[]
+interface DetailedInvoice extends Omit<Invoice, 'invoice_items'> {
+  invoice_items: any[]
 }
 
 interface InvoiceDetailsModalProps {

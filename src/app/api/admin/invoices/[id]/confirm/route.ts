@@ -40,7 +40,7 @@ export async function PUT(
     }
 
     // Update inventory stock levels for matched items
-    const matchedItems = invoice.invoice_items.filter(item => 
+    const matchedItems = invoice.invoice_items.filter((item: any) => 
       item.matched_item_id && item.match_method !== 'skipped'
     )
 
@@ -116,8 +116,8 @@ export async function PUT(
     // Generate summary stats
     const totalItems = invoice.invoice_items.length
     const matchedCount = matchedItems.length
-    const skippedCount = invoice.invoice_items.filter(item => item.match_method === 'skipped').length
-    const createdCount = invoice.invoice_items.filter(item => item.match_method === 'manual_create').length
+    const skippedCount = invoice.invoice_items.filter((item: any) => item.match_method === 'skipped').length
+    const createdCount = invoice.invoice_items.filter((item: any) => item.match_method === 'manual_create').length
 
     return NextResponse.json({
       success: true,

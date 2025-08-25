@@ -44,7 +44,7 @@ export default function CheckoutFlow({ customerInfo, onSuccess, onCancel }: Chec
   const [showSquareForm, setShowSquareForm] = useState(false)
   
   const { cart } = useCartState()
-  const squareTotals = useSquareCartTotals(cart)
+  const squareTotals = useSquareCartTotals(cart?.items || null)
 
   // Saved card management functions
   const getSavedCards = useCallback(async () => {

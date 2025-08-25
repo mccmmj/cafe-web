@@ -2,6 +2,36 @@ import { NextResponse } from 'next/server'
 import { listCatalogObjects, searchAllCatalogItems } from '@/lib/square/fetch-client'
 import { sortMenuItems, sortMenuCategories } from '@/lib/constants/menu'
 
+// In-memory cache for menu data
+let menuCache: {
+  data: any
+  timestamp: number
+  ttl: number
+} | null = null
+
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes in milliseconds
+
+function isCacheValid(): boolean {
+  return menuCache !== null && Date.now() - menuCache.timestamp < menuCache.ttl
+}
+
+function getCachedMenu() {
+  if (isCacheValid()) {
+    console.log('✅ Serving menu from cache')
+    return menuCache!.data
+  }
+  return null
+}
+
+function setCachedMenu(data: any) {
+  menuCache = {
+    data,
+    timestamp: Date.now(),
+    ttl: CACHE_TTL
+  }
+  console.log('💾 Menu data cached for 5 minutes')
+}
+
 interface TransformedMenuItem {
   id: string
   name: string
@@ -26,6 +56,10 @@ interface TransformedMenuItem {
 interface CatalogObject {
   id: string
   type: string
+  is_deleted?: boolean
+  present_at_all_locations?: boolean
+  present_at_location_ids?: string[]
+  absent_at_location_ids?: string[]
   item_data?: {
     name: string
     description?: string
@@ -39,6 +73,7 @@ interface CatalogObject {
     }>
     image_ids?: string[]
     is_deleted?: boolean
+    is_archived?: boolean
     modifier_list_info?: Array<{
       modifier_list_id: string
       name?: string
@@ -48,11 +83,25 @@ interface CatalogObject {
     name: string
     description?: string
     ordinal?: number
+    parent_category?: {
+      id: string
+    }
   }
 }
 
 export async function GET() {
   try {
+    // Check cache first
+    const cachedMenu = getCachedMenu()
+    if (cachedMenu) {
+      return NextResponse.json(cachedMenu, {
+        headers: {
+          'Cache-Control': 'public, max-age=300, s-maxage=300', // 5 minutes browser cache
+          'X-Cache': 'HIT' // Indicate this was a cache hit
+        }
+      })
+    }
+
     // Fetch items via search (to get all items including those missing from list API)
     // and categories via list API
     const [itemsData, categoriesData] = await Promise.all([
@@ -91,18 +140,18 @@ export async function GET() {
 
     // Separate items and categories, explicitly filter out ITEM_VARIATIONS and other types
     const items = catalogData.objects.filter((obj: CatalogObject) => obj.type === 'ITEM')
-    const rawCategories = catalogData.objects.filter((obj: CatalogObject) => obj.type === 'CATEGORY')
+    const rawCategories = catalogData.objects.filter((obj: any) => obj.type === 'CATEGORY')
     
     // console.log(`Found ${items.length} items and ${rawCategories.length} categories`)
     
     // Remove duplicate categories (same ID)
-    const categories = rawCategories.filter((category: CatalogObject, index: number, arr: CatalogObject[]) => 
-      arr.findIndex(c => c.id === category.id) === index
+    const categories = rawCategories.filter((category: any, index: number, arr: any[]) => 
+      arr.findIndex((c: any) => c.id === category.id) === index
     )
 
     // Filter items for location availability and status
     const locationId = process.env.SQUARE_LOCATION_ID
-    const availableItems = items.filter((item: CatalogObject) => {
+    const availableItems = items.filter((item: any) => {
       const itemData = item.item_data
       
       // Filter out deleted and archived items
@@ -128,7 +177,7 @@ export async function GET() {
     // console.log(`Filtered ${items.length} items to ${availableItems.length} available items for location ${locationId}`)
 
     // Transform Square data to our menu format
-    const transformedItems = availableItems.map((item: CatalogObject) => {
+    const transformedItems = availableItems.map((item: any) => {
       const itemData = item.item_data
       if (!itemData) {
         return {
@@ -156,13 +205,13 @@ export async function GET() {
         price: price / 100, // Convert cents to dollars
         categoryId: categoryId,
         imageUrl: itemData.image_ids?.[0] ? `/api/square/image/${itemData.image_ids[0]}` : undefined,
-        variations: itemData?.variations?.map((variation) => ({
+        variations: itemData?.variations?.map((variation: any) => ({
           id: variation.id,
           name: variation.item_variation_data.name,
           priceDifference: (variation.item_variation_data.price_money?.amount || 0) / 100 - price / 100
         })) || [],
         isAvailable: !itemData.is_deleted,
-        modifiers: itemData?.modifier_list_info?.map((modInfo) => ({
+        modifiers: itemData?.modifier_list_info?.map((modInfo: any) => ({
           id: modInfo.modifier_list_id,
           name: modInfo.name || 'Modifier',
           price: 0, // Modifier prices come from the modifier list details
@@ -172,12 +221,12 @@ export async function GET() {
     })
 
     // First, organize categories by parent-child relationships
-    const topLevelCategories: CatalogObject[] = []
-    const childCategories: CatalogObject[] = []
+    const topLevelCategories: any[] = []
+    const childCategories: any[] = []
     
     // Organize categories by parent-child relationships
     
-    categories.forEach((category: CatalogObject) => {
+    categories.forEach((category: any) => {
       const parentCategory = category.category_data?.parent_category
       const parentId = parentCategory?.id
       const categoryOrdinal = category.category_data?.ordinal
@@ -188,7 +237,7 @@ export async function GET() {
       } else {
         // For sandbox environment, check if there's a category with ordinal immediately before this one
         // that could be the parent (e.g., FRAPPUCCINO=20, COFFEE=21, CREME=22)
-        const potentialParent = categories.find((potentialParent: CatalogObject) => {
+        const potentialParent = categories.find((potentialParent: any) => {
           const parentOrdinal = potentialParent.category_data?.ordinal
           // Look for a category with an ordinal exactly 1 or 2 less than this category
           // and that could logically be a parent (like FRAPPUCCINO for COFFEE/CREME)
@@ -206,9 +255,9 @@ export async function GET() {
     })
     
 
-    const transformedCategories = topLevelCategories.map((category: CatalogObject) => {
+    const transformedCategories = topLevelCategories.map((category: any) => {
       // Find child categories for this parent
-      const children = childCategories.filter((child: CatalogObject) => {
+      const children = childCategories.filter((child: any) => {
         const childParentId = child.category_data?.parent_category?.id
         const categoryOrdinal = category.category_data?.ordinal
         const childOrdinal = child.category_data?.ordinal
@@ -227,17 +276,17 @@ export async function GET() {
       })
       
       // Get direct items for this category
-      let categoryItems = transformedItems.filter((item: TransformedMenuItem) => item.categoryId === category.id)
+      let categoryItems = transformedItems.filter((item: any) => item.categoryId === category.id)
       
       // Get items from child categories
-      const childItems = children.flatMap((child: CatalogObject) => 
-        transformedItems.filter((item: TransformedMenuItem) => item.categoryId === child.id)
+      const childItems = children.flatMap((child: any) => 
+        transformedItems.filter((item: any) => item.categoryId === child.id)
       )
       
       // If no items found by ID, try matching by category name for common seeded categories
       if (categoryItems.length === 0 && childItems.length === 0) {
         const categoryName = category.category_data?.name.toLowerCase() || ''
-        categoryItems = transformedItems.filter((item: TransformedMenuItem) => {
+        categoryItems = transformedItems.filter((item: any) => {
           const itemCategoryId = item.categoryId?.toLowerCase()
           return itemCategoryId?.includes(categoryName.replace(/\s+/g, '-')) || 
                  itemCategoryId?.includes(categoryName.replace(/\s+/g, ''))
@@ -248,8 +297,8 @@ export async function GET() {
       //   categoryItems.map(item => `${item.name} (categoryId: ${item.categoryId})`))
       
       // Create subcategories structure for child categories
-      const subcategories = children.map((child: CatalogObject) => {
-        const childItems = transformedItems.filter((item: TransformedMenuItem) => item.categoryId === child.id)
+      const subcategories = children.map((child: any) => {
+        const childItems = transformedItems.filter((item: any) => item.categoryId === child.id)
         return {
           id: child.id,
           name: child.category_data?.name || '',
@@ -257,7 +306,7 @@ export async function GET() {
           items: sortMenuItems(childItems),
           sortOrder: child.category_data?.ordinal || 0
         }
-      }).sort((a, b) => a.sortOrder - b.sortOrder)
+      }).sort((a: any, b: any) => a.sortOrder - b.sortOrder)
 
       return {
         id: category.id,
@@ -270,8 +319,8 @@ export async function GET() {
     })
 
     // Add uncategorized items
-    const uncategorizedItems = transformedItems.filter((item: TransformedMenuItem) => 
-      !categories.some((cat: CatalogObject) => cat.id === item.categoryId)
+    const uncategorizedItems = transformedItems.filter((item: any) => 
+      !categories.some((cat: any) => cat.id === item.categoryId)
     )
 
     // console.log(`Uncategorized items check:`)
@@ -286,6 +335,7 @@ export async function GET() {
         name: 'Other Items',
         description: 'Additional menu items',
         items: sortMenuItems(uncategorizedItems), // Apply smart sorting to uncategorized items too
+        subcategories: undefined,
         sortOrder: 999
       })
     }
@@ -293,7 +343,7 @@ export async function GET() {
     // Sort categories using business logic priority instead of just ordinal
     const sortedCategories = sortMenuCategories(transformedCategories)
 
-    return NextResponse.json({
+    const menuData = {
       categories: sortedCategories,
       items: transformedItems,
       lastUpdated: new Date().toISOString(),
@@ -310,6 +360,16 @@ export async function GET() {
       //     itemCount: c.items.length 
       //   }))
       // }
+    }
+
+    // Cache the menu data
+    setCachedMenu(menuData)
+
+    return NextResponse.json(menuData, {
+      headers: {
+        'Cache-Control': 'public, max-age=300, s-maxage=300', // 5 minutes browser cache
+        'X-Cache': 'MISS' // Indicate this was a cache miss
+      }
     })
 
   } catch (error) {

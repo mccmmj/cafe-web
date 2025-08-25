@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
         file_type,
         file_size,
         status: 'uploaded',
-        created_by: authResult.userId
+        created_by: (authResult as any).userId
       })
       .select(`
         id,

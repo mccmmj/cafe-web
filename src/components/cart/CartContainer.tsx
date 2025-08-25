@@ -122,7 +122,7 @@ const CartContainer = ({
               tax={tax}
               total={total}
               itemCount={itemCount}
-              taxInfo={taxInfo}
+              taxInfo={taxInfo || undefined}
             />
 
             {/* Actions */}

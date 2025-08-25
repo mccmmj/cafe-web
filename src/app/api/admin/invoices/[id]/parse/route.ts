@@ -5,7 +5,7 @@ import { parseInvoiceWithAI } from '@/lib/ai/openai-service'
 import { processInvoiceFile, validateInvoiceText } from '@/lib/document/pdf-processor'
 
 interface RouteContext {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 export async function POST(request: NextRequest, context: RouteContext) {
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       .from('invoices')
       .update({
         status: 'parsing',
-        processed_by: authResult.userId,
+        processed_by: (authResult as any).userId,
         processed_at: new Date().toISOString()
       })
       .eq('id', id)
@@ -152,7 +152,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       
       const aiResult = await parseInvoiceWithAI({
         text: documentResult.text,
-        supplier_name: invoice.suppliers?.name,
+        supplier_name: (invoice.suppliers as any)?.name,
         template_rules: template?.parsing_rules || {}
       })
 
@@ -215,7 +215,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       }
 
       // Step 6: Create purchase order if supplier was created/found
-      let purchaseOrderId = null
+      let purchaseOrderId: string | null = null
       if (finalSupplierId && !invoice.supplier_id) {
         console.log('📦 Creating purchase order for invoice')
         
@@ -230,7 +230,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
             status: 'confirmed', // Mark as confirmed since we have the invoice
             total_amount: orderTotal,
             notes: `Auto-created from invoice ${invoice.invoice_number}`,
-            created_by: authResult.userId
+            created_by: (authResult as any).userId
           })
           .select('id, order_number')
           .single()
@@ -318,10 +318,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
       // Step 9: Update supplier template success rate if template was used
       if (template) {
-        await supabase.rpc('increment_template_usage', {
-          template_id: template.id,
-          success: true
-        }).catch(err => console.log('Template update failed:', err))
+        try {
+          await supabase.rpc('increment_template_usage', {
+            template_id: (template as any).id,
+            success: true
+          })
+        } catch (err) {
+          console.log('Template update failed:', err)
+        }
       }
 
       console.log('✅ Invoice parsing completed successfully')

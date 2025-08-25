@@ -23,7 +23,7 @@ interface CustomerInfo {
 export default function CheckoutPage() {
   const router = useRouter()
   const { cart, itemCount, isEmpty } = useCartState()
-  const squareTotals = useSquareCartTotals(cart)
+  const squareTotals = useSquareCartTotals(cart?.items || null)
   const [user, setUser] = useState<any>(null)
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo>({
     name: '',
@@ -65,11 +65,18 @@ export default function CheckoutPage() {
     loadUserData()
   }, []) // Remove dependencies to prevent infinite loop
 
-  // Redirect if cart is empty
+  // Redirect if cart is empty (with a small delay to ensure cart is loaded)
   useEffect(() => {
-    if (!loading && isEmpty) {
-      toast.error('Your cart is empty')
-      router.push('/menu')
+    if (!loading) {
+      // Add a small delay to ensure cart state is fully loaded
+      const timeoutId = setTimeout(() => {
+        if (isEmpty) {
+          toast.error('Your cart is empty')
+          router.push('/menu')
+        }
+      }, 100)
+      
+      return () => clearTimeout(timeoutId)
     }
   }, [isEmpty, loading, router])
 

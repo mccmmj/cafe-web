@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { findOrderMatches } from '@/lib/matching/item-matcher'
 
 interface RouteContext {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 export async function POST(request: NextRequest, context: RouteContext) {
@@ -15,7 +15,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return authResult
     }
 
-    const { id } = context.params
+    const resolvedParams = await context.params
+    const { id } = resolvedParams
     const supabase = await createClient()
 
     console.log('🔍 Starting order matching for invoice:', id)
@@ -98,7 +99,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       id: order.id,
       order_number: order.order_number,
       supplier_id: order.supplier_id,
-      supplier_name: order.suppliers?.name || '',
+      supplier_name: (order.suppliers as any)?.name || '',
       order_date: order.order_date,
       expected_delivery_date: order.expected_delivery_date,
       status: order.status,
@@ -106,7 +107,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       items: (order.purchase_order_items || []).map(item => ({
         id: item.id,
         inventory_item_id: item.inventory_item_id,
-        item_name: item.inventory_items?.item_name || 'Unknown Item',
+        item_name: (item.inventory_items as any)?.item_name || 'Unknown Item',
         quantity_ordered: item.quantity_ordered,
         unit_cost: item.unit_cost,
         total_cost: item.total_cost
@@ -125,7 +126,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     // Find order matches
     const orderMatches = await findOrderMatches(
-      invoice.suppliers?.name || '',
+      (invoice.suppliers as any)?.name || '',
       invoice.invoice_date,
       invoice.total_amount,
       invoiceItems,
@@ -187,7 +188,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         invoice_id: id,
         invoice_date: invoice.invoice_date,
         invoice_total: invoice.total_amount,
-        supplier_name: invoice.suppliers?.name,
+        supplier_name: (invoice.suppliers as any)?.name,
         order_matches: orderMatches,
         auto_matches: autoMatches,
         statistics
@@ -215,7 +216,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
       return authResult
     }
 
-    const { id } = context.params
+    const resolvedParams = await context.params
+    const { id } = resolvedParams
     const supabase = await createClient()
 
     // Get existing order matches for the invoice

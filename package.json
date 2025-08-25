@@ -42,7 +42,7 @@
     "react-dom": "^19.0.0",
     "react-hot-toast": "^2.5.2",
     "react-square-web-payments-sdk": "^3.2.4-beta.1",
-    "resend": "^4.7.0",
+    "resend": "^4.8.0",
     "square": "^43.0.0",
     "string-similarity": "^4.0.4",
     "tailwind-merge": "^3.3.1",

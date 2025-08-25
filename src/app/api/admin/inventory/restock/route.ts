@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
         unit_cost: restockUnitCost,
         reference_id: reference_id || null,
         notes: notes || 'Stock restock via admin interface',
-        created_by: authResult.userId
+        created_by: (authResult as any).userId
       })
 
     if (movementError) {
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
       .from('low_stock_alerts')
       .update({ 
         is_acknowledged: true,
-        acknowledged_by: authResult.userId,
+        acknowledged_by: (authResult as any).userId,
         acknowledged_at: new Date().toISOString()
       })
       .eq('inventory_item_id', inventory_item_id)

@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { locationId: string } }
+  { params }: { params: Promise<{ locationId: string }> }
 ) {
   try {
     // Verify admin authentication
@@ -13,7 +13,8 @@ export async function PATCH(
       return authResult
     }
 
-    const { locationId } = params
+    const resolvedParams = await params
+    const { locationId } = resolvedParams
     if (!locationId) {
       return NextResponse.json(
         { error: 'Location ID is required' },
