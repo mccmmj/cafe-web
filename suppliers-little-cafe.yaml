@@ -1,0 +1,75 @@
+# Suppliers YAML File
+suppliers:
+  - name: "Aspen Bakery"
+    contact_person: "Joe Smith"
+    email: "joe@aspenbaking.com"
+    phone: "(303) 333-6025"
+    address: "8035 E. 40th Avenue, Denver, CO 80207"
+    payment_terms: "Net 30"
+    notes: "Croissants, Danish, Coffee Cakes, excellent customer service"
+    is_active: true
+
+  - name: "Odeko, Inc."
+    contact_person: "David Pardo"
+    email: "dpardo@odeko.coop"
+    phone: "(303) 565-8669"
+    address: "247 Centre Street 4th Floor, New York, NY 10013"
+    payment_terms: "Net 15"
+    notes: "Dis Burritos, Sammies, Savory Croissants. Organic options available"
+    is_active: true
+
+  - name: "Gold Seal Distributing, LLC"
+    contact_person: "Abi Lutz"
+    email: "abi@goldsealdistributing.com"
+    phone: "(970) 833-1850"
+    address: "4543 Viking Way, Loveland, CO 80538"
+    payment_terms: "Net 30"
+    notes: "Cake Pops, Brownies, Patter Bars, locally sourced when possible"
+    is_active: true
+
+  # Inactive supplier
+  - name: "Bluepoint Bakery"
+    contact_person: "Nicole Rapp"
+    email: "Nicole@bluepointbakery.com"
+    phone: "(303) 802-9612"
+    address: "1721 E 58th Ave, Denver, CO 80216"
+    payment_terms: "Net 30"
+    notes: "Pastries, Breads, Scones"
+    is_active: false
+
+  - name: "Aurora Sam's Club"
+    contact_person: ""
+    email: ""
+    phone: "(303) 695-1812"
+    address: "880 S Abilene St, Aurora, CO 80012"
+    payment_terms: "Net 0"
+    notes: "Pre-packaged Goods"
+    is_active: true
+
+  - name: "Walmart Business, Aurora Supercenter"
+    contact_person: ""
+    email: ""
+    phone: "(833) 707-1245"
+    address: "14000 E Exposition Ave, Aurora, CO 80012"
+    payment_terms: "Net 0"
+    notes: "Pre-packaged Goods"
+    is_active: true
+
+  - name: "Little Man Creamery"
+    contact_person: "Chad Ahrensdorf"
+    email: "sales@littlemanicecream.com"
+    phone: "(833) 707-1245"
+    address: "4411 West Colfax Ave, Denver, CO 80204"
+    payment_terms: "Net 0"
+    notes: "Ice Cream"
+    is_active: true
+
+  - name: "Nestle Professional Solutions"
+    contact_person: ""
+    email: ""
+    phone: "(800) 344-1575"
+    address: ""
+    payment_terms: "Net 0"
+    notes: "coffee"
+    is_active: true
+
