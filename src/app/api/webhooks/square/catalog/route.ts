@@ -3,23 +3,38 @@ import { createClient } from '@supabase/supabase-js'
 import { headers } from 'next/headers'
 import crypto from 'crypto'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SECRET_KEY!
-const squareWebhookSecret = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY
-const squareAccessToken = process.env.SQUARE_ACCESS_TOKEN!
-const squareEnvironment = process.env.SQUARE_ENVIRONMENT
+function getSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseServiceKey = process.env.SUPABASE_SECRET_KEY
 
-if (!supabaseUrl || !supabaseServiceKey || !squareAccessToken) {
-  throw new Error('Missing required environment variables for Square webhook')
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error('Missing Supabase environment variables for Square webhook')
+  }
+
+  return createClient(supabaseUrl, supabaseServiceKey)
 }
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey)
+function getSquareConfig() {
+  const squareWebhookSecret = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY
+  const squareAccessToken = process.env.SQUARE_ACCESS_TOKEN
+  const squareEnvironment = process.env.SQUARE_ENVIRONMENT
 
-// Square API configuration
-const SQUARE_BASE_URL = squareEnvironment === 'production'
-  ? 'https://connect.squareup.com'
-  : 'https://connect.squareupsandbox.com'
-const SQUARE_VERSION = '2024-12-18'
+  if (!squareAccessToken) {
+    throw new Error('Missing required Square environment variables for webhook')
+  }
+
+  return { squareWebhookSecret, squareAccessToken, squareEnvironment }
+}
+
+function getSquareApiConfig() {
+  const { squareEnvironment } = getSquareConfig()
+  return {
+    SQUARE_BASE_URL: squareEnvironment === 'production'
+      ? 'https://connect.squareup.com'
+      : 'https://connect.squareupsandbox.com',
+    SQUARE_VERSION: '2024-12-18'
+  }
+}
 
 interface SquareCatalogWebhookEvent {
   type: 'catalog.version.updated'
@@ -66,6 +81,8 @@ function verifySquareSignature(body: string, signature: string, secret: string):
 }
 
 function getSquareHeaders() {
+  const { squareAccessToken } = getSquareConfig()
+  const { SQUARE_VERSION } = getSquareApiConfig()
   return {
     'Square-Version': SQUARE_VERSION,
     'Authorization': `Bearer ${squareAccessToken}`,
@@ -75,6 +92,7 @@ function getSquareHeaders() {
 
 async function getLastCatalogSync() {
   try {
+    const supabase = getSupabaseClient()
     const { data: lastSync, error } = await supabase
       .from('webhook_events')
       .select('processed_at, event_data')
@@ -97,6 +115,7 @@ async function getLastCatalogSync() {
 
 async function fetchCatalogChanges(sinceTimestamp?: Date) {
   try {
+    const { SQUARE_BASE_URL } = getSquareApiConfig()
     const query: any = {
       object_types: ['ITEM', 'CATEGORY'],
       include_related_objects: true
@@ -137,6 +156,7 @@ async function syncCatalogChanges(catalogData: any) {
   let updatedItems = 0
 
   // Get existing inventory items
+  const supabase = getSupabaseClient()
   const { data: existingItems, error } = await supabase
     .from('inventory_items')
     .select('id, square_item_id, item_name, updated_at')
@@ -290,6 +310,7 @@ function generateInventoryDefaults(item: any, category: any) {
 async function logWebhookEvent(event: SquareCatalogWebhookEvent, syncResult: any) {
   try {
     // Log webhook processing for audit trail
+    const supabase = getSupabaseClient()
     const { error } = await supabase
       .from('webhook_events')
       .insert([{
@@ -315,6 +336,7 @@ export async function POST(request: NextRequest) {
     const event: SquareCatalogWebhookEvent = JSON.parse(body)
 
     // Verify webhook signature if configured
+    const { squareWebhookSecret } = getSquareConfig()
     const headersList = await headers()
     const signature = headersList.get('x-square-signature') || ''
     if (squareWebhookSecret && !verifySquareSignature(body, signature, squareWebhookSecret)) {
@@ -326,6 +348,7 @@ export async function POST(request: NextRequest) {
     console.log('📅 Catalog updated at:', event.data.object.catalog_version.updated_at)
 
     // Check if this event was already processed
+    const supabase = getSupabaseClient()
     const { data: existingEvent } = await supabase
       .from('webhook_events')
       .select('id')

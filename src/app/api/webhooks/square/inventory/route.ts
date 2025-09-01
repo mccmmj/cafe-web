@@ -3,16 +3,27 @@ import { createClient } from '@supabase/supabase-js'
 import { headers } from 'next/headers'
 import crypto from 'crypto'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SECRET_KEY!
-const squareWebhookSecret = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY
-const squareLocationId = process.env.SQUARE_LOCATION_ID!
+function getSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseServiceKey = process.env.SUPABASE_SECRET_KEY
 
-if (!supabaseUrl || !supabaseServiceKey || !squareLocationId) {
-  throw new Error('Missing required environment variables for Square inventory webhook')
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error('Missing Supabase environment variables for Square inventory webhook')
+  }
+
+  return createClient(supabaseUrl, supabaseServiceKey)
 }
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey)
+function getSquareConfig() {
+  const squareWebhookSecret = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY
+  const squareLocationId = process.env.SQUARE_LOCATION_ID
+
+  if (!squareLocationId) {
+    throw new Error('Missing required Square environment variables for inventory webhook')
+  }
+
+  return { squareWebhookSecret, squareLocationId }
+}
 
 interface InventoryCount {
   catalog_object_id: string
@@ -65,6 +76,7 @@ function verifySquareSignature(body: string, signature: string, secret: string):
 
 async function getInventoryItemBySquareId(catalogObjectId: string) {
   // Try to find by exact square_item_id first
+  const supabase = getSupabaseClient()
   const { data: item, error } = await supabase
     .from('inventory_items')
     .select('id, square_item_id, item_name, current_stock')
@@ -89,6 +101,7 @@ async function updateInventoryStock(inventoryItem: any, newQuantity: number, mov
 
   try {
     // Update inventory item
+    const supabase = getSupabaseClient()
     const { error: updateError } = await supabase
       .from('inventory_items')
       .update({
@@ -145,6 +158,7 @@ async function checkLowStockAlert(inventoryItem: any, newQuantity: number) {
   if (alertLevel) {
     try {
       // Check if alert already exists for this item
+      const supabase = getSupabaseClient()
       const { data: existingAlert } = await supabase
         .from('low_stock_alerts')
         .select('id')
@@ -176,6 +190,7 @@ async function checkLowStockAlert(inventoryItem: any, newQuantity: number) {
 }
 
 async function processInventoryUpdates(inventoryCounts: InventoryCount[], eventId: string) {
+  const { squareLocationId } = getSquareConfig()
   const results = {
     processed: 0,
     updated: 0,
@@ -240,6 +255,7 @@ async function processInventoryUpdates(inventoryCounts: InventoryCount[], eventI
 
 async function logWebhookEvent(event: SquareInventoryWebhookEvent, processResult: any) {
   try {
+    const supabase = getSupabaseClient()
     const { error } = await supabase
       .from('webhook_events')
       .insert([{
@@ -265,6 +281,7 @@ export async function POST(request: NextRequest) {
     const event: SquareInventoryWebhookEvent = JSON.parse(body)
 
     // Verify webhook signature if configured
+    const { squareWebhookSecret } = getSquareConfig()
     const headersList = await headers()
     const signature = headersList.get('x-square-signature') || ''
     if (squareWebhookSecret && !verifySquareSignature(body, signature, squareWebhookSecret)) {
@@ -276,6 +293,7 @@ export async function POST(request: NextRequest) {
     console.log('📦 Inventory counts:', event.data.object.inventory_counts.length)
 
     // Check if this event was already processed
+    const supabase = getSupabaseClient()
     const { data: existingEvent } = await supabase
       .from('webhook_events')
       .select('id')

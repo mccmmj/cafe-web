@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SECRET_KEY!
+function getSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseServiceKey = process.env.SUPABASE_SECRET_KEY
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error('Missing Supabase environment variables for hybrid sync')
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error('Missing Supabase environment variables for hybrid sync')
+  }
+
+  return createClient(supabaseUrl, supabaseServiceKey)
 }
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 interface HybridSyncRequest {
   adminEmail: string
@@ -27,6 +29,7 @@ interface ConflictResolution {
 }
 
 async function validateAdminAccess(adminEmail: string) {
+  const supabase = getSupabaseClient()
   const { data: profile, error } = await supabase
     .from('profiles')
     .select('id, email, role')
@@ -41,6 +44,7 @@ async function validateAdminAccess(adminEmail: string) {
 }
 
 async function getInventoryStats() {
+  const supabase = getSupabaseClient()
   const { data: items, error } = await supabase
     .from('inventory_items')
     .select('id, current_stock, unit_cost, supplier_id')
@@ -101,6 +105,7 @@ async function runEnrichmentSync(adminEmail: string, enrichmentData: any, dryRun
 
   try {
     // Get supplier mappings
+    const supabase = getSupabaseClient()
     const { data: suppliers, error: supplierError } = await supabase
       .from('suppliers')
       .select('id, name')

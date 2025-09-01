@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SECRET_KEY!
+function getSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseServiceKey = process.env.SUPABASE_SECRET_KEY
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error('Missing Supabase environment variables')
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error('Missing Supabase environment variables')
+  }
+
+  return createClient(supabaseUrl, supabaseServiceKey)
 }
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 interface InventoryItemInput {
   square_item_id: string
@@ -31,6 +33,7 @@ interface BulkUploadRequest {
 }
 
 async function validateAdminAccess(adminEmail: string) {
+  const supabase = getSupabaseClient()
   const { data: profile, error } = await supabase
     .from('profiles')
     .select('id, email, role')
@@ -50,6 +53,7 @@ async function validateInventoryItems(items: InventoryItemInput[]) {
   const validUnitTypes = ['each', 'lb', 'oz', 'gallon', 'liter', 'ml']
 
   // Get existing square_item_ids to check for duplicates
+  const supabase = getSupabaseClient()
   const { data: existingItems } = await supabase
     .from('inventory_items')
     .select('square_item_id')
@@ -110,6 +114,7 @@ async function validateInventoryItems(items: InventoryItemInput[]) {
 }
 
 async function clearExistingInventory() {
+  const supabase = getSupabaseClient()
   const { error } = await supabase
     .from('inventory_items')
     .delete()
@@ -137,6 +142,7 @@ async function insertInventoryItems(items: InventoryItemInput[]) {
     last_restocked_at: item.last_restocked_at ? new Date(item.last_restocked_at) : null
   }))
 
+  const supabase = getSupabaseClient()
   const { data, error } = await supabase
     .from('inventory_items')
     .insert(dbItems)
@@ -166,6 +172,7 @@ async function createStockMovements(inventoryItems: any[]) {
     return []
   }
 
+  const supabase = getSupabaseClient()
   const { data, error } = await supabase
     .from('stock_movements')
     .insert(stockMovements)

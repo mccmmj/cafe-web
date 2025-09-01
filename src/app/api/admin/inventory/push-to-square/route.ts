@@ -1,23 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SECRET_KEY!
-const squareAccessToken = process.env.SQUARE_ACCESS_TOKEN!
-const squareEnvironment = process.env.SQUARE_ENVIRONMENT
-const squareLocationId = process.env.SQUARE_LOCATION_ID!
+function getSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseServiceKey = process.env.SUPABASE_SECRET_KEY
 
-if (!supabaseUrl || !supabaseServiceKey || !squareAccessToken || !squareLocationId) {
-  throw new Error('Missing required environment variables for Square inventory push')
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error('Missing Supabase environment variables')
+  }
+
+  return createClient(supabaseUrl, supabaseServiceKey)
 }
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey)
+function getSquareConfig() {
+  const squareAccessToken = process.env.SQUARE_ACCESS_TOKEN
+  const squareEnvironment = process.env.SQUARE_ENVIRONMENT
+  const squareLocationId = process.env.SQUARE_LOCATION_ID
+
+  if (!squareAccessToken || !squareLocationId) {
+    throw new Error('Missing required Square environment variables')
+  }
+
+  return { squareAccessToken, squareEnvironment, squareLocationId }
+}
 
 // Square API configuration
-const SQUARE_BASE_URL = squareEnvironment === 'production'
-  ? 'https://connect.squareup.com'
-  : 'https://connect.squareupsandbox.com'
-const SQUARE_VERSION = '2024-12-18'
+function getSquareApiConfig() {
+  const { squareEnvironment } = getSquareConfig()
+  return {
+    SQUARE_BASE_URL: squareEnvironment === 'production'
+      ? 'https://connect.squareup.com'
+      : 'https://connect.squareupsandbox.com',
+    SQUARE_VERSION: '2024-12-18'
+  }
+}
 
 interface PushToSquareRequest {
   adminEmail: string
@@ -27,6 +43,7 @@ interface PushToSquareRequest {
 }
 
 async function validateAdminAccess(adminEmail: string) {
+  const supabase = getSupabaseClient()
   const { data: profile, error } = await supabase
     .from('profiles')
     .select('id, email, role')
@@ -41,6 +58,8 @@ async function validateAdminAccess(adminEmail: string) {
 }
 
 function getSquareHeaders() {
+  const { squareAccessToken } = getSquareConfig()
+  const { SQUARE_VERSION } = getSquareApiConfig()
   return {
     'Square-Version': SQUARE_VERSION,
     'Authorization': `Bearer ${squareAccessToken}`,
@@ -49,6 +68,7 @@ function getSquareHeaders() {
 }
 
 async function getInventoryItemsToPush(itemIds?: string[]) {
+  const supabase = getSupabaseClient()
   let query = supabase
     .from('inventory_items')
     .select('id, square_item_id, item_name, current_stock, unit_cost, notes')
@@ -68,6 +88,8 @@ async function getInventoryItemsToPush(itemIds?: string[]) {
 }
 
 async function pushInventoryCountsToSquare(items: any[], dryRun: boolean) {
+  const { squareLocationId } = getSquareConfig()
+  const { SQUARE_BASE_URL } = getSquareApiConfig()
   const results = {
     processed: 0,
     updated: 0,
@@ -154,6 +176,7 @@ async function pushInventoryCountsToSquare(items: any[], dryRun: boolean) {
       console.log(`✅ Successfully pushed ${results.updated} inventory changes to Square`)
       
       // Log the push operation
+      const supabase = getSupabaseClient()
       await supabase
         .from('stock_movements')
         .insert(
