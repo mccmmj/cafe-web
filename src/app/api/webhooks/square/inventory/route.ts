@@ -126,7 +126,7 @@ async function updateInventoryStock(inventoryItem: any, newQuantity: number, mov
     }
   } catch (error) {
     console.error(`Error updating inventory for ${inventoryItem.item_name}:`, error)
-    return { updated: false, error: error.message }
+    return { updated: false, error: error instanceof Error ? error.message : 'Unknown error' }
   }
 }
 
@@ -168,7 +168,7 @@ async function checkLowStockAlert(inventoryItem: any, newQuantity: number) {
         return { alertCreated: true, alertLevel }
       }
     } catch (error) {
-      console.warn('Warning: Could not create stock alert:', error.message)
+      console.warn('Warning: Could not create stock alert:', error instanceof Error ? error.message : 'Unknown error')
     }
   }
 
@@ -252,10 +252,10 @@ async function logWebhookEvent(event: SquareInventoryWebhookEvent, processResult
       }])
 
     if (error) {
-      console.warn('Warning: Could not log webhook event:', error.message)
+      console.warn('Warning: Could not log webhook event:', error instanceof Error ? error.message : 'Unknown error')
     }
   } catch (error) {
-    console.warn('Warning: Could not log webhook event:', error.message)
+    console.warn('Warning: Could not log webhook event:', error instanceof Error ? error.message : 'Unknown error')
   }
 }
 
@@ -265,7 +265,8 @@ export async function POST(request: NextRequest) {
     const event: SquareInventoryWebhookEvent = JSON.parse(body)
 
     // Verify webhook signature if configured
-    const signature = headers().get('x-square-signature') || ''
+    const headersList = await headers()
+    const signature = headersList.get('x-square-signature') || ''
     if (squareWebhookSecret && !verifySquareSignature(body, signature, squareWebhookSecret)) {
       console.error('❌ Invalid webhook signature')
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })

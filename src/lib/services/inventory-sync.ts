@@ -51,7 +51,7 @@ export class InventorySyncService {
     const result = {
       success: false,
       updates: 0,
-      conflicts: [],
+      conflicts: [] as SyncConflict[],
       alerts: 0
     }
 
@@ -179,7 +179,7 @@ export class InventorySyncService {
 
       return { updated: true, alertCreated }
     } catch (error) {
-      return { updated: false, alertCreated: false, error: error.message }
+      return { updated: false, alertCreated: false, error: error instanceof Error ? error.message : 'Unknown error' }
     }
   }
 
@@ -337,7 +337,7 @@ export class InventorySyncService {
   /**
    * Force a manual sync (for testing or recovery)
    */
-  static async forceManu alSync(syncType: 'catalog' | 'inventory' | 'both' = 'both'): Promise<{
+  static async forceManualSync(syncType: 'catalog' | 'inventory' | 'both' = 'both'): Promise<{
     success: boolean
     results: any
   }> {

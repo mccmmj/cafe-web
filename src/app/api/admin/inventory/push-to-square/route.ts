@@ -126,7 +126,7 @@ async function pushInventoryCountsToSquare(items: any[], dryRun: boolean) {
       }
     } catch (error) {
       results.errors++
-      results.errorDetails.push(`${item.item_name}: ${error.message}`)
+      results.errorDetails.push(`${item.item_name}: ${error instanceof Error ? error.message : 'Unknown error'}`)
       console.error(`Error processing ${item.item_name}:`, error)
     }
   }
@@ -170,7 +170,7 @@ async function pushInventoryCountsToSquare(items: any[], dryRun: boolean) {
 
     } catch (error) {
       results.errors += inventoryChanges.length
-      results.errorDetails.push(`Batch push failed: ${error.message}`)
+      results.errorDetails.push(`Batch push failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
       console.error('Error pushing inventory changes:', error)
     }
   }

@@ -129,8 +129,8 @@ async function runEnrichmentSync(adminEmail: string, enrichmentData: any, dryRun
     })
 
     // Process enrichments with conflict resolution
-    const updates = []
-    const stockMovements = []
+    const updates: any[] = []
+    const stockMovements: any[] = []
     const stats = {
       processed: 0,
       updated: 0,
@@ -149,7 +149,7 @@ async function runEnrichmentSync(adminEmail: string, enrichmentData: any, dryRun
 
       // Build update object with conflict resolution
       const updates_obj: any = {}
-      const changes = []
+      const changes: any[] = []
 
       // Apply enrichment settings for conflict resolution
       const settings = enrichmentData.enrichment_settings || {}

@@ -185,7 +185,7 @@ async function syncCatalogChanges(catalogData: any) {
       }
     } else {
       // Create new inventory item with intelligent defaults
-      const categoryObj = categories.find(cat => cat.id === item.item_data?.category_id)
+      const categoryObj = categories.find((cat: any) => cat.id === item.item_data?.category_id)
       const supplierId = mapItemToSupplier(item, categoryObj, suppliers)
       const defaults = generateInventoryDefaults(item, categoryObj)
 
@@ -305,7 +305,7 @@ async function logWebhookEvent(event: SquareCatalogWebhookEvent, syncResult: any
       console.warn('Warning: Could not log webhook event:', error.message)
     }
   } catch (error) {
-    console.warn('Warning: Could not log webhook event:', error.message)
+    console.warn('Warning: Could not log webhook event:', error instanceof Error ? error.message : 'Unknown error')
   }
 }
 
@@ -315,7 +315,8 @@ export async function POST(request: NextRequest) {
     const event: SquareCatalogWebhookEvent = JSON.parse(body)
 
     // Verify webhook signature if configured
-    const signature = headers().get('x-square-signature') || ''
+    const headersList = await headers()
+    const signature = headersList.get('x-square-signature') || ''
     if (squareWebhookSecret && !verifySquareSignature(body, signature, squareWebhookSecret)) {
       console.error('❌ Invalid webhook signature')
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
@@ -340,7 +341,7 @@ export async function POST(request: NextRequest) {
     const lastSync = await getLastCatalogSync()
     
     // Fetch catalog changes since last sync
-    const catalogData = await fetchCatalogChanges(lastSync)
+    const catalogData = await fetchCatalogChanges(lastSync || undefined)
     
     // Sync changes to inventory
     const syncResult = await syncCatalogChanges(catalogData)
