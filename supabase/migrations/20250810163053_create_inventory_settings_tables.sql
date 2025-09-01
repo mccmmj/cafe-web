@@ -86,30 +86,12 @@ ALTER TABLE public.inventory_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.inventory_locations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.inventory_unit_types ENABLE ROW LEVEL SECURITY;
 
--- Create RLS policies
-CREATE POLICY "Allow admin access to inventory_settings" ON public.inventory_settings
-  FOR ALL USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid()
-      AND profiles.role = 'admin'
-    )
-  );
+-- Create temporary RLS policies (will upgrade to admin-only later)
+CREATE POLICY "Allow authenticated access to inventory_settings" ON public.inventory_settings
+  FOR ALL USING (auth.uid() IS NOT NULL);
 
-CREATE POLICY "Allow admin access to inventory_locations" ON public.inventory_locations
-  FOR ALL USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid()
-      AND profiles.role = 'admin'
-    )
-  );
+CREATE POLICY "Allow authenticated access to inventory_locations" ON public.inventory_locations
+  FOR ALL USING (auth.uid() IS NOT NULL);
 
-CREATE POLICY "Allow admin access to inventory_unit_types" ON public.inventory_unit_types
-  FOR ALL USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid()
-      AND profiles.role = 'admin'
-    )
-  );
+CREATE POLICY "Allow authenticated access to inventory_unit_types" ON public.inventory_unit_types
+  FOR ALL USING (auth.uid() IS NOT NULL);

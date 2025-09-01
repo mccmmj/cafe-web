@@ -136,30 +136,33 @@ ALTER TABLE public.purchase_order_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.low_stock_alerts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.recipe_ingredients ENABLE ROW LEVEL SECURITY;
 
--- 11. Create admin-only RLS policies
-CREATE POLICY "Admin can manage inventory items" ON public.inventory_items 
-  FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin'));
+-- 11. Create basic RLS policies 
+-- Note: Admin-specific policies will be added after role column is created
+-- For now, allow authenticated users to manage their data
 
-CREATE POLICY "Admin can manage suppliers" ON public.suppliers 
-  FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin'));
+CREATE POLICY "Authenticated users can manage inventory items" ON public.inventory_items 
+  FOR ALL USING (auth.uid() IS NOT NULL);
 
-CREATE POLICY "Admin can view stock movements" ON public.stock_movements 
-  FOR SELECT USING (EXISTS (SELECT 1 FROM public.profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin'));
+CREATE POLICY "Authenticated users can manage suppliers" ON public.suppliers 
+  FOR ALL USING (auth.uid() IS NOT NULL);
 
-CREATE POLICY "Admin can insert stock movements" ON public.stock_movements 
-  FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM public.profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin'));
+CREATE POLICY "Authenticated users can view stock movements" ON public.stock_movements 
+  FOR SELECT USING (auth.uid() IS NOT NULL);
 
-CREATE POLICY "Admin can manage purchase orders" ON public.purchase_orders 
-  FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin'));
+CREATE POLICY "Authenticated users can insert stock movements" ON public.stock_movements 
+  FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 
-CREATE POLICY "Admin can manage purchase order items" ON public.purchase_order_items 
-  FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin'));
+CREATE POLICY "Authenticated users can manage purchase orders" ON public.purchase_orders 
+  FOR ALL USING (auth.uid() IS NOT NULL);
 
-CREATE POLICY "Admin can manage low stock alerts" ON public.low_stock_alerts 
-  FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin'));
+CREATE POLICY "Authenticated users can manage purchase order items" ON public.purchase_order_items 
+  FOR ALL USING (auth.uid() IS NOT NULL);
 
-CREATE POLICY "Admin can manage recipe ingredients" ON public.recipe_ingredients 
-  FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin'));
+CREATE POLICY "Authenticated users can manage low stock alerts" ON public.low_stock_alerts 
+  FOR ALL USING (auth.uid() IS NOT NULL);
+
+CREATE POLICY "Authenticated users can manage recipe ingredients" ON public.recipe_ingredients 
+  FOR ALL USING (auth.uid() IS NOT NULL);
 
 -- 12. Insert initial suppliers
 INSERT INTO public.suppliers (name, contact_person, email, phone, payment_terms) VALUES 

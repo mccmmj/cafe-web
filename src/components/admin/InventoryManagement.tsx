@@ -59,6 +59,7 @@ const InventoryManagement = () => {
   const [activeTab, setActiveTab] = useState('overview')
   const [searchQuery, setSearchQuery] = useState('')
   const [stockFilter, setStockFilter] = useState('all') // all, low, critical, out_of_stock
+  const [supplierFilter, setSupplierFilter] = useState('all') // all, or supplier_id
   
   // Modal states
   const [editModalOpen, setEditModalOpen] = useState(false)
@@ -131,7 +132,7 @@ const InventoryManagement = () => {
     setSelectedItem(null)
   }
 
-  // Filter items based on search and stock level
+  // Filter items based on search, stock level, and supplier
   const filteredItems = inventoryItems.filter(item => {
     const matchesSearch = item.item_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          item.location.toLowerCase().includes(searchQuery.toLowerCase())
@@ -149,7 +150,9 @@ const InventoryManagement = () => {
       }
     })()
 
-    return matchesSearch && matchesStockFilter
+    const matchesSupplierFilter = supplierFilter === 'all' || item.supplier_id === supplierFilter
+
+    return matchesSearch && matchesStockFilter && matchesSupplierFilter
   })
 
   // Calculate summary statistics
@@ -296,18 +299,42 @@ const InventoryManagement = () => {
                 </div>
               </div>
 
+              {/* Supplier Filter */}
+              <div className="sm:w-48">
+                <div className="relative">
+                  <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <select
+                    value={supplierFilter}
+                    onChange={(e) => setSupplierFilter(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent appearance-none"
+                  >
+                    <option value="all">All Suppliers</option>
+                    {suppliers.map((supplier: any) => (
+                      <option key={supplier.id} value={supplier.id}>
+                        {supplier.name}
+                      </option>
+                    ))}
+                  </select>
+                  <Filter className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
+                </div>
+              </div>
+
               {/* Stock Level Filter */}
               <div className="sm:w-48">
-                <select
-                  value={stockFilter}
-                  onChange={(e) => setStockFilter(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                >
-                  <option value="all">All Items</option>
-                  <option value="low">Low Stock</option>
-                  <option value="critical">Critical Stock</option>
-                  <option value="out_of_stock">Out of Stock</option>
-                </select>
+                <div className="relative">
+                  <Package className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <select
+                    value={stockFilter}
+                    onChange={(e) => setStockFilter(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent appearance-none"
+                  >
+                    <option value="all">All Items</option>
+                    <option value="low">Low Stock</option>
+                    <option value="critical">Critical Stock</option>
+                    <option value="out_of_stock">Out of Stock</option>
+                  </select>
+                  <Filter className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
+                </div>
               </div>
             </div>
           </div>
