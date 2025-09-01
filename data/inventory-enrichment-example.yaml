@@ -1,0 +1,198 @@
+# Inventory Enrichment YAML File
+# Use this to enrich existing inventory items with accurate business data
+# This overlays on top of Square catalog sync to add detailed information
+
+inventory_enrichments:
+  # Coffee & Espresso Items - Update costs and suppliers
+  - square_item_id: "GIFJJEPR5MRJGOCUPJI3K5Y3"  # Pike Place Roast (from Square)
+    unit_cost: 8.50
+    supplier_name: "Premium Coffee Roasters"
+    current_stock: 35
+    minimum_threshold: 8
+    reorder_point: 15
+    location: "Coffee Storage"
+    notes: "Premium single-origin beans, roasted weekly"
+
+  - square_item_id: "UCT6VD4RATXRQS3WRAQ7FHQT"  # Espresso Beans (from Square)
+    unit_cost: 12.00
+    supplier_name: "Premium Coffee Roasters"
+    current_stock: 20
+    minimum_threshold: 5
+    reorder_point: 10
+    location: "Coffee Storage"
+    notes: "Dark roast espresso blend, check expiration dates"
+
+  # Dairy Products - Critical for freshness tracking
+  - square_item_id: "R3QHCZDAVPYIR4KNUW4HIYOC"  # Whole Milk (from Square)
+    unit_cost: 4.25
+    supplier_name: "Local Dairy Cooperative"
+    current_stock: 15
+    minimum_threshold: 8
+    reorder_point: 12
+    unit_type: "gallon"
+    location: "Walk-in Refrigerator"
+    notes: "Check expiration dates daily, rotate stock FIFO"
+    custom_fields:
+      expiration_tracking: true
+      delivery_schedule: "Monday, Wednesday, Friday"
+      order_lead_time_days: 1
+
+  # Syrups and Flavorings - Update actual costs and usage
+  - square_item_id: "KGKM2UDBHOWTQ3SWR2HAHF23"  # Caramel Syrup (from Square)
+    unit_cost: 6.75
+    supplier_name: "Denver Bakery Supply Co"
+    current_stock: 12
+    minimum_threshold: 4
+    reorder_point: 6
+    location: "Beverage Station"
+    notes: "Popular during fall season, monitor usage"
+
+  - square_item_id: "USUVWEFRWCV2KPXH65LURMXQ"  # Chocolate Syrup (from Square)
+    unit_cost: 6.25
+    supplier_name: "Denver Bakery Supply Co"
+    current_stock: 8
+    minimum_threshold: 3
+    reorder_point: 5
+    location: "Beverage Station"
+
+  # Fresh Ingredients - High turnover items
+  - square_item_id: "EGGS_FRESH_SQUARE_ID"  # Fresh Eggs
+    unit_cost: 0.28
+    supplier_name: "Local Dairy Cooperative"
+    current_stock: 72
+    minimum_threshold: 24
+    reorder_point: 36
+    location: "Walk-in Refrigerator"
+    notes: "Grade AA large eggs, check for cracks"
+    custom_fields:
+      expiration_tracking: true
+      max_storage_days: 21
+
+  - square_item_id: "BACON_PREMIUM_SQUARE_ID"  # Premium Bacon
+    unit_cost: 8.95
+    supplier_name: "Mountain Fresh Produce"
+    current_stock: 8
+    minimum_threshold: 3
+    reorder_point: 5
+    unit_type: "lb"
+    location: "Walk-in Refrigerator"
+    notes: "Applewood smoked, slice fresh daily"
+
+  # Baked Goods - Update with actual costs from supplier
+  - square_item_id: "KUINOEOULKH4LVGGN6IUNJET"  # Blueberry Muffins
+    unit_cost: 2.15
+    supplier_name: "Denver Bakery Supply Co"
+    current_stock: 18
+    minimum_threshold: 8
+    reorder_point: 12
+    location: "Display Case"
+    notes: "Delivered fresh daily at 6 AM"
+    custom_fields:
+      delivery_time: "06:00"
+      shelf_life_hours: 48
+
+  - square_item_id: "HSTJS72WEGI4GLKAOZ645GJJ"  # Chocolate Chip Cookies
+    unit_cost: 1.65
+    supplier_name: "Denver Bakery Supply Co"
+    current_stock: 24
+    minimum_threshold: 10
+    reorder_point: 15
+    location: "Display Case"
+
+  # High-Volume Packaging - Accurate inventory management critical
+  - square_item_id: "PACKAGING_CUPS_TALL"  # 12oz Paper Cups
+    unit_cost: 0.085
+    supplier_name: "Eco-Friendly Packaging"
+    current_stock: 800
+    minimum_threshold: 200
+    reorder_point: 350
+    location: "Storage Room - Shelf A"
+    notes: "Eco-friendly, compostable cups"
+    custom_fields:
+      case_quantity: 1000
+      order_in_cases: true
+
+  - square_item_id: "PACKAGING_LIDS"  # Universal Cup Lids
+    unit_cost: 0.042
+    supplier_name: "Eco-Friendly Packaging"
+    current_stock: 1200
+    minimum_threshold: 300
+    reorder_point: 500
+    location: "Storage Room - Shelf A"
+    custom_fields:
+      case_quantity: 2000
+      order_in_cases: true
+
+  # Seasonal Items - Adjust for seasonal demand
+  - square_item_id: "YRWALRYMLF4XIHJMQ75YOS3V"  # Pumpkin Spice Syrup
+    unit_cost: 7.95
+    supplier_name: "Denver Bakery Supply Co"
+    current_stock: 6
+    minimum_threshold: 2
+    reorder_point: 4
+    location: "Beverage Station"
+    notes: "Seasonal item (Sept-Dec), high demand in fall"
+    custom_fields:
+      seasonal: true
+      season_months: [9, 10, 11, 12]
+      off_season_stock: 1
+
+  # Custom inventory items not in Square (supplies, cleaning, etc.)
+  - square_item_id: "CLEANING_SANITIZER"
+    item_name: "Food-Safe Sanitizer"
+    unit_cost: 12.50
+    supplier_name: "Eco-Friendly Packaging"
+    current_stock: 4
+    minimum_threshold: 2
+    reorder_point: 3
+    unit_type: "each"
+    location: "Storage Room - Cleaning Supplies"
+    notes: "EPA approved food-safe sanitizer"
+    is_ingredient: false
+    custom_fields:
+      category: "cleaning_supplies"
+      hazmat: false
+
+  - square_item_id: "TOWELS_PAPER_ROLL"
+    item_name: "Paper Towel Rolls"
+    unit_cost: 2.25
+    supplier_name: "Eco-Friendly Packaging"
+    current_stock: 12
+    minimum_threshold: 4
+    reorder_point: 8
+    unit_type: "each"
+    location: "Storage Room"
+    is_ingredient: false
+    notes: "Commercial grade paper towels"
+
+# Enrichment configuration
+enrichment_settings:
+  # What fields can be updated from Square vs preserved from YAML
+  square_managed_fields:
+    - "item_name"           # Keep Square item names current
+    - "square_category_id"  # Track Square category changes
+  
+  yaml_managed_fields:
+    - "unit_cost"           # Business data from YAML
+    - "supplier_id"         # Business relationships
+    - "current_stock"       # Actual inventory counts
+    - "minimum_threshold"   # Business rules
+    - "reorder_point"       # Business rules
+    - "location"            # Physical location mapping
+    - "notes"               # Business-specific notes
+    - "custom_fields"       # Extended business data
+
+  # Conflict resolution rules
+  conflict_resolution:
+    default_strategy: "yaml_wins"  # YAML overrides Square for business data
+    field_strategies:
+      item_name: "square_wins"     # Let Square control item names
+      description: "square_wins"   # Let Square control descriptions
+      unit_cost: "yaml_wins"       # Business controls costs
+      supplier_id: "yaml_wins"     # Business controls suppliers
+
+# Notes:
+# - square_item_id can reference existing Square items OR be custom IDs for non-Square items
+# - custom_fields allows storing additional business data not in the standard schema
+# - enrichment_settings controls merge behavior for hybrid sync
+# - Items not listed here keep their current values unchanged

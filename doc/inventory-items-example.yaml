@@ -1,0 +1,307 @@
+# Example Inventory Items YAML File
+# Use this as a template for bulk uploading your inventory items
+
+inventory_items:
+  # Coffee & Espresso Ingredients
+  - square_item_id: "COFFEE_BEANS_PIKE_PLACE"
+    item_name: "Pike Place Roast Coffee Beans"
+    current_stock: 50
+    minimum_threshold: 10
+    reorder_point: 15
+    unit_cost: 8.50
+    unit_type: "lb"
+    supplier_name: "Premium Coffee Roasters"
+    location: "Coffee Storage"
+    notes: "Premium coffee beans for Pike Place Roast"
+    is_ingredient: true
+
+  - square_item_id: "ESPRESSO_BEANS_PREMIUM"
+    item_name: "Premium Espresso Beans"
+    current_stock: 30
+    minimum_threshold: 8
+    reorder_point: 12
+    unit_cost: 12.00
+    unit_type: "lb"
+    supplier_name: "Premium Coffee Roasters"
+    location: "Coffee Storage"
+    notes: "High-quality espresso beans for americano and lattes"
+    is_ingredient: true
+
+  - square_item_id: "WHOLE_MILK_FRESH"
+    item_name: "Whole Milk"
+    current_stock: 120
+    minimum_threshold: 20
+    reorder_point: 30
+    unit_cost: 4.50
+    unit_type: "gallon"
+    supplier_name: "Local Dairy Cooperative"
+    location: "Refrigerator"
+    notes: "Fresh whole milk for lattes and drinks"
+    is_ingredient: true
+
+  # Syrups & Flavorings
+  - square_item_id: "SYRUP_CARAMEL"
+    item_name: "Caramel Syrup"
+    current_stock: 15
+    minimum_threshold: 3
+    reorder_point: 5
+    unit_cost: 6.25
+    unit_type: "each"
+    supplier_name: "Denver Bakery Supply Co"
+    location: "Beverage Station"
+    notes: "Caramel syrup for specialty drinks"
+    is_ingredient: true
+
+  - square_item_id: "SYRUP_VANILLA"
+    item_name: "Vanilla Bean Syrup"
+    current_stock: 10
+    minimum_threshold: 2
+    reorder_point: 4
+    unit_cost: 6.75
+    unit_type: "each"
+    supplier_name: "Denver Bakery Supply Co"
+    location: "Beverage Station"
+    notes: "Premium vanilla bean syrup"
+    is_ingredient: true
+
+  - square_item_id: "SYRUP_CHOCOLATE"
+    item_name: "Chocolate Syrup"
+    current_stock: 12
+    minimum_threshold: 3
+    reorder_point: 5
+    unit_cost: 5.75
+    unit_type: "each"
+    supplier_name: "Denver Bakery Supply Co"
+    location: "Beverage Station"
+    notes: "Rich chocolate syrup for mocha drinks"
+    is_ingredient: true
+
+  # Dairy Products
+  - square_item_id: "WHIPPED_CREAM"
+    item_name: "Whipped Cream"
+    current_stock: 8
+    minimum_threshold: 2
+    reorder_point: 4
+    unit_cost: 3.50
+    unit_type: "each"
+    supplier_name: "Local Dairy Cooperative"
+    location: "Refrigerator"
+    notes: "Fresh whipped cream for specialty drinks"
+    is_ingredient: true
+
+  # Tea & Specialty Beverages
+  - square_item_id: "CHAI_CONCENTRATE"
+    item_name: "Chai Tea Concentrate"
+    current_stock: 6
+    minimum_threshold: 2
+    reorder_point: 3
+    unit_cost: 8.99
+    unit_type: "each"
+    supplier_name: "Premium Coffee Roasters"
+    location: "Beverage Station"
+    notes: "Spiced chai concentrate for tea lattes"
+    is_ingredient: true
+
+  - square_item_id: "MATCHA_POWDER"
+    item_name: "Premium Matcha Powder"
+    current_stock: 4
+    minimum_threshold: 1
+    reorder_point: 2
+    unit_cost: 15.99
+    unit_type: "each"
+    supplier_name: "Premium Coffee Roasters"
+    location: "Beverage Station"
+    notes: "Premium matcha powder for green tea lattes"
+    is_ingredient: true
+
+  # Food Ingredients
+  - square_item_id: "TORTILLAS_BREAKFAST"
+    item_name: "Large Flour Tortillas"
+    current_stock: 200
+    minimum_threshold: 30
+    reorder_point: 50
+    unit_cost: 0.35
+    unit_type: "each"
+    supplier_name: "Denver Bakery Supply Co"
+    location: "Dry Storage"
+    notes: "Large flour tortillas for breakfast burritos"
+    is_ingredient: true
+
+  - square_item_id: "EGGS_FRESH"
+    item_name: "Fresh Eggs"
+    current_stock: 60
+    minimum_threshold: 12
+    reorder_point: 20
+    unit_cost: 0.25
+    unit_type: "each"
+    supplier_name: "Local Dairy Cooperative"
+    location: "Refrigerator"
+    notes: "Fresh eggs for breakfast items"
+    is_ingredient: true
+
+  - square_item_id: "BACON_PREMIUM"
+    item_name: "Premium Bacon"
+    current_stock: 15
+    minimum_threshold: 3
+    reorder_point: 5
+    unit_cost: 8.50
+    unit_type: "lb"
+    supplier_name: "Mountain Fresh Produce"
+    location: "Refrigerator"
+    notes: "Premium bacon for breakfast items"
+    is_ingredient: true
+
+  - square_item_id: "ENGLISH_MUFFINS"
+    item_name: "Artisan English Muffins"
+    current_stock: 48
+    minimum_threshold: 10
+    reorder_point: 15
+    unit_cost: 0.45
+    unit_type: "each"
+    supplier_name: "Denver Bakery Supply Co"
+    location: "Dry Storage"
+    notes: "Artisan English muffins for breakfast sandwiches"
+    is_ingredient: true
+
+  - square_item_id: "AVOCADOS_FRESH"
+    item_name: "Fresh Avocados"
+    current_stock: 24
+    minimum_threshold: 6
+    reorder_point: 10
+    unit_cost: 1.25
+    unit_type: "each"
+    supplier_name: "Mountain Fresh Produce"
+    location: "Produce Area"
+    notes: "Fresh avocados for wraps and sandwiches"
+    is_ingredient: true
+
+  # Baked Goods (Finished Products)
+  - square_item_id: "MUFFIN_BLUEBERRY"
+    item_name: "Blueberry Muffins"
+    current_stock: 24
+    minimum_threshold: 6
+    reorder_point: 10
+    unit_cost: 1.95
+    unit_type: "each"
+    supplier_name: "Denver Bakery Supply Co"
+    location: "Display Case"
+    notes: "Fresh baked blueberry muffins"
+    is_ingredient: false
+
+  - square_item_id: "COOKIE_CHOCOLATE_CHIP"
+    item_name: "Chocolate Chip Cookies"
+    current_stock: 36
+    minimum_threshold: 8
+    reorder_point: 12
+    unit_cost: 1.45
+    unit_type: "each"
+    supplier_name: "Denver Bakery Supply Co"
+    location: "Display Case"
+    notes: "Classic chocolate chip cookies"
+    is_ingredient: false
+
+  - square_item_id: "CROISSANT_BUTTER"
+    item_name: "Butter Croissants"
+    current_stock: 18
+    minimum_threshold: 4
+    reorder_point: 8
+    unit_cost: 1.75
+    unit_type: "each"
+    supplier_name: "Denver Bakery Supply Co"
+    location: "Display Case"
+    notes: "Flaky European-style croissants"
+    is_ingredient: false
+
+  # Bottled Beverages
+  - square_item_id: "LEMONADE_FRESH"
+    item_name: "Fresh Lemonade"
+    current_stock: 24
+    minimum_threshold: 6
+    reorder_point: 12
+    unit_cost: 1.15
+    unit_type: "each"
+    supplier_name: "Mountain Fresh Produce"
+    location: "Refrigerated Cooler"
+    notes: "Fresh bottled lemonade"
+    is_ingredient: false
+
+  - square_item_id: "SPARKLING_WATER"
+    item_name: "Sparkling Water"
+    current_stock: 48
+    minimum_threshold: 12
+    reorder_point: 24
+    unit_cost: 0.75
+    unit_type: "each"
+    supplier_name: "Mountain Fresh Produce"
+    location: "Retail Display"
+    notes: "Premium sparkling water bottles"
+    is_ingredient: false
+
+  # Snacks
+  - square_item_id: "NUTS_MIXED"
+    item_name: "Premium Mixed Nuts"
+    current_stock: 25
+    minimum_threshold: 5
+    reorder_point: 10
+    unit_cost: 2.45
+    unit_type: "each"
+    supplier_name: "Mountain Fresh Produce"
+    location: "Retail Display"
+    notes: "Premium mixed nuts snack packs"
+    is_ingredient: false
+
+  - square_item_id: "PROTEIN_BARS"
+    item_name: "High-Protein Energy Bars"
+    current_stock: 30
+    minimum_threshold: 8
+    reorder_point: 15
+    unit_cost: 1.95
+    unit_type: "each"
+    supplier_name: "Mountain Fresh Produce"
+    location: "Retail Display"
+    notes: "High-protein energy bars"
+    is_ingredient: false
+
+  # Packaging & Supplies
+  - square_item_id: "CUPS_PAPER_12OZ"
+    item_name: "Paper Cups - 12oz"
+    current_stock: 500
+    minimum_threshold: 100
+    reorder_point: 200
+    unit_cost: 0.08
+    unit_type: "each"
+    supplier_name: "Eco-Friendly Packaging"
+    location: "Storage Room"
+    notes: "Eco-friendly 12oz disposable cups"
+    is_ingredient: false
+
+  - square_item_id: "CUPS_PAPER_16OZ"
+    item_name: "Paper Cups - 16oz"
+    current_stock: 500
+    minimum_threshold: 100
+    reorder_point: 200
+    unit_cost: 0.10
+    unit_type: "each"
+    supplier_name: "Eco-Friendly Packaging"
+    location: "Storage Room"
+    notes: "Eco-friendly 16oz disposable cups"
+    is_ingredient: false
+
+  - square_item_id: "LIDS_UNIVERSAL"
+    item_name: "Universal Cup Lids"
+    current_stock: 1000
+    minimum_threshold: 200
+    reorder_point: 400
+    unit_cost: 0.04
+    unit_type: "each"
+    supplier_name: "Eco-Friendly Packaging"
+    location: "Storage Room"
+    notes: "Universal fit eco-friendly cup lids"
+    is_ingredient: false
+
+# Notes:
+# - supplier_name must match existing supplier names in your database
+# - unit_type options: 'each', 'lb', 'oz', 'gallon', 'liter', 'ml'
+# - is_ingredient: true for raw ingredients, false for finished products
+# - square_item_id should match your Square catalog item IDs
+# - All monetary amounts are in USD (unit_cost)

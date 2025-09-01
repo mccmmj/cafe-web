@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui'
-import { X, Plus, Trash2, Package, Building2, Calendar } from 'lucide-react'
+import { X, Plus, Trash2, Package, Building2, Calendar, Search, ChevronDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface PurchaseOrderItem {
@@ -33,6 +33,118 @@ interface PurchaseOrderModalProps {
   order?: PurchaseOrder | null
   isOpen: boolean
   onClose: () => void
+}
+
+interface SearchableDropdownProps {
+  items: any[]
+  value: string
+  onChange: (value: string) => void
+  placeholder: string
+  className?: string
+}
+
+const SearchableDropdown = ({ items, value, onChange, placeholder, className }: SearchableDropdownProps) => {
+  const [isOpen, setIsOpen] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false)
+        setSearchTerm('')
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Filter items based on search term
+  const filteredItems = items.filter(item =>
+    item.item_name.toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
+  // Get selected item display name
+  const selectedItem = items.find(item => item.id === value)
+  const displayValue = selectedItem ? `${selectedItem.item_name} (${selectedItem.unit_type})` : ''
+
+  const handleSelect = (item: any) => {
+    onChange(item.id)
+    setIsOpen(false)
+    setSearchTerm('')
+  }
+
+  return (
+    <div ref={dropdownRef} className={`relative ${className}`}>
+      {/* Trigger Button */}
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className={`w-full px-3 py-2 text-left bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
+          !value ? 'text-gray-500' : 'text-gray-900'
+        }`}
+      >
+        <div className="flex items-center justify-between">
+          <span className="truncate">
+            {displayValue || placeholder}
+          </span>
+          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        </div>
+      </button>
+
+      {/* Dropdown */}
+      {isOpen && (
+        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-hidden">
+          {/* Search Input */}
+          <div className="p-2 border-b border-gray-200">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search items..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
+                autoFocus
+              />
+            </div>
+          </div>
+
+          {/* Items List */}
+          <div className="max-h-48 overflow-y-auto">
+            {filteredItems.length === 0 ? (
+              <div className="px-3 py-2 text-sm text-gray-500 text-center">
+                {searchTerm ? 'No items match your search' : 'No items available'}
+              </div>
+            ) : (
+              filteredItems.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleSelect(item)}
+                  className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 focus:bg-gray-50 focus:outline-none ${
+                    item.id === value ? 'bg-primary-50 text-primary-700' : 'text-gray-900'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">{item.item_name}</span>
+                    <span className="text-xs text-gray-500">({item.unit_type})</span>
+                  </div>
+                  {item.unit_cost > 0 && (
+                    <div className="text-xs text-gray-500 mt-0.5">
+                      ${item.unit_cost.toFixed(2)} per {item.unit_type}
+                    </div>
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 const PurchaseOrderModal = ({ order, isOpen, onClose }: PurchaseOrderModalProps) => {
@@ -154,8 +266,8 @@ const PurchaseOrderModal = ({ order, isOpen, onClose }: PurchaseOrderModalProps)
 
     // Validate all items
     for (const item of formData.items) {
-      if (!item.inventory_item_id || item.quantity_ordered <= 0 || item.unit_cost <= 0) {
-        toast.error('All items must have valid inventory item, quantity, and cost')
+      if (!item.inventory_item_id || item.quantity_ordered <= 0) {
+        toast.error('All items must have valid inventory item and quantity')
         return
       }
     }
@@ -191,7 +303,7 @@ const PurchaseOrderModal = ({ order, isOpen, onClose }: PurchaseOrderModalProps)
         const updatedItem = { ...item, [field]: value }
         
         // Auto-calculate total cost
-        if (field === 'quantity_ordered' || field === 'unit_cost') {
+        if (field === 'quantity_ordered') {
           updatedItem.total_cost = updatedItem.quantity_ordered * updatedItem.unit_cost
         }
         
@@ -337,19 +449,19 @@ const PurchaseOrderModal = ({ order, isOpen, onClose }: PurchaseOrderModalProps)
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Inventory Item *
                         </label>
-                        <select
-                          value={item.inventory_item_id}
-                          onChange={(e) => updateItem(index, 'inventory_item_id', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                          required
-                        >
-                          <option value="">Select an item</option>
-                          {inventoryItems.map((invItem: any) => (
-                            <option key={invItem.id} value={invItem.id}>
-                              {invItem.item_name} ({invItem.unit_type})
-                            </option>
-                          ))}
-                        </select>
+                        {formData.supplier_id ? (
+                          <SearchableDropdown
+                            items={inventoryItems.filter((invItem: any) => invItem.supplier_id === formData.supplier_id)}
+                            value={item.inventory_item_id}
+                            onChange={(value) => updateItem(index, 'inventory_item_id', value)}
+                            placeholder="Search and select an item"
+                            className="w-full"
+                          />
+                        ) : (
+                          <div className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500">
+                            Select a supplier first
+                          </div>
+                        )}
                       </div>
 
                       <div>
@@ -359,9 +471,9 @@ const PurchaseOrderModal = ({ order, isOpen, onClose }: PurchaseOrderModalProps)
                         <input
                           type="number"
                           min="1"
-                          step="0.01"
+                          step="1"
                           value={item.quantity_ordered}
-                          onChange={(e) => updateItem(index, 'quantity_ordered', parseFloat(e.target.value) || 0)}
+                          onChange={(e) => updateItem(index, 'quantity_ordered', parseInt(e.target.value) || 0)}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                           required
                         />
@@ -369,16 +481,13 @@ const PurchaseOrderModal = ({ order, isOpen, onClose }: PurchaseOrderModalProps)
 
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Unit Cost *
+                          Unit Cost
                         </label>
                         <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={item.unit_cost}
-                          onChange={(e) => updateItem(index, 'unit_cost', parseFloat(e.target.value) || 0)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                          required
+                          type="text"
+                          value={`$${item.unit_cost.toFixed(2)}`}
+                          readOnly
+                          className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md text-gray-600 cursor-not-allowed"
                         />
                       </div>
 
