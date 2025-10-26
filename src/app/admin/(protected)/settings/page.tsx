@@ -1,17 +1,26 @@
 import { requireAdmin } from '@/lib/admin/auth'
+import SiteAvailabilitySettings from '@/components/admin/SiteAvailabilitySettings'
+import { getSiteSettings, getSiteStatusUsingServiceClient } from '@/lib/services/siteSettings'
 
 export default async function AdminSettingsPage() {
   // Ensure user is admin (will redirect if not)
   await requireAdmin()
 
+  const [initialStatus, initialSettings] = await Promise.all([
+    getSiteStatusUsingServiceClient(),
+    getSiteSettings()
+  ])
+
   return (
-    <div>
+    <div className="space-y-6">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
         <p className="text-gray-600 mt-2">
           Configure system settings, integrations, and admin preferences.
         </p>
       </div>
+
+      <SiteAvailabilitySettings initialStatus={initialStatus} initialSettings={initialSettings} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* System Settings */}
