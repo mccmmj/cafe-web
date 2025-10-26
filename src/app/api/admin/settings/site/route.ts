@@ -5,10 +5,6 @@ import { getSiteSettings, getSiteStatusUsingServiceClient, saveSiteSettings } fr
 
 export async function GET(request: NextRequest) {
   const authResult = await requireAdminAuth(request)
-  if (authResult instanceof NextResponse) {
-    return authResult
-  }
-
   try {
     const settings = await getSiteSettings()
     const status = await getSiteStatusUsingServiceClient()
@@ -58,14 +54,18 @@ export async function POST(request: NextRequest) {
       ))
     }
 
-    const saved = await saveSiteSettings(payload, authResult.userId)
-    const status = await getSiteStatusUsingServiceClient()
+    if ('userId' in authResult) {
+      const saved = await saveSiteSettings(payload, authResult.userId)
+      const status = await getSiteStatusUsingServiceClient()
 
-    return addSecurityHeaders(NextResponse.json({
-      success: true,
-      settings: saved,
-      status
-    }))
+      return addSecurityHeaders(NextResponse.json({
+        success: true,
+        settings: saved,
+        status
+      }))
+    }
+
+    return authResult
   } catch (error) {
     console.error('Failed to update site settings:', error)
     return addSecurityHeaders(NextResponse.json(
