@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdminAuth } from '@/lib/admin/middleware'
+import { requireAdminAuth, isAdminAuthSuccess } from '@/lib/admin/middleware'
 import { createClient } from '@/lib/supabase/server'
 
 export async function GET(request: NextRequest) {
@@ -63,11 +63,10 @@ export async function POST(request: NextRequest) {
   try {
     // Verify admin authentication
     const authResult = await requireAdminAuth(request)
-    if (authResult instanceof NextResponse) {
+    if (!isAdminAuthSuccess(authResult)) {
       return authResult
     }
     const { userId } = authResult
-
     const body = await request.json()
     const { alertIds, acknowledged } = body
 

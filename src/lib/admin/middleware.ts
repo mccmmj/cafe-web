@@ -1,13 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { User } from '@supabase/supabase-js'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { rateLimiters } from '@/lib/security/rate-limiter'
 import { addSecurityHeaders } from '@/lib/security/headers'
+
+export interface AdminAuthSuccess {
+  user: User
+  profile: { role: unknown }
+  userId: string
+  sessionInfo: {
+    age: number
+    ip: string
+  }
+}
+
+export type AdminAuthResult = Response | AdminAuthSuccess
 
 /**
  * Admin authentication middleware for API routes with enhanced security
  * Returns admin auth info or NextResponse error
  */
-export async function requireAdminAuth(request: NextRequest) {
+export async function requireAdminAuth(request: NextRequest): Promise<AdminAuthResult> {
   try {
     // Apply admin-specific rate limiting
     const rateLimitResult = rateLimiters.admin(request)
@@ -115,4 +128,8 @@ function getClientIP(request: NextRequest): string {
   }
   
   return 'unknown'
+}
+
+export const isAdminAuthSuccess = (result: AdminAuthResult): result is AdminAuthSuccess => {
+  return 'userId' in result
 }

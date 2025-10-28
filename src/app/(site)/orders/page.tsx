@@ -24,7 +24,7 @@ interface OrderItem {
   modifiers?: Record<string, unknown> | null
 }
 
-interface Order {
+interface OrdersPageOrder {
   id: string
   square_order_id: string | null
   total_amount: number
@@ -75,7 +75,7 @@ export default function OrdersPage() {
   }, [])
 
   const filteredOrders = useMemo(() => {
-    let filtered = orders
+    let filtered = orders as OrdersPageOrder[]
 
     if (statusFilter !== 'all') {
       filtered = filtered.filter(order => order.status === statusFilter)
@@ -111,7 +111,7 @@ export default function OrdersPage() {
     }
   }
 
-  const reorderItems = async (order: Order) => {
+  const reorderItems = async (order: OrdersPageOrder) => {
     try {
       // Add each item from the order to the cart
       for (const item of order.order_items) {

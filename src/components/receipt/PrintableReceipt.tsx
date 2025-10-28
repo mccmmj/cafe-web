@@ -8,8 +8,8 @@ interface OrderItem {
   quantity: number
   unit_price: number
   total_price: number
-  variations?: Record<string, any>
-  modifiers?: Record<string, any>
+  variations?: Record<string, unknown> | null
+  modifiers?: Record<string, unknown> | null
 }
 
 interface Order {
@@ -191,16 +191,16 @@ const PrintableReceipt = forwardRef<HTMLDivElement, PrintableReceiptProps>(
                 
                 {item.variations && Object.keys(item.variations).length > 0 && (
                   <div className="receipt-item-details">
-                    {Object.entries(item.variations).map(([key, value]: [string, any]) => (
-                      <div key={key}>• {key}: {value}</div>
+                    {Object.entries(item.variations).map(([key, value]) => (
+                      <div key={key}>• {key}: {String(value)}</div>
                     ))}
                   </div>
                 )}
                 
                 {item.modifiers && Object.keys(item.modifiers).length > 0 && (
                   <div className="receipt-item-details">
-                    {Object.entries(item.modifiers).map(([key, value]: [string, any]) => (
-                      <div key={key}>+ {key}: {value}</div>
+                    {Object.entries(item.modifiers).map(([key, value]) => (
+                      <div key={key}>+ {key}: {String(value)}</div>
                     ))}
                   </div>
                 )}

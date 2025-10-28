@@ -50,7 +50,7 @@ export default function SquarePaymentForm({
   disabled = false
 }: SquarePaymentFormProps) {
   const { payments, isLoading: paymentsLoading, error: paymentsError } = useSquarePayments()
-  const [card, setCard] = useState<SquareCard | null>(null)
+  const cardRef = useRef<SquareCard | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [cardInputErrors, setCardInputErrors] = useState<Record<string, string>>({})
   const [containerId] = useState(() => `card-container-${Math.random().toString(36).substr(2, 9)}`)
@@ -61,7 +61,7 @@ export default function SquarePaymentForm({
     if (!payments || paymentsLoading || paymentsError) return
     
     // Check if already initialized
-    if (initializingRef.current || card) {
+    if (initializingRef.current || cardRef.current) {
       console.log('Square card already initialized, skipping')
       return
     }
@@ -75,6 +75,10 @@ export default function SquarePaymentForm({
       console.log('Starting Square card initialization for container:', containerId)
       
       try {
+        if (!payments) {
+          throw new Error('Square payments client unavailable')
+        }
+
         // Wait for DOM element to be available
         const waitForElement = () => {
           return new Promise<void>((resolve, reject) => {
@@ -145,7 +149,7 @@ export default function SquarePaymentForm({
           return
         }
         
-        setCard(cardInstance)
+        cardRef.current = cardInstance
         console.log('Square card attached successfully')
 
       } catch (error) {
@@ -163,9 +167,10 @@ export default function SquarePaymentForm({
     return () => {
       console.log('Cleaning up Square card for container:', containerId)
       isCleanedUp = true
-      if (card) {
+      const currentCard = cardRef.current
+      if (currentCard) {
         try {
-          card.destroy()
+          currentCard.destroy()
           console.log('Square card destroyed during cleanup')
         } catch (error) {
           console.error('Error destroying Square card:', error)
@@ -173,23 +178,27 @@ export default function SquarePaymentForm({
       }
       initializingRef.current = false
     }
-  }, [payments, paymentsLoading, paymentsError, onError, containerId, card])
+  }, [payments, paymentsLoading, paymentsError, onError, containerId])
 
   // Additional cleanup on unmount
   useEffect(() => {
     return () => {
-      if (card) {
+      const currentCard = cardRef.current
+      if (currentCard) {
         try {
-          card.destroy()
+          currentCard.destroy()
         } catch (error) {
           console.error('Error destroying Square card on unmount:', error)
         }
       }
+      cardRef.current = null
     }
-  }, [card])
+  }, [])
 
   const handlePayment = useCallback(async () => {
-    if (!card || !payments) {
+    const activeCard = cardRef.current
+
+    if (!activeCard || !payments) {
       onError(new Error('Payment form not ready'))
       return
     }
@@ -198,7 +207,7 @@ export default function SquarePaymentForm({
 
     try {
       // Tokenize the payment method
-      const tokenResult = await card.tokenize()
+      const tokenResult = await activeCard.tokenize()
 
       if (tokenResult.status === 'OK') {
         const { token, details } = tokenResult
@@ -208,8 +217,8 @@ export default function SquarePaymentForm({
           tokenPrefix: token.substring(0, 10) + '...',
           tokenType: typeof token,
           details: {
-            card: details?.card,
-            billing: details?.billing,
+          card: details?.card,
+          billing: details?.billing,
             digital_wallet: details?.digital_wallet
           }
         })
@@ -232,7 +241,7 @@ export default function SquarePaymentForm({
 
       } else {
         // Handle tokenization errors
-        const errorMessages =
+      const errorMessages =
           tokenResult.errors?.map((tokenError) => tokenError.message).join(', ') ||
           'Payment processing failed'
         throw new Error(errorMessages)
@@ -244,7 +253,9 @@ export default function SquarePaymentForm({
     } finally {
       setIsProcessing(false)
     }
-  }, [card, payments, billingAddress, saveCard, onPaymentSuccess, onError])
+  }, [payments, billingAddress, saveCard, onPaymentSuccess, onError])
+
+  const hasInitializedCard = Boolean(cardRef.current)
 
   if (paymentsLoading) {
     return (
@@ -341,7 +352,7 @@ export default function SquarePaymentForm({
       {/* Payment Button */}
       <Button
         onClick={handlePayment}
-        disabled={disabled || isProcessing || !card || Object.keys(cardInputErrors).length > 0}
+        disabled={disabled || isProcessing || !hasInitializedCard || Object.keys(cardInputErrors).length > 0}
         variant="primary"
         size="lg"
         fullWidth

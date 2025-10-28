@@ -10,15 +10,23 @@ interface OrderItem {
   quantity: number
   total_price: number
   unit_price?: number
+  variations?: Record<string, unknown> | null
+  modifiers?: Record<string, unknown> | null
 }
 
 interface Order {
   id: string
+  square_order_id: string | null
   status: 'pending' | 'confirmed' | 'preparing' | 'ready' | 'completed' | 'cancelled'
   payment_status: 'pending' | 'processing' | 'completed' | 'failed' | 'refunded'
   total_amount: number
+  tax_amount: number
+  customer_email: string | null
+  customer_phone: string | null
   created_at: string
   updated_at: string
+  pickup_time: string | null
+  special_instructions: string | null
   order_items?: OrderItem[]
 }
 

@@ -86,7 +86,7 @@ export default function OrderDetailsPage() {
         
         // Fetch order details
         const { data: orderData, error } = await supabaseClient
-          .from<Order>('orders')
+          .from('orders')
           .select(`
             *,
             order_items (*)
@@ -103,7 +103,7 @@ export default function OrderDetailsPage() {
         }
 
         if (orderData && isMounted) {
-          setOrder(orderData)
+          setOrder(orderData as Order)
         }
       } catch (error) {
         console.error('Error loading order:', error)

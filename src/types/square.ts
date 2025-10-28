@@ -35,7 +35,7 @@ export interface SquarePayments {
   card(): Promise<SquareCard>
 }
 
-export interface SquareWindow extends Window {
+export type SquareWindow = Window & {
   Square?: {
     payments(
       applicationId: string,
