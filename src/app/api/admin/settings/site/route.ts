@@ -54,18 +54,18 @@ export async function POST(request: NextRequest) {
       ))
     }
 
-    if ('userId' in authResult) {
-      const saved = await saveSiteSettings(payload, authResult.userId)
-      const status = await getSiteStatusUsingServiceClient()
-
-      return addSecurityHeaders(NextResponse.json({
-        success: true,
-        settings: saved,
-        status
-      }))
+    if (!('userId' in authResult)) {
+      return authResult
     }
 
-    return authResult
+    const saved = await saveSiteSettings(payload, authResult.userId)
+    const status = await getSiteStatusUsingServiceClient()
+
+    return addSecurityHeaders(NextResponse.json({
+      success: true,
+      settings: saved,
+      status
+    }))
   } catch (error) {
     console.error('Failed to update site settings:', error)
     return addSecurityHeaders(NextResponse.json(

@@ -12,15 +12,42 @@ function getSupabaseClient() {
   return createClient(supabaseUrl, supabaseServiceKey)
 }
 
+interface EnrichmentRecord extends Record<string, unknown> {
+  square_item_id: string
+  supplier_name?: string
+  current_stock?: number
+  minimum_threshold?: number
+  reorder_point?: number
+  unit_cost?: number
+  location?: string
+  notes?: string
+  item_name?: string
+  description?: string
+}
+
+interface ConflictResolutionStrategy {
+  strategy: 'square_wins' | 'yaml_wins' | 'merge'
+  fieldStrategies?: Record<string, 'square_wins' | 'yaml_wins' | 'merge'>
+}
+
+interface EnrichmentSettings {
+  conflict_resolution?: {
+    default_strategy?: 'square_wins' | 'yaml_wins' | 'merge'
+    field_strategies?: Record<string, 'square_wins' | 'yaml_wins' | 'merge'>
+  }
+}
+
+interface EnrichmentPayload {
+  inventory_enrichments: EnrichmentRecord[]
+  enrichment_settings?: EnrichmentSettings
+}
+
 interface HybridSyncRequest {
   adminEmail: string
   dryRun?: boolean
   skipSquareSync?: boolean
   skipEnrichment?: boolean
-  enrichmentData?: {
-    inventory_enrichments: any[]
-    enrichment_settings?: any
-  }
+  enrichmentData?: EnrichmentPayload
 }
 
 interface ConflictResolution {

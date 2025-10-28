@@ -1,8 +1,21 @@
 'use client'
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { useState } from 'react'
+
+const isClientError = (error: unknown): boolean => {
+  if (typeof error !== 'object' || error === null) {
+    return false
+  }
+
+  const status = (error as { status?: unknown }).status
+
+  if (typeof status !== 'number') {
+    return false
+  }
+
+  return status >= 400 && status < 500
+}
 
 export default function QueryProvider({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -15,9 +28,9 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
             // How long data stays in cache
             gcTime: 1000 * 60 * 30, // 30 minutes (previously cacheTime)
             // Retry failed requests
-            retry: (failureCount, error: any) => {
+            retry: (failureCount, error: unknown) => {
               // Don't retry on 4xx errors (client errors)
-              if (error?.status >= 400 && error?.status < 500) {
+              if (isClientError(error)) {
                 return false
               }
               // Retry up to 3 times for other errors

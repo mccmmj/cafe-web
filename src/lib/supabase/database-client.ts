@@ -1,6 +1,12 @@
 import { createClient } from './client'
 import type { UserProfile } from '@/types/menu'
 
+interface ProfileDbUpdate {
+  full_name?: string
+  phone?: string
+  email?: string
+}
+
 // Client-side database operations (for components)
 export function createClientDatabaseHelpers() {
   const supabase = createClient()
@@ -71,7 +77,7 @@ export function createClientDatabaseHelpers() {
       if (!user.user) throw new Error('Not authenticated')
       
       // Map camelCase to snake_case for database
-      const dbUpdates: any = {}
+      const dbUpdates: ProfileDbUpdate = {}
       if (updates.fullName !== undefined) dbUpdates.full_name = updates.fullName
       if (updates.phone !== undefined) dbUpdates.phone = updates.phone
       if (updates.email !== undefined) dbUpdates.email = updates.email

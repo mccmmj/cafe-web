@@ -12,14 +12,13 @@ import {
   Mail, 
   MapPin, 
   User,
-  MoreVertical,
   Archive,
   ArchiveRestore
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import SupplierModal from './SupplierModal'
 
-interface Supplier {
+export interface Supplier {
   id: string
   name: string
   contact_person?: string
@@ -295,7 +294,7 @@ const SuppliersManagement = ({
                     
                     {supplier.notes && (
                       <div className="mt-3">
-                        <p className="text-sm text-gray-600 italic">"{supplier.notes}"</p>
+                        <p className="text-sm text-gray-600 italic">&ldquo;{supplier.notes}&rdquo;</p>
                       </div>
                     )}
                   </div>

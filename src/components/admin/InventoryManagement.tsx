@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs'
 import { Button } from '@/components/ui'
 import { 
@@ -17,11 +17,9 @@ import {
   ClipboardList,
   Settings
 } from 'lucide-react'
-import toast from 'react-hot-toast'
 import InventoryEditModal from './InventoryEditModal'
 import RestockModal from './RestockModal'
-import SuppliersManagement from './SuppliersManagement'
-import SupplierModal from './SupplierModal'
+import SuppliersManagement, { type Supplier } from './SuppliersManagement'
 import PurchaseOrdersManagement from './PurchaseOrdersManagement'
 import InventorySettings from './InventorySettings'
 
@@ -71,8 +69,7 @@ const InventoryManagement = () => {
   // Fetch inventory items
   const { 
     data: inventoryData, 
-    isLoading: inventoryLoading, 
-    error: inventoryError 
+    isLoading: inventoryLoading
   } = useQuery({
     queryKey: ['admin-inventory'],
     queryFn: async () => {
@@ -86,8 +83,7 @@ const InventoryManagement = () => {
 
   // Fetch stock alerts
   const { 
-    data: alertsData, 
-    isLoading: alertsLoading 
+    data: alertsData
   } = useQuery({
     queryKey: ['admin-stock-alerts'],
     queryFn: async () => {
@@ -113,7 +109,7 @@ const InventoryManagement = () => {
 
   const inventoryItems: InventoryItem[] = inventoryData?.items || []
   const stockAlerts: StockAlert[] = alertsData?.alerts || []
-  const suppliers = suppliersData?.suppliers || []
+  const suppliers: Supplier[] = suppliersData?.suppliers ?? []
 
   // Modal handlers
   const handleEditItem = (item: InventoryItem) => {
@@ -309,7 +305,7 @@ const InventoryManagement = () => {
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent appearance-none"
                   >
                     <option value="all">All Suppliers</option>
-                    {suppliers.map((supplier: any) => (
+                    {suppliers.map((supplier) => (
                       <option key={supplier.id} value={supplier.id}>
                         {supplier.name}
                       </option>

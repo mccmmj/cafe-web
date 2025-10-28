@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, ShoppingCart, User, MapPin, CheckCircle } from 'lucide-react'
 import { motion } from 'framer-motion'
@@ -24,7 +24,6 @@ export default function CheckoutPage() {
   const router = useRouter()
   const { cart, itemCount, isEmpty } = useCartState()
   const squareTotals = useSquareCartTotals(cart?.items || null)
-  const [user, setUser] = useState<any>(null)
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo>({
     name: '',
     email: '',
@@ -33,8 +32,8 @@ export default function CheckoutPage() {
   const [step, setStep] = useState<'customer-info' | 'payment' | 'success'>('customer-info')
   const [loading, setLoading] = useState(true)
   
-  const supabase = createClient()
-  const db = createClientDatabaseHelpers()
+  const supabase = useMemo(() => createClient(), [])
+  const db = useMemo(() => createClientDatabaseHelpers(), [])
   const clearCartMutation = useClearCart()
 
   useEffect(() => {
@@ -43,8 +42,6 @@ export default function CheckoutPage() {
       try {
         const { data: { session } } = await supabase.auth.getSession()
         if (session?.user) {
-          setUser(session.user)
-          
           // Load full profile including phone number
           const profile = await db.getMyProfile()
           
@@ -63,7 +60,7 @@ export default function CheckoutPage() {
     }
     
     loadUserData()
-  }, []) // Remove dependencies to prevent infinite loop
+  }, [db, supabase])
 
   // Redirect if cart is empty (with a small delay to ensure cart is loaded)
   useEffect(() => {
@@ -104,7 +101,7 @@ export default function CheckoutPage() {
     setStep('payment')
   }
 
-  const handlePaymentSuccess = async (paymentData: any) => {
+  const handlePaymentSuccess = async (paymentData: unknown) => {
     try {
       // Order creation is handled by the payment processing route
       // which uses Square's calculated tax amounts
@@ -313,7 +310,7 @@ export default function CheckoutPage() {
                 </div>
                 <h2 className="text-2xl font-semibold text-gray-900 mb-2">Order Confirmed!</h2>
                 <p className="text-gray-600 mb-6">
-                  Thank you for your order. You'll receive a confirmation email shortly.
+                  Thank you for your order. You&apos;ll receive a confirmation email shortly.
                 </p>
                 <Button onClick={() => router.push('/orders')}>
                   View Order Status

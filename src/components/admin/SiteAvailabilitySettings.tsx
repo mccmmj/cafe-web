@@ -38,14 +38,15 @@ export default function SiteAvailabilitySettings({
   const persistChanges = (payload: Record<string, unknown>, successMessage: string) => {
     startTransition(() => {
       void (async () => {
-        try {
-          const response = await fetch('/api/admin/settings/site', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-          })
+    try {
+      const response = await fetch('/api/admin/settings/site', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      })
 
           if (!response.ok) {
             const errorBody = await response.json().catch(() => null)
@@ -69,6 +70,7 @@ export default function SiteAvailabilitySettings({
     try {
       const response = await fetch('/api/admin/settings/site', {
         method: 'GET',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json'
         }

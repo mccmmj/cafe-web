@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { rateLimiters } from '@/lib/security/rate-limiter'
 import { addSecurityHeaders } from '@/lib/security/headers'
 
@@ -26,7 +26,8 @@ export async function requireAdminAuth(request: NextRequest) {
     const referer = request.headers.get('referer')
     const origin = request.headers.get('origin')
     const host = request.headers.get('host')
-    
+    const envOrigin = process.env.NEXT_PUBLIC_APP_URL
+
     // Allow requests from same origin or valid referer
     const allowedOrigins = [
       `https://${host}`,
@@ -34,6 +35,12 @@ export async function requireAdminAuth(request: NextRequest) {
       'http://localhost:3000',
       'http://localhost:3001'
     ]
+    if (envOrigin) {
+      allowedOrigins.push(envOrigin)
+      const httpVariant = envOrigin.replace(/^https:\/\//, 'http://')
+      const httpsVariant = envOrigin.replace(/^http:\/\//, 'https://')
+      allowedOrigins.push(httpVariant, httpsVariant)
+    }
     
     const hasValidOrigin = origin && allowedOrigins.includes(origin)
     const hasValidReferer = referer && allowedOrigins.some(allowed => referer.startsWith(allowed))
@@ -58,9 +65,10 @@ export async function requireAdminAuth(request: NextRequest) {
     }
     
     // Check if user has admin role with additional validation
-    const { data: profile, error: profileError } = await supabase
+    const serviceSupabase = createServiceClient()
+    const { data: profile, error: profileError } = await serviceSupabase
       .from('profiles')
-      .select('role, created_at, last_sign_in_at')
+      .select('role')
       .eq('id', user.id)
       .single()
     
@@ -72,20 +80,14 @@ export async function requireAdminAuth(request: NextRequest) {
     }
     
     // Check for suspicious activity (optional additional validation)
-    const lastSignIn = profile.last_sign_in_at ? new Date(profile.last_sign_in_at) : null
     const now = new Date()
-    const sessionAge = lastSignIn ? (now.getTime() - lastSignIn.getTime()) / 1000 / 60 / 60 : 0 // hours
-    
-    if (sessionAge > 24) { // Session older than 24 hours
-      console.warn(`Admin session potentially stale for user ${user.id}: ${sessionAge} hours old`)
-    }
-    
+
     return { 
       user, 
       profile,
       userId: user.id, // Helper for convenience
       sessionInfo: {
-        age: sessionAge,
+        age: 0,
         ip: getClientIP(request)
       }
     }

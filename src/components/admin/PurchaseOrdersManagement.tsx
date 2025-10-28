@@ -86,7 +86,7 @@ const PurchaseOrdersManagement = ({
   } = useQuery({
     queryKey: ['admin-purchase-orders', statusFilter, dateFilter],
     queryFn: async () => {
-      let url = '/api/admin/purchase-orders?'
+      const url = '/api/admin/purchase-orders?'
       const params = new URLSearchParams()
       
       if (statusFilter !== 'all') params.append('status', statusFilter)

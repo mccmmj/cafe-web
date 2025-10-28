@@ -6,7 +6,7 @@ async function getMatchingLibraries() {
   if (!Fuse || !stringSimilarity) {
     try {
       Fuse = (await import('fuse.js')).default
-      // @ts-ignore
+      // @ts-expect-error string-similarity has no type definitions
       stringSimilarity = await import('string-similarity')
     } catch (error) {
       console.error('Failed to load matching libraries:', error)
@@ -330,7 +330,7 @@ export async function findOrderMatches(
       const reasons: string[] = []
       let matchedItems = 0
       let quantityVariance = 0
-      let amountVariance = Math.abs(invoiceTotal - order.total_amount)
+      const amountVariance = Math.abs(invoiceTotal - order.total_amount)
 
       // Check supplier match (base confidence)
       if (order.supplier_name.toLowerCase() === supplierName.toLowerCase()) {

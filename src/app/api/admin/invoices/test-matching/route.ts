@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
       console.log('Testing string similarity libraries...')
       
       // Test that libraries can be loaded
-      // @ts-ignore
+      // @ts-expect-error string-similarity has no type definitions
       const { default: stringSimilarity } = await import('string-similarity')
       const { default: Fuse } = await import('fuse.js')
       

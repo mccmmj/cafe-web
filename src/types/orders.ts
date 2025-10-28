@@ -11,7 +11,7 @@ export interface Order {
   pricing: OrderPricing
   timestamps: OrderTimestamps
   notes?: string
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 export type OrderStatus = 

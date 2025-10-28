@@ -6,8 +6,8 @@ export { DEFAULT_SITE_STATUS } from './siteSettings.shared'
 
 async function invalidateEdgeCache() {
   try {
-    const module = await import('./siteSettings.edge')
-    module.invalidateSiteStatusCache()
+    const edgeModule = await import('./siteSettings.edge')
+    edgeModule.invalidateSiteStatusCache()
   } catch (error) {
     console.warn('Unable to invalidate edge site status cache', error)
   }

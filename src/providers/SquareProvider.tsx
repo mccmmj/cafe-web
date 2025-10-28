@@ -1,10 +1,10 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-// Using any for Square types since we're loading from CDN
+import type { SquarePayments, SquareWindow, SquareEnvironment } from '@/types/square'
 
 interface SquareContextType {
-  payments: any | null
+  payments: SquarePayments | null
   isLoading: boolean
   error: string | null
 }
@@ -27,7 +27,7 @@ interface SquareProviderProps {
   children: ReactNode
   applicationId: string
   locationId: string
-  environment: 'sandbox' | 'production'
+  environment?: SquareEnvironment
 }
 
 export function SquareProvider({ 
@@ -36,7 +36,7 @@ export function SquareProvider({
   locationId, 
   environment = 'sandbox' 
 }: SquareProviderProps) {
-  const [payments, setPayments] = useState<any | null>(null)
+  const [payments, setPayments] = useState<SquarePayments | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -47,19 +47,25 @@ export function SquareProvider({
         setError(null)
 
         // Load Square Web Payments SDK from CDN
-        if (!(window as any).Square) {
-          await new Promise((resolve, reject) => {
+        const squareWindow = window as SquareWindow
+
+        if (!squareWindow.Square) {
+          await new Promise<void>((resolve, reject) => {
             const script = document.createElement('script')
             script.src = environment === 'production' 
               ? 'https://web.squarecdn.com/v1/square.js'
               : 'https://sandbox.web.squarecdn.com/v1/square.js'
-            script.onload = resolve
-            script.onerror = reject
+            script.onload = () => resolve()
+            script.onerror = () => reject(new Error('Failed to load Square SDK'))
             document.head.appendChild(script)
           })
         }
+
+        if (!squareWindow.Square) {
+          throw new Error('Square SDK unavailable after script load')
+        }
         
-        const paymentsInstance = await (window as any).Square.payments(applicationId, locationId, environment)
+        const paymentsInstance = await squareWindow.Square.payments(applicationId, locationId, environment)
         
         setPayments(paymentsInstance)
       } catch (err) {

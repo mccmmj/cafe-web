@@ -2,10 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { motion } from 'framer-motion'
 import { 
   ArrowLeft, 
-  Calendar, 
   Clock, 
   Receipt, 
   Package, 
@@ -34,8 +32,8 @@ interface OrderItem {
   quantity: number
   unit_price: number
   total_price: number
-  variations: Record<string, any>
-  modifiers: Record<string, any>
+  variations?: Record<string, unknown> | null
+  modifiers?: Record<string, unknown> | null
 }
 
 interface Order {
@@ -63,56 +61,67 @@ export default function OrderDetailsPage() {
   const router = useRouter()
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
-  const [user, setUser] = useState<any>(null)
   const [emailingReceipt, setEmailingReceipt] = useState(false)
   const receiptRef = useRef<HTMLDivElement>(null)
-  
-  const supabase = createClient()
   const orderId = params.id as string
 
   useEffect(() => {
-    loadUserAndOrder()
-  }, [orderId])
+    let isMounted = true
 
-  const loadUserAndOrder = async () => {
-    try {
-      // Get current user first
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        toast.error('Please sign in to view order details')
-        router.push('/')
-        return
+    const loadOrder = async () => {
+      const supabaseClient = createClient()
+
+      if (isMounted) {
+        setLoading(true)
       }
-      
-      setUser(user)
-      
-      // Fetch order details
-      const { data: orderData, error } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          order_items (*)
-        `)
-        .eq('id', orderId)
-        .eq('user_id', user.id) // Ensure user can only see their own orders
-        .single()
 
-      if (error) {
+      try {
+        // Get current user first
+        const { data: { user } } = await supabaseClient.auth.getUser()
+        if (!user) {
+          toast.error('Please sign in to view order details')
+          router.push('/')
+          return
+        }
+        
+        // Fetch order details
+        const { data: orderData, error } = await supabaseClient
+          .from<Order>('orders')
+          .select(`
+            *,
+            order_items (*)
+          `)
+          .eq('id', orderId)
+          .eq('user_id', user.id) // Ensure user can only see their own orders
+          .single()
+
+        if (error) {
+          console.error('Error loading order:', error)
+          toast.error('Order not found')
+          router.push('/orders')
+          return
+        }
+
+        if (orderData && isMounted) {
+          setOrder(orderData)
+        }
+      } catch (error) {
         console.error('Error loading order:', error)
-        toast.error('Order not found')
+        toast.error('Failed to load order details')
         router.push('/orders')
-        return
+      } finally {
+        if (isMounted) {
+          setLoading(false)
+        }
       }
-
-      setOrder(orderData)
-    } catch (error) {
-      console.error('Error loading order:', error)
-      toast.error('Failed to load order details')
-      router.push('/orders')
-    } finally {
-      setLoading(false)
     }
-  }
+
+    void loadOrder()
+
+    return () => {
+      isMounted = false
+    }
+  }, [orderId, router])
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -267,7 +276,7 @@ export default function OrderDetailsPage() {
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <Receipt className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h1 className="text-2xl font-bold text-gray-900 mb-2">Order not found</h1>
-            <p className="text-gray-600 mb-6">The order you're looking for doesn't exist or you don't have permission to view it.</p>
+            <p className="text-gray-600 mb-6">The order you&rsquo;re looking for doesn&rsquo;t exist or you don&rsquo;t have permission to view it.</p>
             <Button onClick={() => router.push('/orders')}>
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Orders
@@ -417,24 +426,24 @@ export default function OrderDetailsPage() {
                 </h2>
                 
                 <div className="space-y-4">
-                  {order.order_items?.map((item: any) => (
+                  {order.order_items?.map((item) => (
                     <div key={item.id} className="flex justify-between items-start py-3 border-b border-gray-100 last:border-b-0">
                       <div className="flex-1">
                         <h3 className="font-medium text-gray-900">{item.item_name}</h3>
                         {item.variations && Object.keys(item.variations).length > 0 && (
                           <div className="mt-1">
-                            {Object.entries(item.variations).map(([key, value]: [string, any]) => (
+                            {Object.entries(item.variations).map(([key, value]) => (
                               <p key={key} className="text-sm text-gray-600">
-                                {key}: {value}
+                                {key}: {String(value)}
                               </p>
                             ))}
                           </div>
                         )}
                         {item.modifiers && Object.keys(item.modifiers).length > 0 && (
                           <div className="mt-1">
-                            {Object.entries(item.modifiers).map(([key, value]: [string, any]) => (
+                            {Object.entries(item.modifiers).map(([key, value]) => (
                               <p key={key} className="text-sm text-gray-600">
-                                + {key}: {value}
+                                + {key}: {String(value)}
                               </p>
                             ))}
                           </div>

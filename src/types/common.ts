@@ -1,14 +1,14 @@
 // Common types used across the application
 
 // API Response types
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   data?: T
   error?: string
   message?: string
   statusCode?: number
 }
 
-export interface PaginatedResponse<T = any> {
+export interface PaginatedResponse<T = unknown> {
   data: T[]
   pagination: {
     page: number
@@ -22,11 +22,11 @@ export interface PaginatedResponse<T = any> {
 }
 
 // Generic CRUD operations
-export interface CreateRequest<T = any> {
+export interface CreateRequest<T = unknown> {
   data: T
 }
 
-export interface UpdateRequest<T = any> {
+export interface UpdateRequest<T = unknown> {
   id: string
   data: Partial<T>
 }
@@ -43,7 +43,7 @@ export interface ListRequest {
   page?: number
   limit?: number
   search?: string
-  filter?: Record<string, any>
+  filter?: Record<string, unknown>
   sort?: {
     field: string
     direction: 'asc' | 'desc'
@@ -53,7 +53,7 @@ export interface ListRequest {
 // Status types
 export type Status = 'idle' | 'loading' | 'success' | 'error'
 
-export interface AsyncState<T = any> {
+export interface AsyncState<T = unknown> {
   data: T | null
   status: Status
   error: string | null
@@ -68,7 +68,7 @@ export interface FormField {
   required?: boolean
   validation?: ValidationRule[]
   options?: SelectOption[] // For select fields
-  defaultValue?: any
+  defaultValue?: unknown
   disabled?: boolean
   helper?: string
 }
@@ -81,7 +81,7 @@ export interface SelectOption {
 
 export interface ValidationRule {
   type: 'required' | 'email' | 'min' | 'max' | 'pattern' | 'custom'
-  value?: any
+  value?: unknown
   message: string
 }
 
@@ -90,7 +90,7 @@ export interface FormErrors {
 }
 
 export interface FormState {
-  values: Record<string, any>
+  values: Record<string, unknown>
   errors: FormErrors
   touched: Record<string, boolean>
   isSubmitting: boolean
@@ -101,7 +101,7 @@ export interface FormState {
 export interface NavItem {
   name: string
   href: string
-  icon?: React.ComponentType<any>
+  icon?: React.ComponentType<unknown>
   isActive?: boolean
   badge?: string | number
   children?: NavItem[]
@@ -110,7 +110,7 @@ export interface NavItem {
 export interface BreadcrumbItem {
   name: string
   href: string
-  icon?: React.ComponentType<any>
+  icon?: React.ComponentType<unknown>
 }
 
 // Modal/Dialog types
@@ -160,7 +160,7 @@ export interface SearchConfig {
   weights?: Record<string, number> // Weight for each field
 }
 
-export interface SearchResult<T = any> {
+export interface SearchResult<T = unknown> {
   item: T
   score: number
   matches: SearchMatch[]
@@ -225,17 +225,17 @@ export interface EnvironmentConfig {
 export interface AppError {
   code: string
   message: string
-  details?: Record<string, any>
+  details?: Record<string, unknown>
   stack?: string
   timestamp: string
   userId?: string
-  context?: Record<string, any>
+  context?: Record<string, unknown>
 }
 
 // Analytics types
 export interface AnalyticsEvent {
   name: string
-  properties?: Record<string, any>
+  properties?: Record<string, unknown>
   userId?: string
   timestamp: string
 }

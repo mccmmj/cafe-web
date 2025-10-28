@@ -9,7 +9,6 @@ export async function GET(request: NextRequest) {
     if (authResult instanceof NextResponse) {
       return authResult
     }
-
     console.log('Admin fetching inventory items...')
 
     const supabase = await createClient()
@@ -132,7 +131,7 @@ export async function POST(request: NextRequest) {
         new_stock: current_stock,
         unit_cost: unit_cost || 0,
         notes: 'Initial stock entry',
-        created_by: (authResult as any).userId
+        created_by: userId
       })
 
     if (movementError) {
@@ -193,7 +192,7 @@ export async function PUT(request: NextRequest) {
     const supabase = await createClient()
 
     // Build update object with only provided fields
-    const updateData: any = {}
+    const updateData: Record<string, unknown> = {}
     if (item_name !== undefined) updateData.item_name = item_name
     if (minimum_threshold !== undefined) updateData.minimum_threshold = minimum_threshold
     if (reorder_point !== undefined) updateData.reorder_point = reorder_point

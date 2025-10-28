@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Bell, Check, Coffee, AlertCircle, X, RefreshCw, Filter } from 'lucide-react'
+import { Bell, Check, Coffee, AlertCircle, X, RefreshCw } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui'
 import Link from 'next/link'
@@ -14,7 +14,7 @@ interface Notification {
   type: 'info' | 'success' | 'warning' | 'error' | 'order_status'
   read: boolean
   action_url?: string
-  data?: any
+  data?: Record<string, unknown>
   created_at: string
 }
 
@@ -24,26 +24,10 @@ const NotificationsPage = () => {
   const [filter, setFilter] = useState<'all' | 'unread'>('all')
   const [user, setUser] = useState<{ id: string; email?: string } | null>(null)
 
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
-  useEffect(() => {
-    // Get current user
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      setUser(user)
-      if (!user) {
-        window.location.href = '/'
-        return
-      }
-      fetchNotifications()
-    }
-    
-    getUser()
-  }, [])
-
-  const fetchNotifications = async () => {
-    if (!user) return
-
+  const fetchNotifications = useCallback(async (userId: string) => {
+    if (!userId) return
     setLoading(true)
     try {
       const unreadOnly = filter === 'unread'
@@ -58,13 +42,28 @@ const NotificationsPage = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [filter])
+
+  useEffect(() => {
+    // Get current user
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      setUser(user)
+      if (!user) {
+        window.location.href = '/'
+        return
+      }
+      await fetchNotifications(user.id)
+    }
+    
+    void getUser()
+  }, [fetchNotifications, supabase])
 
   useEffect(() => {
     if (user) {
-      fetchNotifications()
+      void fetchNotifications(user.id)
     }
-  }, [filter, user])
+  }, [fetchNotifications, user])
 
   const markAsRead = async (notificationId: string) => {
     try {
@@ -149,7 +148,7 @@ const NotificationsPage = () => {
               </p>
             </div>
             <Button
-              onClick={fetchNotifications}
+              onClick={() => user && fetchNotifications(user.id)}
               variant="outline"
               size="sm"
               disabled={loading}

@@ -4,6 +4,14 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'react-hot-toast'
 
+interface OrderItem {
+  id: string
+  item_name: string
+  quantity: number
+  total_price: number
+  unit_price?: number
+}
+
 interface Order {
   id: string
   status: 'pending' | 'confirmed' | 'preparing' | 'ready' | 'completed' | 'cancelled'
@@ -11,7 +19,7 @@ interface Order {
   total_amount: number
   created_at: string
   updated_at: string
-  order_items?: any[]
+  order_items?: OrderItem[]
 }
 
 interface OrderUpdate {

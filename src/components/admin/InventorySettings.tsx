@@ -256,7 +256,7 @@ const InventorySettings = () => {
   // Update form when settings load
   React.useEffect(() => {
     setFormSettings(settings)
-  }, [settingsData])
+  }, [settings])
 
   const handleSaveSettings = () => {
     saveSettingsMutation.mutate(formSettings)

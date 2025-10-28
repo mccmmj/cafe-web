@@ -6,6 +6,7 @@ import { useSquarePayments } from '@/providers/SquareProvider'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import { toast } from 'react-hot-toast'
+import type { SquareCard, SquareCardEvent, SquareTokenDetails } from '@/types/square'
 
 interface BillingAddress {
   street: string
@@ -23,9 +24,20 @@ interface SquarePaymentFormProps {
   }
   billingAddress: BillingAddress
   saveCard: boolean
-  onPaymentSuccess: (result: { token: string, details: any }) => void
+  onPaymentSuccess: (result: PaymentSuccessPayload) => void
   onError: (error: Error) => void
   disabled?: boolean
+}
+
+interface PaymentSuccessDetails extends SquareTokenDetails {
+  verificationToken: string | null
+  saveCard: boolean
+  billingAddress: BillingAddress
+}
+
+interface PaymentSuccessPayload {
+  token: string
+  details: PaymentSuccessDetails
 }
 
 export default function SquarePaymentForm({
@@ -38,7 +50,7 @@ export default function SquarePaymentForm({
   disabled = false
 }: SquarePaymentFormProps) {
   const { payments, isLoading: paymentsLoading, error: paymentsError } = useSquarePayments()
-  const [card, setCard] = useState<any>(null)
+  const [card, setCard] = useState<SquareCard | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [cardInputErrors, setCardInputErrors] = useState<Record<string, string>>({})
   const [containerId] = useState(() => `card-container-${Math.random().toString(36).substr(2, 9)}`)
@@ -106,21 +118,21 @@ export default function SquarePaymentForm({
         }
 
         // Handle real-time validation
-        cardInstance.addEventListener('cardBrandChanged', (event: any) => {
+        cardInstance.addEventListener('cardBrandChanged', (event: SquareCardEvent) => {
           console.log('Card brand:', event.cardBrand)
         })
 
-        cardInstance.addEventListener('errorChanged', (event: any) => {
+        cardInstance.addEventListener('errorChanged', (event: SquareCardEvent) => {
           const errors: Record<string, string> = {}
-          if (event.errors) {
-            event.errors.forEach((error: any) => {
+          for (const error of event.errors ?? []) {
+            if (error.field) {
               errors[error.field] = error.message
-            })
+            }
           }
           setCardInputErrors(errors)
         })
 
-        cardInstance.addEventListener('postalCodeChanged', (event: any) => {
+        cardInstance.addEventListener('postalCodeChanged', (event: SquareCardEvent) => {
           console.log('Postal code changed:', event.postalCode)
         })
 
@@ -204,14 +216,14 @@ export default function SquarePaymentForm({
 
         // Verify buyer if needed (for SCA compliance)
         // Skip buyer verification for now to avoid issues with incomplete billing address
-        let verificationToken = null
+        const verificationToken: string | null = null
         console.log('Skipping buyer verification for now')
 
         // Call success handler with token and verification
         onPaymentSuccess({
           token,
           details: {
-            ...details,
+            ...(details ?? {}),
             verificationToken,
             saveCard,
             billingAddress
@@ -220,7 +232,9 @@ export default function SquarePaymentForm({
 
       } else {
         // Handle tokenization errors
-        const errorMessages = (tokenResult.errors as any[])?.map((error: any) => error.message).join(', ') || 'Payment processing failed'
+        const errorMessages =
+          tokenResult.errors?.map((tokenError) => tokenError.message).join(', ') ||
+          'Payment processing failed'
         throw new Error(errorMessages)
       }
 
@@ -230,7 +244,7 @@ export default function SquarePaymentForm({
     } finally {
       setIsProcessing(false)
     }
-  }, [card, payments, amount, customerInfo, billingAddress, saveCard, onPaymentSuccess, onError])
+  }, [card, payments, billingAddress, saveCard, onPaymentSuccess, onError])
 
   if (paymentsLoading) {
     return (

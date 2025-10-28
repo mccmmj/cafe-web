@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    let result = { created: 0, updated: 0, errors: [] as string[] }
+    const result = { created: 0, updated: 0, errors: [] as string[] }
 
     // If replace existing, clear all current suppliers first
     if (replaceExisting) {

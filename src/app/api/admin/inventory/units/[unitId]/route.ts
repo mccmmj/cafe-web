@@ -29,7 +29,7 @@ export async function PATCH(
     const supabase = await createClient()
 
     // Build update object with only provided fields
-    const updateData: any = {}
+    const updateData: Record<string, unknown> = {}
     if (body.name !== undefined) updateData.name = body.name?.trim() || null
     if (body.symbol !== undefined) updateData.symbol = body.symbol?.trim() || null
     if (body.category !== undefined) updateData.category = body.category

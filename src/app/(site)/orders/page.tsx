@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { Calendar, Clock, Receipt, RefreshCw, ChevronRight, Package, MapPin } from 'lucide-react'
+import { Calendar, Clock, Receipt, RefreshCw, ChevronRight, Package } from 'lucide-react'
 import { Button, Card, Input } from '@/components/ui'
 import Navigation from '@/components/Navigation'
 import Breadcrumbs from '@/components/layout/Breadcrumbs'
@@ -11,6 +11,7 @@ import { useCartState } from '@/hooks/useCartData'
 import { useOrderUpdates } from '@/hooks/useOrderUpdates'
 import { toast } from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
+import type { User } from '@supabase/supabase-js'
 
 interface OrderItem {
   id: string
@@ -19,8 +20,8 @@ interface OrderItem {
   quantity: number
   unit_price: number
   total_price: number
-  variations: Record<string, any>
-  modifiers: Record<string, any>
+  variations?: Record<string, unknown> | null
+  modifiers?: Record<string, unknown> | null
 }
 
 interface Order {
@@ -40,45 +41,40 @@ interface Order {
 }
 
 export default function OrdersPage() {
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [filteredOrders, setFilteredOrders] = useState<any[]>([])
   
   const router = useRouter()
-  const supabase = createClient()
   const { openCart } = useCartState()
   
   // Use the real-time order updates hook
   const { orders, isLoading, refreshOrders } = useOrderUpdates(user?.id)
   
-
   useEffect(() => {
-    loadUser()
+    const supabaseClient = createClient()
+
+    const fetchUser = async () => {
+      try {
+        // Get current user
+        const { data: { user: currentUser } } = await supabaseClient.auth.getUser()
+        if (!currentUser) {
+          toast.error('Please sign in to view your orders')
+          window.location.href = '/auth'
+          return
+        }
+        
+        setUser(currentUser)
+      } catch (error) {
+        console.error('Error loading user:', error)
+        toast.error('Failed to load user')
+      }
+    }
+
+    void fetchUser()
   }, [])
 
-  useEffect(() => {
-    filterOrders()
-  }, [orders, searchQuery, statusFilter])
-
-  const loadUser = async () => {
-    try {
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        toast.error('Please sign in to view your orders')
-        window.location.href = '/auth'
-        return
-      }
-      
-      setUser(user)
-    } catch (error) {
-      console.error('Error loading user:', error)
-      toast.error('Failed to load user')
-    }
-  }
-
-  const filterOrders = () => {
+  const filteredOrders = useMemo(() => {
     let filtered = orders
 
     if (statusFilter !== 'all') {
@@ -86,16 +82,17 @@ export default function OrdersPage() {
     }
 
     if (searchQuery) {
+      const query = searchQuery.toLowerCase()
       filtered = filtered.filter(order => 
-        order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        order.id.toLowerCase().includes(query) ||
         order.order_items?.some(item => 
-          item.item_name.toLowerCase().includes(searchQuery.toLowerCase())
+          item.item_name.toLowerCase().includes(query)
         )
       )
     }
 
-    setFilteredOrders(filtered)
-  }
+    return filtered
+  }, [orders, searchQuery, statusFilter])
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -307,7 +304,7 @@ export default function OrdersPage() {
 
                     {/* Order Items */}
                     <div className="space-y-2 mb-4">
-                      {order.order_items?.map((item: any) => (
+                      {order.order_items?.map((item) => (
                         <div key={item.id} className="flex justify-between items-center text-sm">
                           <div className="flex items-center">
                             <Package className="w-4 h-4 text-gray-400 mr-2" />

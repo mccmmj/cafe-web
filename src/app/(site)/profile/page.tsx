@@ -1,14 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, type Dispatch, type SetStateAction } from 'react'
 import { motion } from 'framer-motion'
-import { User, Mail, Phone, MapPin, Calendar, Star, Clock, Receipt, CreditCard, Settings, LogOut } from 'lucide-react'
+import { User, Mail, Phone, MapPin, Calendar, Star, Receipt, CreditCard, Settings, LogOut, Shield } from 'lucide-react'
 import { Button, Input, Card, PhoneInput } from '@/components/ui'
 import Navigation from '@/components/Navigation'
 import Breadcrumbs from '@/components/layout/Breadcrumbs'
 import { createClient } from '@/lib/supabase/client'
 import { createClientDatabaseHelpers } from '@/lib/supabase/database-client'
 import { toast } from 'react-hot-toast'
+import TwoFactorSettings from '@/components/security/TwoFactorSettings'
 
 interface UserProfile {
   id: string
@@ -35,70 +36,93 @@ interface Order {
   orderType: 'pickup' | 'dine_in'
 }
 
+interface EditFormState {
+  name: string
+  phone: string
+  email: string
+}
+
+interface ProfileTabProps {
+  user: UserProfile
+  editForm: EditFormState
+  setEditForm: Dispatch<SetStateAction<EditFormState>>
+  isEditing: boolean
+  onEdit: () => void
+}
+
 export default function ProfilePage() {
-  const [activeTab, setActiveTab] = useState<'profile' | 'orders' | 'preferences'>('profile')
+  const [activeTab, setActiveTab] = useState<'profile' | 'orders' | 'preferences' | 'security'>('profile')
   const [isEditing, setIsEditing] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [user, setUser] = useState<UserProfile | null>(null)
   const [orders, setOrders] = useState<Order[]>([])
-  const [editForm, setEditForm] = useState({
+  const [editForm, setEditForm] = useState<EditFormState>({
     name: '',
     phone: '',
     email: '',
   })
 
-  const supabase = createClient()
-  const db = createClientDatabaseHelpers()
+  const supabase = useMemo(() => createClient(), [])
+  const db = useMemo(() => createClientDatabaseHelpers(), [])
 
   useEffect(() => {
-    loadUserProfile()
-    loadOrders()
-  }, [])
+    let isMounted = true
 
-  const loadUserProfile = async () => {
-    try {
-      const { data: authUser } = await supabase.auth.getUser()
-      if (!authUser.user) {
-        // Show mock data for development
-        setUser(mockUserProfile)
-        setEditForm({
-          name: mockUserProfile.name,
-          phone: mockUserProfile.phone || '',
-          email: mockUserProfile.email,
-        })
-      } else {
-        // Load real user profile
-        const profile = await db.getMyProfile()
-        const userProfile: UserProfile = {
-          id: authUser.user.id,
-          email: authUser.user.email!,
-          name: profile?.full_name || authUser.user.user_metadata?.full_name || 'User',
-          phone: profile?.phone || authUser.user.user_metadata?.phone,
-          loyaltyNumber: `LC${authUser.user.id.slice(0, 8).toUpperCase()}`,
-          joinDate: authUser.user.created_at,
-          totalOrders: 0,
-          totalSpent: 0,
-          favoriteItems: [],
+    const loadData = async () => {
+      try {
+        const { data: authUser } = await supabase.auth.getUser()
+
+        if (!authUser.user) {
+          if (!isMounted) return
+
+          setUser(mockUserProfile)
+          setEditForm({
+            name: mockUserProfile.name,
+            phone: mockUserProfile.phone || '',
+            email: mockUserProfile.email,
+          })
+        } else {
+          const profile = await db.getMyProfile()
+          if (!isMounted) return
+
+          const userProfile: UserProfile = {
+            id: authUser.user.id,
+            email: authUser.user.email ?? '',
+            name: profile?.full_name || authUser.user.user_metadata?.full_name || 'User',
+            phone: profile?.phone || authUser.user.user_metadata?.phone,
+            loyaltyNumber: `LC${authUser.user.id.slice(0, 8).toUpperCase()}`,
+            joinDate: authUser.user.created_at,
+            totalOrders: 0,
+            totalSpent: 0,
+            favoriteItems: [],
+          }
+
+          setUser(userProfile)
+          setEditForm({
+            name: userProfile.name,
+            phone: userProfile.phone || '',
+            email: userProfile.email,
+          })
         }
-        setUser(userProfile)
-        setEditForm({
-          name: userProfile.name,
-          phone: userProfile.phone || '',
-          email: userProfile.email,
-        })
+      } catch (error) {
+        console.error('Error loading profile:', error)
+        if (isMounted) {
+          setUser(mockUserProfile)
+        }
+      } finally {
+        if (isMounted) {
+          setOrders(mockOrders)
+          setIsLoading(false)
+        }
       }
-    } catch (error) {
-      console.error('Error loading profile:', error)
-      setUser(mockUserProfile)
-    } finally {
-      setIsLoading(false)
     }
-  }
 
-  const loadOrders = async () => {
-    // Mock order data for now
-    setOrders(mockOrders)
-  }
+    void loadData()
+
+    return () => {
+      isMounted = false
+    }
+  }, [db, supabase])
 
   const handleEditProfile = async () => {
     if (!isEditing) {
@@ -125,6 +149,7 @@ export default function ProfilePage() {
       }
       setIsEditing(false)
     } catch (error) {
+      console.error('Failed to update profile:', error)
       toast.error('Failed to update profile')
     }
   }
@@ -136,6 +161,7 @@ export default function ProfilePage() {
       // Redirect to home page
       window.location.href = '/'
     } catch (error) {
+      console.error('Failed to sign out:', error)
       toast.error('Failed to sign out')
     }
   }
@@ -234,6 +260,18 @@ export default function ProfilePage() {
                   <Settings className="w-4 h-4 inline mr-3" />
                   Preferences
                 </button>
+
+                <button
+                  onClick={() => setActiveTab('security')}
+                  className={`w-full text-left px-4 py-2 rounded-lg transition-colors ${
+                    activeTab === 'security'
+                      ? 'bg-amber-100 text-amber-700'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  <Shield className="w-4 h-4 inline mr-3" />
+                  Security
+                </button>
               </nav>
 
               <div className="mt-6 pt-6 border-t">
@@ -273,7 +311,11 @@ export default function ProfilePage() {
               )}
               
               {activeTab === 'preferences' && (
-                <PreferencesTab user={user} />
+                <PreferencesTab />
+              )}
+
+              {activeTab === 'security' && (
+                <TwoFactorSettings />
               )}
             </motion.div>
           </div>
@@ -284,7 +326,7 @@ export default function ProfilePage() {
 }
 
 // Profile Tab Component
-function ProfileTab({ user, editForm, setEditForm, isEditing, onEdit }: any) {
+function ProfileTab({ user, editForm, setEditForm, isEditing, onEdit }: ProfileTabProps) {
   return (
     <div className="space-y-6">
       {/* Stats Cards */}
@@ -470,7 +512,7 @@ function OrdersTab({ orders }: { orders: Order[] }) {
 }
 
 // Preferences Tab Component
-function PreferencesTab({ user }: { user: UserProfile }) {
+function PreferencesTab() {
   const [preferences, setPreferences] = useState({
     emailNotifications: true,
     smsNotifications: false,

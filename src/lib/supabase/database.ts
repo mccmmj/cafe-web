@@ -1,5 +1,4 @@
 import { createClient, createServiceClient } from './server'
-import type { Order } from '@/types/orders'
 import type { UserProfile } from '@/types/menu'
 
 // Server-side database operations
@@ -64,8 +63,8 @@ export async function createOrder(orderData: {
     quantity: number
     unitPrice: number
     totalPrice: number
-    variations?: Record<string, any>
-    modifiers?: Record<string, any>
+    variations?: Record<string, unknown>
+    modifiers?: Record<string, unknown>
     specialInstructions?: string
   }>
 }) {
@@ -147,7 +146,7 @@ export async function getOrdersForUser(userId: string) {
 export async function updateOrderStatus(orderId: string, status: string, paymentStatus?: string) {
   const supabase = await createClient()
   
-  const updates: any = { status }
+  const updates: { status: string; payment_status?: string } = { status }
   if (paymentStatus) updates.payment_status = paymentStatus
   
   const { data, error } = await supabase
@@ -160,4 +159,3 @@ export async function updateOrderStatus(orderId: string, status: string, payment
   if (error) throw error
   return data
 }
-

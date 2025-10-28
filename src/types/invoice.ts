@@ -126,13 +126,13 @@ export interface SupplierInvoiceTemplate {
   is_active: boolean
   
   // Parsing configuration
-  format_config: Record<string, any> // AI parsing instructions
-  parsing_rules: Record<string, any> // Field extraction rules
-  package_mappings: Record<string, any> // Package size mappings
+  format_config: Record<string, unknown> // AI parsing instructions
+  parsing_rules: Record<string, unknown> // Field extraction rules
+  package_mappings: Record<string, unknown> // Package size mappings
   
   // Item matching rules
-  item_matching_rules: Record<string, any>
-  default_unit_conversions: Record<string, any>
+  item_matching_rules: Record<string, unknown>
+  default_unit_conversions: Record<string, unknown>
   
   // Template usage tracking
   usage_count: number
@@ -153,7 +153,7 @@ export interface InvoiceImportSession {
   status: SessionStatus
   
   // Review process data
-  review_data: Record<string, any>
+  review_data: Record<string, unknown>
   step_progress: number
   total_steps: number
   

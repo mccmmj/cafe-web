@@ -9,7 +9,6 @@ export async function GET(request: NextRequest) {
     if (authResult instanceof NextResponse) {
       return authResult
     }
-
     console.log('Admin fetching stock alerts...')
 
     const supabase = await createClient()
@@ -67,6 +66,7 @@ export async function POST(request: NextRequest) {
     if (authResult instanceof NextResponse) {
       return authResult
     }
+    const { userId } = authResult
 
     const body = await request.json()
     const { alertIds, acknowledged } = body
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
       .from('low_stock_alerts')
       .update({
         is_acknowledged: acknowledged,
-        acknowledged_by: acknowledged ? (authResult as any).userId : null,
+        acknowledged_by: acknowledged ? userId : null,
         acknowledged_at: acknowledged ? new Date().toISOString() : null
       })
       .in('id', alertIds)

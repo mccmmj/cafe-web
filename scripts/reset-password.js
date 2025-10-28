@@ -10,14 +10,21 @@ const { createClient } = require('@supabase/supabase-js')
 require('dotenv').config({ path: '.env.local' })
 
 async function resetUserPassword(email, newPassword) {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    console.error('Missing Supabase environment variables')
+  const supabaseUrl = process.env.PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceRoleKey =
+    process.env.SUPABASE_SERVICE_KEY ||
+    process.env.SUPABASE_SECRET_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    console.error('Missing Supabase environment variables.')
+    console.error('Expected PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_KEY (service role).')
     process.exit(1)
   }
 
   const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
+    supabaseUrl,
+    serviceRoleKey
   )
 
   try {
