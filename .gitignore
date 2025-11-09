@@ -12,6 +12,10 @@
 
 # testing
 /coverage
+eslint-report.json
+/data/purchase-orders/PO*
+/data/*yaml
+/data/*json
 
 # next.js
 /.next/
@@ -19,6 +23,9 @@
 
 # production
 /build
+
+# python
+/.venv/
 
 # misc
 .DS_Store
@@ -39,3 +46,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local caches
+.cache/
+/tesseract-data/

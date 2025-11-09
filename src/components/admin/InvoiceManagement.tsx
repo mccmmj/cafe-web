@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Upload, FileText, Clock, CheckCircle, AlertCircle, Plus, Eye } from 'lucide-react'
 import { Invoice } from '@/types/invoice'
 import { InvoiceReviewInterface } from './InvoiceReviewInterface'
@@ -22,7 +22,51 @@ interface InvoicesListProps {
   onViewDetails: (invoice: Invoice) => void
 }
 
+type TextQueue = 'all' | 'needs-ocr' | 'manual-review' | 'high-confidence' | 'ready-to-match'
+
 function InvoicesList({ invoices, loading, parsing, onReviewInvoice, onParseInvoice, onViewDetails }: InvoicesListProps) {
+  const renderTextAnalysisIndicators = (analysis?: Invoice['text_analysis']) => {
+    if (!analysis) return null
+
+    const badges: Array<{ label: string; className: string }> = []
+    const confidence = typeof analysis.validation_confidence === 'number'
+      ? Math.round(analysis.validation_confidence * 100)
+      : null
+
+    if (analysis.needs_ocr) {
+      badges.push({ label: 'Needs OCR', className: 'bg-red-100 text-red-800' })
+    } else if (analysis.extraction_method) {
+      const label = analysis.extraction_method === 'tesseract-ocr'
+        ? 'OCR text'
+        : analysis.extraction_method.replace(/-/g, ' ')
+      badges.push({ label, className: 'bg-gray-100 text-gray-700' })
+    }
+
+    if (analysis.needs_manual_review) {
+      badges.push({ label: 'Manual review required', className: 'bg-orange-100 text-orange-800' })
+    } else if (confidence !== null) {
+      badges.push({ label: `Text confidence ${confidence}%`, className: confidence >= 70 ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-800' })
+    }
+
+    if (analysis.line_item_candidates) {
+      badges.push({ label: `${analysis.line_item_candidates} line items detected`, className: 'bg-blue-100 text-blue-800' })
+    }
+
+    if (badges.length === 0) return null
+
+    return (
+      <div className="mt-2 flex flex-wrap gap-2">
+        {badges.map((badge, index) => (
+          <span
+            key={`${badge.label}-${index}`}
+            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${badge.className}`}
+          >
+            {badge.label}
+          </span>
+        ))}
+      </div>
+    )
+  }
   if (loading) {
     return (
       <div className="animate-pulse">
@@ -89,6 +133,12 @@ function InvoicesList({ invoices, loading, parsing, onReviewInvoice, onParseInvo
     }
   }
 
+  const handleReparse = (invoiceId: string) => {
+    const confirmed = window.confirm('Re-running parsing will overwrite the current extraction result. Continue?')
+    if (!confirmed) return
+    onParseInvoice(invoiceId)
+  }
+
   return (
     <div className="bg-white shadow rounded-lg overflow-hidden">
       <ul className="divide-y divide-gray-200">
@@ -108,19 +158,20 @@ function InvoicesList({ invoices, loading, parsing, onReviewInvoice, onParseInvo
                       {getStatusText(invoice.status)}
                     </span>
                   </div>
-                  <div className="flex items-center mt-1 text-sm text-gray-500">
-                    <span>{invoice.suppliers?.name || 'Unknown Supplier'}</span>
-                    <span className="mx-1">•</span>
-                    <span>{new Date(invoice.invoice_date).toLocaleDateString()}</span>
-                    <span className="mx-1">•</span>
-                    <span>
-                      {invoice.total_amount > 0 
-                        ? `$${invoice.total_amount.toFixed(2)}` 
-                        : 'Pending'
-                      }
-                    </span>
-                  </div>
-                </div>
+              <div className="flex items-center mt-1 text-sm text-gray-500">
+                <span>{invoice.suppliers?.name || 'Unknown Supplier'}</span>
+                <span className="mx-1">•</span>
+                <span>{new Date(invoice.invoice_date).toLocaleDateString()}</span>
+                <span className="mx-1">•</span>
+                <span>
+                  {invoice.total_amount > 0 
+                    ? `$${invoice.total_amount.toFixed(2)}` 
+                    : 'Pending'
+                  }
+                </span>
+              </div>
+              {renderTextAnalysisIndicators(invoice.text_analysis)}
+            </div>
               </div>
               <div className="flex items-center space-x-2">
                 {invoice.parsing_confidence && (
@@ -144,6 +195,15 @@ function InvoicesList({ invoices, loading, parsing, onReviewInvoice, onParseInvo
                         ? 'Retry Parse' 
                         : 'Parse with AI'
                     }
+                  </button>
+                )}
+                {!['uploaded', 'error', 'parsing'].includes(invoice.status) && (
+                  <button
+                    onClick={() => handleReparse(invoice.id)}
+                    disabled={parsing === invoice.id}
+                    className="text-sm text-green-600 hover:text-green-900 disabled:opacity-50"
+                  >
+                    {parsing === invoice.id ? 'Parsing...' : 'Re-parse with AI'}
                   </button>
                 )}
                 {['parsed', 'reviewing', 'matched'].includes(invoice.status) && (
@@ -180,20 +240,70 @@ export function InvoiceManagement() {
   const [testingMatching, setTestingMatching] = useState(false)
   const [reviewingInvoice, setReviewingInvoice] = useState<Invoice | null>(null)
   const [detailsInvoice, setDetailsInvoice] = useState<Invoice | null>(null)
+  const [activeFilter, setActiveFilter] = useState<TextQueue>('all')
+  const [textQueueCounts, setTextQueueCounts] = useState<Record<TextQueue, number>>({
+    'all': 0,
+    'needs-ocr': 0,
+    'manual-review': 0,
+    'high-confidence': 0,
+    'ready-to-match': 0
+  })
+  const [invoiceStats, setInvoiceStats] = useState({
+    total: 0,
+    pending_review: 0,
+    confirmed: 0,
+    errors: 0
+  })
 
-  useEffect(() => {
-    fetchInvoices()
-    fetchSuppliers()
-  }, [])
+  const FILTERS: Array<{
+    id: TextQueue
+    label: string
+    description: string
+  }> = [
+    {
+      id: 'all',
+      label: 'All invoices',
+      description: 'Full list'
+    },
+    {
+      id: 'needs-ocr',
+      label: 'Needs OCR',
+      description: 'Flagged for OCR fallback'
+    },
+    {
+      id: 'manual-review',
+      label: 'Manual review',
+      description: 'Text quality issues'
+    },
+    {
+      id: 'high-confidence',
+      label: 'High confidence',
+      description: 'Confidence ≥ 75%'
+    },
+    {
+      id: 'ready-to-match',
+      label: 'Ready to match',
+      description: 'Parsed & stable text'
+    }
+  ]
 
-  const fetchInvoices = async () => {
+  const fetchInvoices = useCallback(async (queue?: TextQueue) => {
+    const targetQueue = queue ?? activeFilter
     try {
       setLoading(true)
-      const response = await fetch('/api/admin/invoices')
+      const params = new URLSearchParams()
+      params.set('text_queue', targetQueue)
+      const response = await fetch(`/api/admin/invoices?${params.toString()}`)
       const result = await response.json()
       
       if (result.success) {
         setInvoices(result.data)
+        if (result.text_queue_counts) {
+          setTextQueueCounts(result.text_queue_counts)
+        }
+        if (result.stats) {
+          setInvoiceStats(result.stats)
+        }
       } else {
         console.error('Failed to fetch invoices:', result.error)
       }
@@ -202,7 +312,15 @@ export function InvoiceManagement() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [activeFilter])
+
+  useEffect(() => {
+    fetchSuppliers()
+  }, [])
+
+  useEffect(() => {
+    fetchInvoices()
+  }, [fetchInvoices])
 
   const fetchSuppliers = async () => {
     try {
@@ -357,7 +475,7 @@ export function InvoiceManagement() {
                     Total Invoices
                   </dt>
                   <dd className="text-lg font-medium text-gray-900">
-                    {invoices.length}
+                    {invoiceStats.total}
                   </dd>
                 </dl>
               </div>
@@ -377,7 +495,7 @@ export function InvoiceManagement() {
                     Pending Review
                   </dt>
                   <dd className="text-lg font-medium text-gray-900">
-                    {invoices.filter(inv => ['uploaded', 'parsing', 'parsed', 'reviewing'].includes(inv.status)).length}
+                    {invoiceStats.pending_review}
                   </dd>
                 </dl>
               </div>
@@ -397,12 +515,7 @@ export function InvoiceManagement() {
                     Confirmed
                   </dt>
                   <dd className="text-lg font-medium text-gray-900">
-                    {(() => {
-                      const confirmedInvoices = invoices.filter(inv => inv.status === 'confirmed')
-                      console.log('DEBUG - All invoice statuses:', invoices.map(inv => ({ id: inv.id, status: inv.status, number: inv.invoice_number })))
-                      console.log('DEBUG - Confirmed invoices:', confirmedInvoices.length, confirmedInvoices.map(inv => ({ id: inv.id, status: inv.status })))
-                      return confirmedInvoices.length
-                    })()}
+                    {invoiceStats.confirmed}
                   </dd>
                 </dl>
               </div>
@@ -422,13 +535,57 @@ export function InvoiceManagement() {
                     Errors
                   </dt>
                   <dd className="text-lg font-medium text-gray-900">
-                    {invoices.filter(inv => inv.status === 'error').length}
+                    {invoiceStats.errors}
                   </dd>
                 </dl>
               </div>
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Filter Controls */}
+      <div className="mt-8">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-sm font-medium text-gray-700">Focus queues</p>
+          <span className="text-xs text-gray-500">Tap a queue to slice invoices by text quality</span>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          {FILTERS.map((filter) => {
+            const isActive = activeFilter === filter.id
+            const count = textQueueCounts[filter.id] ?? 0
+            return (
+              <button
+                key={filter.id}
+                onClick={() => setActiveFilter(filter.id)}
+                className={`flex flex-col items-start rounded-lg border px-4 py-3 text-left transition ${
+                  isActive
+                    ? 'border-indigo-500 bg-indigo-50'
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <span className={`text-sm font-semibold ${isActive ? 'text-indigo-700' : 'text-gray-800'}`}>
+                    {filter.label}
+                  </span>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                    isActive ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {count}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">{filter.description}</p>
+              </button>
+            )
+          })}
+        </div>
+        {!loading && invoices.length === 0 && (
+          <p className="mt-3 text-sm text-gray-500">
+            {(textQueueCounts[activeFilter] ?? 0) > 0
+              ? 'No invoices currently match this queue on this page. Adjust filters or pagination.'
+              : 'No invoices have hit this queue yet.'}
+          </p>
+        )}
       </div>
 
       {/* Invoices List */}
@@ -456,7 +613,7 @@ export function InvoiceManagement() {
           onClose={() => setReviewingInvoice(null)}
           onConfirm={() => {
             setReviewingInvoice(null)
-            fetchInvoices() // Refresh the list
+    fetchInvoices() // Refresh the list
           }}
         />
       )}

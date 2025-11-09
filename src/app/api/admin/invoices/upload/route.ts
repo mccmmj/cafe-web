@@ -125,6 +125,7 @@ export async function POST(request: NextRequest) {
         invoice_date,
         total_amount: 0, // Will be updated after parsing
         file_url,
+        file_path: uniqueFileName,
         file_name: file.name,
         file_type: file.type,
         file_size: file.size,

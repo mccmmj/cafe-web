@@ -15,6 +15,8 @@ interface InventoryItem {
   unit_cost: number
   unit_type: string
   is_ingredient: boolean
+  item_type?: 'ingredient' | 'prepackaged' | 'prepared' | 'supply'
+  auto_decrement?: boolean
   supplier_id?: string
   location: string
   notes?: string
@@ -56,7 +58,9 @@ export default function InventoryEditModal({ item, suppliers, isOpen, onClose }:
         supplier_id: item.supplier_id || '',
         location: item.location,
         notes: item.notes || '',
-        is_ingredient: item.is_ingredient
+        is_ingredient: item.is_ingredient,
+        item_type: item.item_type || (item.is_ingredient ? 'ingredient' : 'prepackaged'),
+        auto_decrement: item.auto_decrement ?? false
       })
     }
   }, [item, isOpen])
@@ -249,18 +253,45 @@ export default function InventoryEditModal({ item, suppliers, isOpen, onClose }:
             />
           </div>
 
-          {/* Is Ingredient */}
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="is_ingredient"
-              checked={formData.is_ingredient || false}
-              onChange={(e) => setFormData(prev => ({ ...prev, is_ingredient: e.target.checked }))}
-              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-            />
-            <label htmlFor="is_ingredient" className="ml-2 block text-sm text-gray-700">
-              This is an ingredient (used in recipes)
-            </label>
+          {/* Classification */}
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Item Classification
+              </label>
+              <select
+                value={formData.item_type || 'prepackaged'}
+                onChange={(e) => {
+                  const value = e.target.value as 'ingredient' | 'prepared' | 'prepackaged' | 'supply'
+                  setFormData(prev => ({
+                    ...prev,
+                    item_type: value,
+                    is_ingredient: value === 'ingredient',
+                    auto_decrement: value === 'prepackaged' ? true : false
+                  }))
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              >
+                <option value="prepackaged">Pre-packaged / Ready to sell</option>
+                <option value="prepared">Prepared drink/food (manual deduction)</option>
+                <option value="ingredient">Ingredient (used in recipes)</option>
+                <option value="supply">Supply / Packaging</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="auto_decrement"
+                checked={formData.auto_decrement || false}
+                onChange={(e) => setFormData(prev => ({ ...prev, auto_decrement: e.target.checked }))}
+                disabled={formData.item_type === 'ingredient' || formData.item_type === 'prepared'}
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded disabled:opacity-50"
+              />
+              <label htmlFor="auto_decrement" className="block text-sm text-gray-700">
+                Auto sync stock from sales (for pre-packaged items)
+              </label>
+            </div>
           </div>
 
           {/* Notes */}

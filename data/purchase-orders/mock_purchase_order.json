@@ -1,0 +1,30 @@
+{
+  "id": "po_mock_001",
+  "supplier_id": "sup_mock_coffee",
+  "supplier_name": "Premium Coffee Roasters",
+  "order_number": "PO-2025-0101",
+  "status": "sent",
+  "order_date": "2025-01-15T09:30:00Z",
+  "expected_delivery_date": "2025-01-18T00:00:00Z",
+  "notes": "Weekly espresso bar replenishment",
+  "items": [
+    {
+      "inventory_item_id": "inv_espresso_beans",
+      "inventory_item_name": "Espresso Beans - 5lb bag",
+      "quantity_ordered": 12,
+      "unit_cost": 48.5
+    },
+    {
+      "inventory_item_id": "inv_vanilla_syrup",
+      "inventory_item_name": "Vanilla Syrup (1L)",
+      "quantity_ordered": 8,
+      "unit_cost": 9.75
+    },
+    {
+      "inventory_item_id": "inv_mocha_mix",
+      "inventory_item_name": "Mocha Sauce (2kg tub)",
+      "quantity_ordered": 6,
+      "unit_cost": 22.0
+    }
+  ]
+}

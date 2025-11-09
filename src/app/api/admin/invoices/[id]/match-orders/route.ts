@@ -51,6 +51,53 @@ export async function POST(request: NextRequest, context: RouteContext) {
       )
     }
 
+    // Check for existing linked purchase order
+    const { data: existingMatches, error: existingError } = await supabase
+      .from('order_invoice_matches')
+      .select(`
+        id,
+        purchase_order_id,
+        match_confidence,
+        match_method,
+        status,
+        quantity_variance,
+        amount_variance,
+        variance_notes,
+        purchase_orders (
+          id,
+          order_number,
+          supplier_id,
+          order_date,
+          expected_delivery_date,
+          status,
+          total_amount,
+          suppliers (
+            id,
+            name
+          ),
+          purchase_order_items (
+            id,
+            inventory_item_id,
+            quantity_ordered,
+            unit_cost,
+            total_cost,
+            inventory_items (
+              id,
+              item_name
+            )
+          )
+        )
+      `)
+      .eq('invoice_id', id)
+      .order('created_at', { ascending: false })
+
+    if (existingError) {
+      console.error('Failed to fetch existing order matches:', existingError)
+    }
+
+    const existingMatchRecord = existingMatches && existingMatches.length > 0 ? existingMatches[0] : null
+    const linkedOrderId = existingMatchRecord?.purchase_order_id || null
+
     // Get candidate purchase orders (sent/confirmed status, same supplier, recent)
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
@@ -95,24 +142,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     // Transform purchase orders for matching
-    const formattedOrders = (purchaseOrders || []).map(order => ({
-      id: order.id,
-      order_number: order.order_number,
-      supplier_id: order.supplier_id,
-      supplier_name: (order.suppliers as any)?.name || '',
-      order_date: order.order_date,
-      expected_delivery_date: order.expected_delivery_date,
-      status: order.status,
-      total_amount: order.total_amount,
-      items: (order.purchase_order_items || []).map(item => ({
-        id: item.id,
-        inventory_item_id: item.inventory_item_id,
-        item_name: (item.inventory_items as any)?.item_name || 'Unknown Item',
-        quantity_ordered: item.quantity_ordered,
-        unit_cost: item.unit_cost,
-        total_cost: item.total_cost
-      }))
-    }))
+    const formattedOrders = (purchaseOrders || []).map(mapPurchaseOrder)
 
     console.log(`📦 Found ${formattedOrders.length} candidate purchase orders`)
 
@@ -125,7 +155,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }))
 
     // Find order matches
-    const orderMatches = await findOrderMatches(
+    let orderMatches = await findOrderMatches(
       (invoice.suppliers as any)?.name || '',
       invoice.invoice_date,
       invoice.total_amount,
@@ -133,39 +163,67 @@ export async function POST(request: NextRequest, context: RouteContext) {
       formattedOrders
     )
 
+    let linkedMatch = null
+
+    if (linkedOrderId) {
+      // Remove the linked order from suggestions if present
+      const linkedIndex = orderMatches.findIndex(match => match.purchase_order_id === linkedOrderId)
+      if (linkedIndex >= 0) {
+        linkedMatch = orderMatches[linkedIndex]
+        orderMatches.splice(linkedIndex, 1)
+      } else if (existingMatchRecord?.purchase_orders) {
+        const formattedOrder = mapPurchaseOrder(existingMatchRecord.purchase_orders as any)
+        linkedMatch = {
+          purchase_order_id: formattedOrder.id,
+          purchase_order: formattedOrder,
+          confidence: existingMatchRecord.match_confidence || 0.9,
+          match_reasons: existingMatchRecord.variance_notes
+            ? [existingMatchRecord.variance_notes]
+            : ['Previously linked to this purchase order'],
+          quantity_variance: existingMatchRecord.quantity_variance ?? 0,
+          amount_variance: existingMatchRecord.amount_variance ?? Math.abs(invoice.total_amount - formattedOrder.total_amount),
+          matched_items: formattedOrder.items.length,
+          total_items: formattedOrder.items.length
+        }
+      }
+    }
+
     // Auto-create high confidence matches
     const autoMatches = []
-    for (const match of orderMatches) {
-      if (match.confidence >= 0.7) {
-        // Check if match already exists
-        const { data: existingMatch } = await supabase
-          .from('order_invoice_matches')
-          .select('id')
-          .eq('invoice_id', id)
-          .eq('purchase_order_id', match.purchase_order_id)
-          .single()
-
-        if (!existingMatch) {
-          const { data: newMatch, error: matchError } = await supabase
+    if (!linkedMatch) {
+      for (const match of orderMatches) {
+        if (match.confidence >= 0.7) {
+          const { data: existingMatch } = await supabase
             .from('order_invoice_matches')
-            .insert({
-              invoice_id: id,
-              purchase_order_id: match.purchase_order_id,
-              match_confidence: match.confidence,
-              match_method: 'auto',
-              status: 'pending',
-              quantity_variance: match.quantity_variance,
-              amount_variance: match.amount_variance,
-              variance_notes: `Auto-matched: ${match.match_reasons.join(', ')}`
-            })
-            .select()
+            .select('id')
+            .eq('invoice_id', id)
+            .eq('purchase_order_id', match.purchase_order_id)
             .single()
 
-          if (matchError) {
-            console.error('Failed to create auto-match:', matchError)
-          } else {
-            autoMatches.push(newMatch)
-            console.log(`✅ Auto-matched order: ${match.purchase_order.order_number}`)
+          if (!existingMatch) {
+            const { data: newMatch, error: matchError } = await supabase
+              .from('order_invoice_matches')
+              .insert({
+                invoice_id: id,
+                purchase_order_id: match.purchase_order_id,
+                match_confidence: match.confidence,
+                match_method: 'auto',
+                status: 'pending',
+                quantity_variance: match.quantity_variance,
+                amount_variance: match.amount_variance,
+                variance_notes: `Auto-matched: ${match.match_reasons.join(', ')}`
+              })
+              .select()
+              .single()
+
+            if (matchError) {
+              console.error('Failed to create auto-match:', matchError)
+            } else {
+              autoMatches.push(newMatch)
+              linkedMatch = match
+              console.log(`✅ Auto-matched order: ${match.purchase_order.order_number}`)
+              break
+            }
           }
         }
       }
@@ -177,7 +235,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       matches_found: orderMatches.length,
       high_confidence_matches: orderMatches.filter(m => m.confidence >= 0.7).length,
       auto_matches_created: autoMatches.length,
-      best_match_confidence: orderMatches.length > 0 ? orderMatches[0].confidence : 0
+      best_match_confidence: linkedMatch?.confidence ?? (orderMatches.length > 0 ? orderMatches[0].confidence : 0)
     }
 
     console.log('✅ Order matching completed:', statistics)
@@ -189,6 +247,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         invoice_date: invoice.invoice_date,
         invoice_total: invoice.total_amount,
         supplier_name: (invoice.suppliers as any)?.name,
+        linked_match: linkedMatch,
         order_matches: orderMatches,
         auto_matches: autoMatches,
         statistics
@@ -205,6 +264,27 @@ export async function POST(request: NextRequest, context: RouteContext) {
       },
       { status: 500 }
     )
+  }
+}
+
+function mapPurchaseOrder(order: any) {
+  return {
+    id: order.id,
+    order_number: order.order_number,
+    supplier_id: order.supplier_id,
+    supplier_name: (order.suppliers as any)?.name || '',
+    order_date: order.order_date,
+    expected_delivery_date: order.expected_delivery_date,
+    status: order.status,
+    total_amount: order.total_amount,
+    items: (order.purchase_order_items || []).map((item: any) => ({
+      id: item.id,
+      inventory_item_id: item.inventory_item_id,
+      item_name: (item.inventory_items as any)?.item_name || 'Unknown Item',
+      quantity_ordered: item.quantity_ordered,
+      unit_cost: item.unit_cost,
+      total_cost: item.total_cost
+    }))
   }
 }
 

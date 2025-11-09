@@ -1,0 +1,30 @@
+Premium Coffee Roasters
+Invoice #: INV-88271
+PO #: PO-2025-0101
+Invoice Date: 01/16/2025
+Due Date: 02/15/2025
+
+Bill To:
+KP3 Cafe
+123 Beans Ave
+Denver, CO 80202
+
+Line Items:
+1. Espresso Beans - 5lb bag
+   Qty: 12 @ $48.50          $582.00
+
+2. Vanilla Syrup (1L)
+   Qty: 8 @ $9.75            $78.00
+
+3. Mocha Sauce (2kg tub)
+   Qty: 6 @ $22.00           $132.00
+
+Subtotal:                    $792.00
+Shipping:                    $35.00
+Tax (8.5%):                  $70.32
+
+TOTAL DUE:                   $897.32
+
+Notes:
+ - Shipping promo applied: Ground Service (3 days)
+ - Contact support@premiumcoffeeroasters.com with questions.

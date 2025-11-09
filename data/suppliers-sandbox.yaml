@@ -1,0 +1,57 @@
+# Example Suppliers YAML File
+# Use this as a template for bulk uploading your suppliers
+
+suppliers:
+  - name: "Premium Coffee Roasters"
+    contact_person: "Sarah Johnson"
+    email: "sarah@premiumcoffee.com"
+    phone: "(303) 555-0100"
+    address: "1234 Roaster Ave, Denver CO 80202"
+    payment_terms: "Net 30"
+    notes: "Premium single-origin coffee beans, excellent customer service"
+    is_active: true
+
+  - name: "Local Dairy Cooperative"
+    contact_person: "Mike Wilson"
+    email: "orders@localdairy.coop"
+    phone: "(303) 555-0200"
+    address: "5678 Farm Road, Boulder CO 80301"
+    payment_terms: "Net 15"
+    notes: "Fresh milk, cream, and dairy products. Organic options available"
+    is_active: true
+
+  - name: "Mountain Fresh Produce"
+    contact_person: "Lisa Chen"
+    email: "lisa@mountainfresh.com"
+    phone: "(303) 555-0300"
+    address: "9101 Market St, Denver CO 80203"
+    payment_terms: "COD"
+    notes: "Seasonal fruits and vegetables, locally sourced when possible"
+    is_active: true
+
+  - name: "Denver Bakery Supply Co"
+    contact_person: "David Martinez"
+    email: "david@denverbakery.com"
+    phone: "(303) 555-0400"
+    address: "2345 Industrial Blvd, Denver CO 80205"
+    payment_terms: "Net 30"
+    notes: "Flour, sugar, baking ingredients, and packaging supplies"
+    is_active: true
+
+  - name: "Eco-Friendly Packaging"
+    contact_person: "Jennifer Taylor"
+    email: "jen@ecopackaging.com"
+    phone: "(303) 555-0500"
+    address: "7890 Green Way, Fort Collins CO 80524"
+    payment_terms: "Net 30"
+    notes: "Sustainable cups, lids, napkins, and to-go containers"
+    is_active: true
+
+  # Example of an inactive supplier
+  - name: "Old Coffee Company"
+    contact_person: "Former Contact"
+    email: "old@example.com"
+    phone: "(303) 555-0000"
+    payment_terms: "Net 30"
+    notes: "No longer using this supplier"
+    is_active: false

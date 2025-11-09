@@ -13,7 +13,9 @@ import {
   CheckCircle,
   AlertCircle,
   Download,
-  Eye
+  Eye,
+  Activity,
+  Info
 } from 'lucide-react'
 import { Invoice } from '@/types/invoice'
 
@@ -50,6 +52,8 @@ interface InvoiceDetailsModalProps {
 export function InvoiceDetailsModal({ invoice, isOpen, onClose }: InvoiceDetailsModalProps) {
   const [detailedInvoice, setDetailedInvoice] = useState<DetailedInvoice | null>(null)
   const [loading, setLoading] = useState(true)
+  const [downloading, setDownloading] = useState(false)
+  const [downloadError, setDownloadError] = useState<string | null>(null)
 
   useEffect(() => {
     if (isOpen && invoice.id) {
@@ -72,6 +76,25 @@ export function InvoiceDetailsModal({ invoice, isOpen, onClose }: InvoiceDetails
       console.error('Error loading invoice details:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleDownload = async () => {
+    if (!invoice?.id) return
+    try {
+      setDownloading(true)
+      setDownloadError(null)
+      const response = await fetch(`/api/admin/invoices/${invoice.id}/file`)
+      const result = await response.json()
+      if (!response.ok || !result?.url) {
+        throw new Error(result?.error || 'Unable to fetch download URL')
+      }
+      window.open(result.url, '_blank', 'noopener,noreferrer')
+    } catch (error) {
+      console.error('Failed to download invoice file:', error)
+      setDownloadError(error instanceof Error ? error.message : 'Failed to download file')
+    } finally {
+      setDownloading(false)
     }
   }
 
@@ -240,6 +263,97 @@ export function InvoiceDetailsModal({ invoice, isOpen, onClose }: InvoiceDetails
               )}
             </div>
 
+            {/* Text Extraction Insights */}
+            {detailedInvoice.text_analysis && (
+              <div className="bg-white border border-indigo-100 rounded-lg p-6">
+                <div className="flex justify-between items-start mb-4">
+                  <h3 className="text-lg font-medium text-gray-900 flex items-center">
+                    <Activity className="w-5 h-5 mr-2 text-indigo-500" />
+                    Text Extraction Insights
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {detailedInvoice.text_analysis.needs_ocr && (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800">
+                        Needs OCR Review
+                      </span>
+                    )}
+                    {detailedInvoice.text_analysis.needs_manual_review && (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-800">
+                        Manual Review Required
+                      </span>
+                    )}
+                    {detailedInvoice.text_analysis.validation_confidence !== undefined && (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800">
+                        Confidence {Math.round(detailedInvoice.text_analysis.validation_confidence * 100)}%
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">Extraction Method</p>
+                    <p className="text-base text-gray-900">
+                      {detailedInvoice.text_analysis.extraction_method
+                        ? detailedInvoice.text_analysis.extraction_method.replace(/-/g, ' ')
+                        : 'Unknown'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">Text Length</p>
+                    <p className="text-base text-gray-900">
+                      {detailedInvoice.text_analysis.text_length?.toLocaleString() || 'N/A'} chars
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">Line Items Detected</p>
+                    <p className="text-base text-gray-900">
+                      {detailedInvoice.text_analysis.line_item_candidates ?? 0}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">Pages Processed</p>
+                    <p className="text-base text-gray-900">
+                      {detailedInvoice.text_analysis.page_count ?? '—'}
+                    </p>
+                  </div>
+                </div>
+
+                {(detailedInvoice.text_analysis.warnings?.length || 0) > 0 && (
+                  <div className="mt-4">
+                    <p className="text-sm font-medium text-red-700 flex items-center">
+                      <AlertCircle className="w-4 h-4 mr-2" />
+                      Warnings
+                    </p>
+                    <ul className="mt-2 text-sm text-red-700 space-y-1 list-disc pl-5">
+                      {detailedInvoice.text_analysis.warnings!.map((warning, index) => (
+                        <li key={`warning-${index}`}>{warning}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {(detailedInvoice.text_analysis.indicators?.length || 0) > 0 && (
+                  <div className="mt-4">
+                    <p className="text-sm font-medium text-gray-600 flex items-center">
+                      <Info className="w-4 h-4 mr-2" />
+                      Detected Signals
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {detailedInvoice.text_analysis.indicators!.map((indicator, index) => (
+                        <span
+                          key={`indicator-${index}`}
+                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700"
+                        >
+                          {indicator}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Line Items */}
             {detailedInvoice.invoice_items && detailedInvoice.invoice_items.length > 0 && (
               <div className="bg-white border border-gray-200 rounded-lg p-6">
@@ -321,17 +435,20 @@ export function InvoiceDetailsModal({ invoice, isOpen, onClose }: InvoiceDetails
             )}
 
             {/* Actions */}
+            {downloadError && (
+              <p className="text-sm text-red-600 mb-2">{downloadError}</p>
+            )}
+
             <div className="flex justify-end space-x-3">
               {detailedInvoice.file_url && (
-                <a
-                  href={detailedInvoice.file_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                <button
+                  onClick={() => { void handleDownload() }}
+                  disabled={downloading}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-60"
                 >
                   <Download className="w-4 h-4 mr-2" />
-                  Download File
-                </a>
+                  {downloading ? 'Preparing...' : 'Download File'}
+                </button>
               )}
               <button
                 onClick={onClose}

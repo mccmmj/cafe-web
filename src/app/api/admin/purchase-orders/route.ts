@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminAuth } from '@/lib/admin/middleware'
-import { createClient } from '@/lib/supabase/server'
+import type { AdminAuthSuccess } from '@/lib/admin/middleware'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { canonicalStatus, insertStatusHistory } from './status-utils'
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,19 +24,33 @@ export async function GET(request: NextRequest) {
       .select(`
         *,
         suppliers!purchase_orders_supplier_id_fkey (
-          name
+          name,
+          contact_person,
+          email,
+          phone
         ),
         purchase_order_items!purchase_order_items_purchase_order_id_fkey (
           *,
           inventory_items!purchase_order_items_inventory_item_id_fkey (
             item_name
           )
+        ),
+        purchase_order_status_history!purchase_order_status_history_purchase_order_id_fkey (
+          previous_status,
+          new_status,
+          changed_by,
+          changed_at,
+          note
         )
       `)
 
     // Filter by status
     if (status && status !== 'all') {
-      query = query.eq('status', status)
+      if (status === 'approved') {
+        query = query.in('status', ['approved', 'confirmed'])
+      } else {
+        query = query.eq('status', status)
+      }
     }
 
     // Filter by date
@@ -70,15 +86,57 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    const sentByIds = Array.from(
+      new Set(
+        (orders || [])
+          .map((order: any) => order.sent_by)
+          .filter((value: any): value is string => Boolean(value))
+      )
+    )
+
+    let sentByProfiles: Record<string, { full_name?: string | null; email?: string | null }> = {}
+    if (sentByIds.length > 0) {
+      const serviceSupabase = createServiceClient()
+      const { data: profiles } = await serviceSupabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', sentByIds)
+
+      sentByProfiles = (profiles || []).reduce((acc: Record<string, any>, profile: any) => {
+        acc[profile.id] = {
+          full_name: profile.full_name,
+          email: profile.email
+        }
+        return acc
+      }, {})
+    }
+
     // Transform data to match expected format
-    const transformedOrders = orders?.map(order => ({
-      ...order,
-      supplier_name: order.suppliers?.name || 'Unknown Supplier',
-      items: order.purchase_order_items?.map((item: any) => ({
-        ...item,
-        inventory_item_name: item.inventory_items?.item_name || 'Unknown Item'
-      })) || []
-    })) || []
+    const transformedOrders = orders?.map(order => {
+      const history = (order.purchase_order_status_history || [])
+        .map((entry: any) => ({
+          previous_status: entry.previous_status,
+          new_status: entry.new_status,
+          changed_by: entry.changed_by,
+          changed_at: entry.changed_at,
+          note: entry.note
+        }))
+        .sort((a: any, b: any) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime())
+
+      return {
+        ...order,
+        supplier_name: order.suppliers?.name || 'Unknown Supplier',
+        supplier_contact: order.suppliers?.contact_person,
+        supplier_email: order.suppliers?.email,
+        supplier_phone: order.suppliers?.phone,
+        items: order.purchase_order_items?.map((item: any) => ({
+          ...item,
+          inventory_item_name: item.inventory_items?.item_name || 'Unknown Item'
+        })) || [],
+        status_history: history,
+        sent_by_profile: order.sent_by ? sentByProfiles[order.sent_by] || null : null
+      }
+    }) || []
 
     return NextResponse.json({
       success: true,
@@ -106,6 +164,7 @@ export async function POST(request: NextRequest) {
     if (authResult instanceof NextResponse) {
       return authResult
     }
+    const admin = authResult as AdminAuthSuccess
 
     const body = await request.json()
     const { 
@@ -185,8 +244,7 @@ export async function POST(request: NextRequest) {
       inventory_item_id: item.inventory_item_id,
       quantity_ordered: item.quantity_ordered,
       quantity_received: 0,
-      unit_cost: item.unit_cost,
-      total_cost: item.quantity_ordered * item.unit_cost
+      unit_cost: item.unit_cost
     }))
 
     const { error: itemsError } = await supabase
@@ -204,6 +262,14 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('✅ Successfully created purchase order:', newOrder.id)
+
+    await insertStatusHistory(
+      supabase,
+      newOrder.id,
+      null,
+      canonicalStatus(newOrder.status || 'draft') || 'draft',
+      admin.userId
+    )
 
     return NextResponse.json({
       success: true,

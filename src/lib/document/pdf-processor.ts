@@ -1,6 +1,39 @@
+import fs from 'fs'
+import path from 'path'
+import { fork } from 'child_process'
+import { InvoiceTextAnalysis } from '@/types/invoice'
+
 // Dynamic imports for document processing libraries
 let PDFParser: any = null
-let Tesseract: any = null
+let pdfjsLib: any = null
+
+const TESSERACT_DATA_DIR = path.join(process.cwd(), 'tesseract-data')
+const TESSERACT_LANG_URL = 'https://github.com/tesseract-ocr/tessdata_fast/raw/main'
+const OCR_RUNNER_PATH = path.join(process.cwd(), 'scripts', 'ocr-runner.js')
+
+async function ensureDirectory(dirPath: string) {
+  await fs.promises.mkdir(dirPath, { recursive: true })
+}
+
+async function ensureTesseractLanguageData(langCode: string) {
+  const trainedDataPath = path.join(TESSERACT_DATA_DIR, `${langCode}.traineddata`)
+  try {
+    await fs.promises.access(trainedDataPath, fs.constants.R_OK)
+    return trainedDataPath
+  } catch {
+    await ensureDirectory(TESSERACT_DATA_DIR)
+    const downloadUrl = `${TESSERACT_LANG_URL}/${langCode}.traineddata`
+    console.log(`⬇️ Downloading Tesseract language data from ${downloadUrl}`)
+    const response = await fetch(downloadUrl)
+    if (!response.ok) {
+      throw new Error(`Failed to download ${langCode}.traineddata.gz (${response.status})`)
+    }
+    const arrayBuffer = await response.arrayBuffer()
+    await fs.promises.writeFile(trainedDataPath, Buffer.from(arrayBuffer))
+    console.log(`✅ Downloaded ${langCode}.traineddata to ${trainedDataPath}`)
+    return trainedDataPath
+  }
+}
 
 async function getPdfParser() {
   if (!PDFParser) {
@@ -16,36 +49,139 @@ async function getPdfParser() {
   return PDFParser
 }
 
-async function getTesseract() {
-  if (!Tesseract) {
+async function getPdfJs() {
+  if (!pdfjsLib) {
     try {
-      Tesseract = await import('tesseract.js')
-      
-      // Configure Tesseract for server-side usage
-      if (typeof window === 'undefined') {
-        // Server-side configuration
-        console.log('🔧 Configuring Tesseract for server environment')
+      pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs')
+      if (pdfjsLib?.GlobalWorkerOptions) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = ''
       }
-      
-      console.log('✅ Tesseract.js library loaded successfully')
+      console.log('✅ pdfjs-dist fallback library loaded successfully')
     } catch (error: any) {
-      console.error('Failed to load Tesseract.js:', error)
-      throw new Error(`OCR library not available: ${error.message}`)
+      console.error('Failed to load pdfjs-dist:', error)
+      throw new Error(`PDF fallback parser not available: ${error.message}`)
     }
   }
-  return Tesseract
+  return pdfjsLib
+}
+
+interface OcrRunnerMessage {
+  type: 'RUN_OCR'
+  payload: {
+    buffer: string
+    mimeType: string
+  }
+}
+
+interface OcrRunnerResponse {
+  type: 'OCR_RESULT'
+  payload: {
+    text: string
+    confidence?: number
+  }
+}
+
+async function runOcrInIsolatedProcess(buffer: Buffer, mimeType: string) {
+  return new Promise<{ text: string; confidence?: number }>((resolve, reject) => {
+    const child = fork(OCR_RUNNER_PATH, [], {
+      stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
+      env: {
+        ...process.env,
+        TESSDATA_PREFIX: TESSERACT_DATA_DIR
+      }
+    })
+
+    let settled = false
+
+    const timeout = setTimeout(() => {
+      if (!settled) {
+        settled = true
+        child.kill()
+        reject(new Error('OCR processing timeout after 3 minutes'))
+      }
+    }, 180000)
+
+    const cleanup = () => {
+      clearTimeout(timeout)
+      child.removeAllListeners('message')
+      child.removeAllListeners('error')
+      child.removeAllListeners('exit')
+    }
+
+    child.on('message', (message: OcrRunnerResponse | { type: 'OCR_ERROR'; error: string }) => {
+      if (settled) return
+      if (!message) return
+
+      if (message.type === 'OCR_RESULT') {
+        settled = true
+        cleanup()
+        resolve(message.payload)
+        child.kill()
+      } else if (message.type === 'OCR_ERROR') {
+        settled = true
+        cleanup()
+        reject(new Error(message.error || 'OCR runner failed'))
+        child.kill()
+      }
+    })
+
+    child.on('error', (error) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(error)
+    })
+
+    child.on('exit', (code) => {
+      if (settled) return
+      if (code === 0) {
+        settled = true
+        cleanup()
+        reject(new Error('OCR runner exited without returning a result'))
+      } else {
+        settled = true
+        cleanup()
+        reject(new Error(`OCR runner exited with code ${code}`))
+      }
+    })
+
+    const message: OcrRunnerMessage = {
+      type: 'RUN_OCR',
+      payload: {
+        buffer: buffer.toString('base64'),
+        mimeType
+      }
+    }
+
+    child.send(message)
+  })
 }
 
 export interface DocumentProcessingResult {
   success: boolean
   text?: string
+  rawText?: string
+  cleanText?: string
+  analysis?: InvoiceTextAnalysis
   metadata?: {
     pages: number
     fileSize: number
     extractionMethod: string
     confidence?: number // OCR confidence score
+    needsOcr?: boolean
   }
   errors?: string[]
+}
+
+export interface InvoiceTextValidationResult {
+  isValid: boolean
+  confidence: number
+  indicators: string[]
+  warnings: string[]
+  keywordMatches: number
+  priceMatchCount: number
+  dateMatchCount: number
+  lineItemMatchCount: number
 }
 
 /**
@@ -60,86 +196,32 @@ export async function extractTextFromImage(buffer: Buffer, mimeType: string): Pr
       console.log('⚠️ Large image detected, may take longer to process')
     }
 
-    // Get Tesseract library
-    const tesseract = await getTesseract()
-    
-    // Try to create worker with error handling for Next.js environment
-    let worker
-    try {
-      worker = await tesseract.createWorker('eng', 1, {
-        logger: (m: any) => {
-          console.log(`OCR Status: ${m.status} - Progress: ${(m.progress * 100).toFixed(1)}%`)
-        }
-      })
-      
-      // Set OCR parameters for better performance with screenshots
-      await worker.setParameters({
-        tessedit_ocr_engine_mode: '1', // Use LSTM OCR engine
-        tessedit_pageseg_mode: '1',    // Automatic page segmentation with OSD
-      })
-      
-    } catch (workerError: any) {
-      console.error('❌ Worker creation failed:', workerError)
-      
-      // Return helpful error for Next.js environment issues
-      if (workerError.message?.includes('worker script') || workerError.code === 'ERR_WORKER_PATH') {
-        return {
-          success: false,
-          errors: [
-            'OCR processing is not available in this server environment.',
-            'For PNG/JPG invoices, please convert to PDF format first.',
-            'Alternative: Use online tools to convert image to text, then paste the text into a text file and upload.'
-          ]
-        }
-      }
-      
-      throw workerError
-    }
+    await ensureDirectory(TESSERACT_DATA_DIR)
+    await ensureTesseractLanguageData('eng')
 
-    try {
-      // Process the image buffer with timeout
-      const ocrPromise = worker.recognize(buffer)
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('OCR processing timeout after 3 minutes')), 180000)
-      })
-      
-      const { data } = await Promise.race([ocrPromise, timeoutPromise]) as any
-      
-      const extractedText = data.text.trim()
-      
-      if (!extractedText || extractedText.length < 10) {
-        await worker.terminate()
-        return {
-          success: false,
-          errors: ['Image appears to contain no readable text. Ensure the image is clear and contains text.']
-        }
-      }
+    const { text, confidence } = await runOcrInIsolatedProcess(buffer, mimeType)
+    const extractedText = text.trim()
 
-      console.log('✅ OCR text extraction completed, length:', extractedText.length)
-      console.log('📊 OCR confidence:', data.confidence)
-
-      await worker.terminate()
-
-      return {
-        success: true,
-        text: extractedText,
-        metadata: {
-          pages: 1,
-          fileSize: buffer.length,
-          extractionMethod: 'tesseract-ocr',
-          confidence: data.confidence
-        }
-      }
-
-    } catch (ocrError: any) {
-      await worker.terminate()
-      console.error('OCR processing error:', ocrError)
+    if (!extractedText || extractedText.length < 10) {
       return {
         success: false,
-        errors: [`OCR processing failed: ${ocrError.message}`]
+        errors: ['Image appears to contain no readable text. Ensure the image is clear and contains text.']
       }
     }
 
+    console.log('✅ OCR text extraction completed, length:', extractedText.length)
+    console.log('📊 OCR confidence:', confidence)
+
+    return {
+      success: true,
+      text: extractedText,
+      metadata: {
+        pages: 1,
+        fileSize: buffer.length,
+        extractionMethod: 'tesseract-ocr',
+        confidence
+      }
+    }
   } catch (error: any) {
     console.error('OCR setup error:', error)
     return {
@@ -152,88 +234,120 @@ export async function extractTextFromImage(buffer: Buffer, mimeType: string): Pr
 /**
  * Extract text from PDF buffer
  */
-export async function extractTextFromPDF(buffer: Buffer): Promise<DocumentProcessingResult> {
-  try {
-    console.log('📄 Starting PDF text extraction with pdf2json, size:', buffer.length)
+async function extractWithPdf2Json(buffer: Buffer): Promise<DocumentProcessingResult> {
+  console.log('📄 Starting PDF text extraction with pdf2json, size:', buffer.length)
+  const Pdf2Json = await getPdfParser()
+  const pdfParser = new Pdf2Json(null, true)
 
-    // Get pdf2json parser
-    const PDFParser = await getPdfParser()
-    const pdfParser = new PDFParser(null, true) // true = include raw text
+  return new Promise((resolve, reject) => {
+    let extractedText = ''
 
-    return new Promise((resolve) => {
-      let extractedText = ''
-
-      // Handle successful parsing
-      pdfParser.on('pdfParser_dataReady', (pdfData: any) => {
-        try {
-          // Extract text from each page
-          if (pdfData.Pages && pdfData.Pages.length > 0) {
-            for (const page of pdfData.Pages) {
-              if (page.Texts && page.Texts.length > 0) {
-                for (const textBlock of page.Texts) {
-                  if (textBlock.R && textBlock.R.length > 0) {
-                    for (const textRun of textBlock.R) {
-                      if (textRun.T) {
-                        // Decode URI component to handle special characters
-                        extractedText += decodeURIComponent(textRun.T) + ' '
-                      }
+    pdfParser.on('pdfParser_dataReady', (pdfData: any) => {
+      try {
+        if (pdfData.Pages && pdfData.Pages.length > 0) {
+          for (const page of pdfData.Pages) {
+            if (page.Texts && page.Texts.length > 0) {
+              for (const textBlock of page.Texts) {
+                if (textBlock.R && textBlock.R.length > 0) {
+                  for (const textRun of textBlock.R) {
+                    if (textRun.T) {
+                      extractedText += decodeURIComponent(textRun.T) + ' '
                     }
                   }
                 }
-                extractedText += '\n' // Add line break between text blocks
               }
+              extractedText += '\n'
             }
           }
-
-          const cleanedText = extractedText.trim()
-          
-          if (!cleanedText || cleanedText.length < 10) {
-            resolve({
-              success: false,
-              errors: ['PDF appears to be empty or contains only images. OCR may be required.']
-            })
-            return
-          }
-
-          console.log('✅ PDF text extraction completed, length:', cleanedText.length)
-
-          resolve({
-            success: true,
-            text: cleanedText,
-            metadata: {
-              pages: pdfData.Pages?.length || 1,
-              fileSize: buffer.length,
-              extractionMethod: 'pdf2json'
-            }
-          })
-
-        } catch (parseError: any) {
-          console.error('Error processing PDF data:', parseError)
-          resolve({
-            success: false,
-            errors: [`PDF data processing failed: ${parseError.message}`]
-          })
         }
-      })
 
-      // Handle parsing errors
-      pdfParser.on('pdfParser_dataError', (error: any) => {
-        console.error('PDF parsing error:', error)
+        const cleanedText = extractedText.trim()
+        if (!cleanedText || cleanedText.length < 10) {
+          reject(new Error('PDF appears to contain no extractable text'))
+          return
+        }
+
+        console.log('✅ PDF text extraction completed via pdf2json, length:', cleanedText.length)
         resolve({
-          success: false,
-          errors: [`PDF parsing failed: ${error.parserError || error.message || 'Unknown error'}`]
+          success: true,
+          text: cleanedText,
+          metadata: {
+            pages: pdfData.Pages?.length || 1,
+            fileSize: buffer.length,
+            extractionMethod: 'pdf2json'
+          }
         })
-      })
-
-      // Start parsing the buffer
-      pdfParser.parseBuffer(buffer)
+      } catch (error) {
+        reject(error)
+      }
     })
 
-  } catch (error: any) {
-    console.error('PDF extraction setup error:', error)
+    pdfParser.on('pdfParser_dataError', (error: any) => {
+      reject(new Error(error.parserError || error.message || 'Unknown pdf2json error'))
+    })
+
+    pdfParser.parseBuffer(buffer)
+  })
+}
+
+async function extractWithPdfJs(buffer: Buffer): Promise<DocumentProcessingResult> {
+  console.log('📄 Falling back to pdfjs-dist for text extraction')
+  const pdfjs = await getPdfJs()
+  const loadingTask = pdfjs.getDocument({ data: buffer })
+
+  try {
+    const doc = await loadingTask.promise
+    let extractedText = ''
+
+    const totalPages = doc.numPages || 1
+
+    for (let pageNumber = 1; pageNumber <= totalPages; pageNumber += 1) {
+      const page = await doc.getPage(pageNumber)
+      const textContent = await page.getTextContent()
+      const pageText = textContent.items
+        .map((item: any) => (item.str ? item.str : ''))
+        .join(' ')
+
+      extractedText += pageText + '\n'
+    }
+
+    await doc.destroy?.()
+
+    const cleanedText = extractedText.trim()
+    if (!cleanedText || cleanedText.length < 10) {
+      throw new Error('PDF fallback produced insufficient text')
+    }
+
     return {
-      success: false,
-      errors: [`PDF extraction failed: ${error.message}`]
+      success: true,
+      text: cleanedText,
+      metadata: {
+        pages: totalPages,
+        fileSize: buffer.length,
+        extractionMethod: 'pdfjs-dist'
+      }
+    }
+  } finally {
+    await loadingTask.destroy()
+  }
+}
+
+export async function extractTextFromPDF(buffer: Buffer): Promise<DocumentProcessingResult> {
+  try {
+    return await extractWithPdf2Json(buffer)
+  } catch (primaryError: any) {
+    console.warn('⚠️ pdf2json extraction failed, trying pdfjs-dist fallback:', primaryError.message)
+    try {
+      return await extractWithPdfJs(buffer)
+    } catch (fallbackError: any) {
+      console.error('❌ PDF fallback extraction failed:', fallbackError)
+      return {
+        success: false,
+        errors: [
+          `PDF extraction failed: ${primaryError.message}`,
+          `Fallback error: ${fallbackError.message}`
+        ]
+      }
     }
   }
 }
@@ -330,16 +444,35 @@ export async function processInvoiceFile(fileUrl: string, fileType: string, file
       }
     }
     
-    if (!result.success) {
+    if (!result.success || !result.text) {
       return result
     }
 
-    // Additional text cleanup for invoice processing
-    const cleanedText = cleanExtractedText(result.text || '')
-    
+    // Additional text cleanup + normalization for invoice processing
+    const rawText = result.text || ''
+    const cleanedText = cleanExtractedText(rawText)
+    const { normalizedText, normalizationSteps } = normalizeInvoiceText(cleanedText)
+    const validation = validateInvoiceText(normalizedText)
+    const analysis = buildTextAnalysis({
+      normalizedText,
+      rawText,
+      validation,
+      metadata: result.metadata,
+      normalizationSteps
+    })
+
+    const metadata = result.metadata ? { ...result.metadata } : undefined
+    if (metadata) {
+      metadata.needsOcr = analysis.needs_ocr || false
+    }
+
     return {
       ...result,
-      text: cleanedText
+      metadata,
+      rawText,
+      text: normalizedText,
+      cleanText: normalizedText,
+      analysis
     }
 
   } catch (error: any) {
@@ -355,26 +488,172 @@ export async function processInvoiceFile(fileUrl: string, fileType: string, file
  * Clean and normalize extracted text for better AI parsing
  */
 function cleanExtractedText(text: string): string {
+  if (!text) return ''
+
   return text
-    // Remove excessive whitespace
-    .replace(/\s+/g, ' ')
-    // Remove page breaks and form feeds
-    .replace(/[\f\r\n]+/g, '\n')
-    // Remove extra line breaks
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/\f/g, '\n')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\t+/g, '  ')
+    .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
-    // Trim whitespace
+    .replace(/[^\S\n]{3,}/g, '  ')
     .trim()
+}
+
+interface NormalizationResult {
+  normalizedText: string
+  normalizationSteps: string[]
+}
+
+function normalizeInvoiceText(text: string): NormalizationResult {
+  if (!text) {
+    return { normalizedText: '', normalizationSteps: [] }
+  }
+
+  let normalized = text
+  const normalizationSteps: string[] = []
+
+  const applyReplacement = (
+    source: string,
+    pattern: RegExp,
+    replacer: string | ((match: string, ...groups: string[]) => string),
+    note: string
+  ) => {
+    let replaced = false
+    const next = source.replace(pattern, (match: string, ...args: string[]) => {
+      replaced = true
+      if (typeof replacer === 'function') {
+        return replacer(match, ...args)
+      }
+      return replacer
+    })
+    if (replaced) {
+      normalizationSteps.push(note)
+    }
+    return next
+  }
+
+  normalized = applyReplacement(normalized, /[\u201C\u201D]/g, '"', 'normalized curly double quotes')
+  normalized = applyReplacement(normalized, /[\u2018\u2019]/g, '\'', 'normalized curly single quotes')
+  normalized = applyReplacement(normalized, /—/g, '-', 'converted em dash to hyphen')
+  normalized = applyReplacement(normalized, /(\d)O(\d)/g, (_match: string, left: string, right: string) => `${left}0${right}`, 'fixed OCR O→0 between digits')
+  normalized = applyReplacement(normalized, /(\d)[lI](\d)/g, (_match: string, left: string, right: string) => `${left}1${right}`, 'fixed OCR l/I→1 between digits')
+  normalized = applyReplacement(normalized, /\$(\s+)(\d)/g, (_match: string, _spaces: string, digit: string) => `$${digit}`, 'removed spaces after currency symbols')
+  normalized = applyReplacement(normalized, /-\n(?=[a-zA-Z])/g, '', 'merged hyphenated line breaks')
+
+  const headerPatterns = [
+    { regex: /^page \d+ of \d+/i, note: 'removed page headers' },
+    { regex: /^please remit/i, note: 'removed remittance footer' },
+    { regex: /^thank you for your business/i, note: 'removed thank-you footer' },
+    { regex: /^scan date/i, note: 'removed scan metadata' }
+  ]
+
+  const filteredLines: string[] = []
+  const removalCounts: Record<string, number> = {}
+
+  normalized.split('\n').forEach((line) => {
+    const trimmed = line.trim()
+    if (!trimmed) {
+      filteredLines.push('')
+      return
+    }
+
+    const patternMatch = headerPatterns.find(({ regex }) => regex.test(trimmed))
+    if (patternMatch) {
+      removalCounts[patternMatch.note] = (removalCounts[patternMatch.note] || 0) + 1
+      return
+    }
+
+    filteredLines.push(line.replace(/\s+$/g, ''))
+  })
+
+  Object.entries(removalCounts).forEach(([note, count]) => {
+    if (count > 0) {
+      normalizationSteps.push(`${note} (${count})`)
+    }
+  })
+
+  const normalizedText = filteredLines
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[^\S\n]{3,}/g, '  ')
+    .trim()
+
+  return {
+    normalizedText,
+    normalizationSteps
+  }
+}
+
+function buildTextAnalysis({
+  normalizedText,
+  rawText,
+  validation,
+  metadata,
+  normalizationSteps
+}: {
+  normalizedText: string
+  rawText: string
+  validation: InvoiceTextValidationResult
+  metadata?: DocumentProcessingResult['metadata']
+  normalizationSteps: string[]
+}): InvoiceTextAnalysis {
+  const lines = normalizedText.split('\n')
+  const nonEmptyLines = lines.filter((line) => line.trim().length > 0)
+  const numericLines = nonEmptyLines.filter((line) => /\d/.test(line))
+  const tableLines = nonEmptyLines.filter((line) => /\s{2,}\S/.test(line) || /\|/.test(line))
+  const uniqueCharacters = new Set(normalizedText.replace(/\s/g, '').split('')).size
+  const alphanumericChars = normalizedText.replace(/[^0-9A-Za-z]/g, '')
+  const tableConfidence = nonEmptyLines.length > 0
+    ? tableLines.length / nonEmptyLines.length
+    : 0
+
+  const needsOcr = Boolean(
+    (metadata?.extractionMethod === 'pdf2json' && normalizedText.length < 800) ||
+    (validation.keywordMatches < 3 && normalizedText.length < 400) ||
+    (validation.lineItemMatchCount === 0 && normalizedText.length < 600)
+  )
+
+  const needsManualReview = !validation.isValid ||
+    validation.confidence < 0.35 ||
+    validation.lineItemMatchCount === 0
+
+  const analysis: InvoiceTextAnalysis = {
+    extraction_method: metadata?.extractionMethod,
+    text_length: normalizedText.length,
+    raw_text_length: rawText.length,
+    line_count: lines.length,
+    page_count: metadata?.pages,
+    keyword_matches: validation.keywordMatches,
+    line_item_candidates: validation.lineItemMatchCount,
+    is_valid: validation.isValid,
+    needs_ocr: needsOcr,
+    needs_manual_review: needsManualReview,
+    normalization_steps: normalizationSteps,
+    indicators: validation.indicators,
+    warnings: validation.warnings,
+    validation_confidence: validation.confidence,
+    ocr_confidence: metadata?.confidence,
+    metadata: {
+      table_confidence: Number(tableConfidence.toFixed(2)),
+      table_lines: tableLines.length,
+      unique_characters: uniqueCharacters,
+      alphanumeric_ratio: Number((alphanumericChars.length / Math.max(1, normalizedText.length)).toFixed(2)),
+      numeric_line_ratio: Number((numericLines.length / Math.max(1, nonEmptyLines.length)).toFixed(2)),
+      price_match_count: validation.priceMatchCount,
+      date_match_count: validation.dateMatchCount
+    }
+  }
+
+  return analysis
 }
 
 /**
  * Validate if text looks like a valid invoice
  */
-export function validateInvoiceText(text: string): {
-  isValid: boolean
-  confidence: number
-  indicators: string[]
-  warnings: string[]
-} {
+export function validateInvoiceText(text: string): InvoiceTextValidationResult {
   const indicators: string[] = []
   const warnings: string[] = []
   let confidence = 0
@@ -401,17 +680,19 @@ export function validateInvoiceText(text: string): {
   // Check for numeric patterns (prices, quantities)
   const pricePattern = /\$[\d,]+\.?\d*/g
   const priceMatches = text.match(pricePattern)
-  if (priceMatches && priceMatches.length > 0) {
+  const priceMatchCount = priceMatches?.length || 0
+  if (priceMatchCount > 0) {
     confidence += 20
-    indicators.push(`Found ${priceMatches.length} price patterns`)
+    indicators.push(`Found ${priceMatchCount} price patterns`)
   }
 
   // Check for date patterns
   const datePattern = /\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}/g
   const dateMatches = text.match(datePattern)
-  if (dateMatches && dateMatches.length > 0) {
+  const dateMatchCount = dateMatches?.length || 0
+  if (dateMatchCount > 0) {
     confidence += 15
-    indicators.push(`Found ${dateMatches.length} date patterns`)
+    indicators.push(`Found ${dateMatchCount} date patterns`)
   }
 
   // Check text length
@@ -425,9 +706,10 @@ export function validateInvoiceText(text: string): {
   // Check for line items pattern
   const lineItemPattern = /(\d+\.?\d*)\s+[\w\s]+\s+\$?[\d,]+\.?\d*/g
   const lineItemMatches = text.match(lineItemPattern)
-  if (lineItemMatches && lineItemMatches.length > 0) {
+  const lineItemMatchCount = lineItemMatches?.length || 0
+  if (lineItemMatchCount > 0) {
     confidence += 20
-    indicators.push(`Found ${lineItemMatches.length} potential line items`)
+    indicators.push(`Found ${lineItemMatchCount} potential line items`)
   }
 
   // Final confidence adjustment
@@ -443,7 +725,11 @@ export function validateInvoiceText(text: string): {
     isValid,
     confidence: confidence / 100, // Convert to 0-1 scale
     indicators,
-    warnings
+    warnings,
+    keywordMatches,
+    priceMatchCount,
+    dateMatchCount,
+    lineItemMatchCount
   }
 }
 

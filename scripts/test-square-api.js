@@ -1,13 +1,29 @@
 #!/usr/bin/env node
 
 /**
- * Test Square API connectivity and permissions
+ * Test Square API connectivity, optionally listing catalog variation IDs.
  */
 
 require('dotenv').config({ path: '.env.local' })
 
 const SQUARE_BASE_URL = 'https://connect.squareupsandbox.com'
 const SQUARE_VERSION = '2024-12-18'
+
+function parseArgs() {
+  const args = process.argv.slice(2)
+  const options = {
+    listVariations: args.includes('--list-variations')
+  }
+
+  if (args.includes('--help') || args.includes('-h')) {
+    console.log('Usage: node scripts/test-square-api.js [--list-variations]')
+    console.log('\nOptions:')
+    console.log('  --list-variations    Output item and variation IDs after connectivity tests')
+    process.exit(0)
+  }
+
+  return options
+}
 
 function getHeaders() {
   return {
@@ -17,13 +33,63 @@ function getHeaders() {
   }
 }
 
-async function testAPI() {
-  console.log('🧪 Testing Square API Connectivity')
-  console.log('===================================')
+async function listCatalogVariations() {
+  console.log('\nCatalog Variations')
+  console.log('------------------')
+
+  let cursor = undefined
+  const items = []
+
+  do {
+    const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''
+    const response = await fetch(`${SQUARE_BASE_URL}/v2/catalog/list${query}`, {
+      method: 'GET',
+      headers: getHeaders()
+    })
+
+    if (!response.ok) {
+      const text = await response.text()
+      console.error(`Error: Catalog list failed (${response.status}) ${text}`)
+      return
+    }
+
+    const data = await response.json()
+    const objects = data.objects || []
+    objects.forEach(obj => {
+      if (obj.type === 'ITEM' && obj.item_data?.variations?.length) {
+        items.push({
+          name: obj.item_data.name,
+          variations: obj.item_data.variations.map(variation => ({
+            name: variation.item_variation_data?.name,
+            id: variation.id
+          }))
+        })
+      }
+    })
+
+    cursor = data.cursor
+  } while (cursor)
+
+  if (items.length === 0) {
+    console.log('No catalog items with variations found.')
+    return
+  }
+
+  items.forEach(item => {
+    console.log(`\nItem: ${item.name}`)
+    item.variations.forEach(variation => {
+      console.log(`  - ${variation.name}: ${variation.id}`)
+    })
+  })
+}
+
+async function testAPI(options) {
+  console.log('Testing Square API Connectivity')
+  console.log('===============================')
   
   try {
     // Test 1: List Locations
-    console.log('\n1️⃣ Testing Locations API...')
+    console.log('\n1. Testing Locations API...')
     const locResponse = await fetch(`${SQUARE_BASE_URL}/v2/locations`, {
       method: 'GET',
       headers: getHeaders()
@@ -31,17 +97,17 @@ async function testAPI() {
     
     if (locResponse.ok) {
       const locData = await locResponse.json()
-      console.log('✅ Locations API works')
+      console.log('   Success: Locations API reachable')
       console.log(`   Found ${locData.locations?.length || 0} locations`)
       if (locData.locations?.[0]) {
-        console.log(`   Location: ${locData.locations[0].name} (${locData.locations[0].id})`)
+        console.log(`   Example: ${locData.locations[0].name} (${locData.locations[0].id})`)
       }
     } else {
-      console.log('❌ Locations API failed:', locResponse.status)
+      console.log(`   Failure: ${locResponse.status}`)
     }
     
     // Test 2: List Catalog Objects
-    console.log('\n2️⃣ Testing Catalog API...')
+    console.log('\n2. Testing Catalog API...')
     const catResponse = await fetch(`${SQUARE_BASE_URL}/v2/catalog/list`, {
       method: 'GET',
       headers: getHeaders()
@@ -49,14 +115,14 @@ async function testAPI() {
     
     if (catResponse.ok) {
       const catData = await catResponse.json()
-      console.log('✅ Catalog API works')
-      console.log(`   Found ${catData.objects?.length || 0} catalog objects`)
+      console.log('   Success: Catalog API reachable')
+      console.log(`   Retrieved ${catData.objects?.length || 0} catalog objects (first page)`)
     } else {
-      console.log('❌ Catalog API failed:', catResponse.status)
+      console.log(`   Failure: ${catResponse.status}`)
     }
     
     // Test 3: Search for Tax objects specifically
-    console.log('\n3️⃣ Testing Tax Search...')
+    console.log('\n3. Testing Tax Search...')
     const taxResponse = await fetch(`${SQUARE_BASE_URL}/v2/catalog/search`, {
       method: 'POST',
       headers: getHeaders(),
@@ -67,23 +133,31 @@ async function testAPI() {
     
     if (taxResponse.ok) {
       const taxData = await taxResponse.json()
-      console.log('✅ Tax search works')
+      console.log('   Success: Tax search reachable')
       console.log(`   Found ${taxData.objects?.length || 0} tax objects`)
       if (taxData.objects?.length > 0) {
         taxData.objects.forEach(tax => {
-          console.log(`   - ${tax.tax_data?.name}: ${tax.tax_data?.percentage}% (${tax.tax_data?.enabled ? 'enabled' : 'disabled'})`)
+          const taxName = tax.tax_data?.name || 'Unnamed'
+          const percentage = tax.tax_data?.percentage || '0'
+          const enabled = tax.tax_data?.enabled ? 'enabled' : 'disabled'
+          console.log(`   - ${taxName}: ${percentage}% (${enabled})`)
         })
       }
     } else {
       const errorText = await taxResponse.text()
-      console.log('❌ Tax search failed:', taxResponse.status, errorText)
+      console.log(`   Failure: ${taxResponse.status} ${errorText}`)
     }
     
-    console.log('\n🔍 API Tests Complete!')
+    console.log('\nAPI Tests Complete')
+
+    if (options.listVariations) {
+      await listCatalogVariations()
+    }
     
   } catch (error) {
-    console.error('❌ API Test Error:', error.message)
+    console.error('API Test Error:', error.message)
   }
 }
 
-testAPI()
+const options = parseArgs()
+testAPI(options)

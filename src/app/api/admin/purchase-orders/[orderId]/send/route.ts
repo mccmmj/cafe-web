@@ -1,0 +1,277 @@
+import { Buffer } from 'node:buffer'
+import { NextRequest, NextResponse } from 'next/server'
+import { Resend } from 'resend'
+import { requireAdminAuth, isAdminAuthSuccess } from '@/lib/admin/middleware'
+import { createClient } from '@/lib/supabase/server'
+import { fetchPurchaseOrderForIssuance } from '@/lib/purchase-orders/load'
+import { generatePurchaseOrderPdf } from '@/lib/purchase-orders/pdf'
+import { canonicalStatus, canTransition, insertStatusHistory } from '../../status-utils'
+
+const resend = new Resend(process.env.RESEND_API_KEY)
+
+type SendRequestBody = {
+  to?: string | string[]
+  cc?: string | string[]
+  subject?: string
+  message?: string
+  markAsSent?: boolean
+}
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ orderId: string }> }
+) {
+  try {
+    if (!process.env.RESEND_API_KEY) {
+      return NextResponse.json(
+        { error: 'Email service is not configured. Set RESEND_API_KEY to enable supplier emails.' },
+        { status: 503 }
+      )
+    }
+
+    const authResult = await requireAdminAuth(request)
+    if (!isAdminAuthSuccess(authResult)) {
+      return authResult
+    }
+
+    const admin = authResult
+    const resolvedParams = await params
+    const { orderId } = resolvedParams
+
+    if (!orderId) {
+      return NextResponse.json(
+        { error: 'Order ID is required' },
+        { status: 400 }
+      )
+    }
+
+    const body: SendRequestBody = await request.json().catch(() => ({}))
+
+    const supabase = await createClient()
+    const { order, error } = await fetchPurchaseOrderForIssuance(supabase, orderId)
+
+    if (error) {
+      return NextResponse.json(
+        { error: 'Failed to load purchase order', details: error.message },
+        { status: 500 }
+      )
+    }
+
+    if (!order) {
+      return NextResponse.json(
+        { error: 'Purchase order not found' },
+        { status: 404 }
+      )
+    }
+
+    const status = canonicalStatus(order.status) || order.status
+    if (!['approved', 'confirmed', 'sent', 'received'].includes(status)) {
+      return NextResponse.json(
+        { error: 'Purchase order must be approved before emailing the supplier' },
+        { status: 400 }
+      )
+    }
+
+    const recipients = normaliseAddresses(body.to) || (order.supplier.email ? [order.supplier.email] : [])
+    if (recipients.length === 0) {
+      return NextResponse.json(
+        { error: 'Supplier email address is required to send the purchase order' },
+        { status: 400 }
+      )
+    }
+
+    const cc = normaliseAddresses(body.cc)
+    const subject = body.subject?.trim() || `Purchase Order ${order.order_number}`
+    const message = body.message?.trim() || ''
+
+    const pdfBytes = await generatePurchaseOrderPdf(order)
+    const attachmentFileName = `PO-${order.order_number || order.id}.pdf`
+
+    const emailResponse = await resend.emails.send({
+      from: process.env.RESEND_PURCHASING_FROM || 'Little Cafe Purchasing <orders@jmcpastrycoffee.com>',
+      to: recipients,
+      cc: cc.length > 0 ? cc : undefined,
+      subject,
+      html: buildEmailHtml(order, message),
+      attachments: [
+        {
+          filename: attachmentFileName,
+          content: Buffer.from(pdfBytes).toString('base64')
+        }
+      ]
+    })
+
+    if (emailResponse.error) {
+      console.error('Failed to send purchase order email:', emailResponse.error)
+      return NextResponse.json(
+        { error: 'Failed to send email', details: emailResponse.error.message },
+        { status: 502 }
+      )
+    }
+
+    let statusChanged = false
+    if (body.markAsSent !== false) {
+      const targetStatus = 'sent'
+      const currentStatus = canonicalStatus(order.status) || order.status
+
+      if (currentStatus !== targetStatus) {
+        if (!canTransition(currentStatus, targetStatus)) {
+          return NextResponse.json(
+            { error: `Cannot transition purchase order from ${currentStatus} to ${targetStatus}` },
+            { status: 400 }
+          )
+        }
+        statusChanged = true
+      }
+
+      const { error: updateError } = await supabase
+        .from('purchase_orders')
+        .update({
+          status: statusChanged ? targetStatus : currentStatus,
+          sent_at: new Date().toISOString(),
+          sent_via: 'email',
+          sent_notes: message || 'Sent to supplier via email',
+          sent_by: admin.userId
+        })
+        .eq('id', order.id)
+
+      if (updateError) {
+        console.error('Failed to update purchase order after email:', updateError)
+        return NextResponse.json(
+          { error: 'Email sent, but failed to record send status', details: updateError.message },
+          { status: 500 }
+        )
+      }
+
+      if (statusChanged) {
+        await insertStatusHistory(
+          supabase,
+          order.id,
+          currentStatus,
+          targetStatus,
+          admin.userId,
+          'Automatically marked as sent after emailing supplier'
+        )
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Purchase order emailed to supplier',
+      emailId: emailResponse.data?.id,
+      recipients,
+      cc,
+      statusChanged
+    })
+  } catch (error) {
+    console.error('Failed to send purchase order email:', error)
+    return NextResponse.json(
+      {
+        error: 'Failed to send purchase order email',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 500 }
+    )
+  }
+}
+
+function normaliseAddresses(addresses?: string | string[] | null): string[] {
+  if (!addresses) return []
+  if (Array.isArray(addresses)) {
+    return addresses
+      .map(address => address?.trim())
+      .filter((value): value is string => Boolean(value))
+  }
+  return addresses.split(',').map(value => value.trim()).filter(Boolean)
+}
+
+function buildEmailHtml(order: Awaited<ReturnType<typeof fetchPurchaseOrderForIssuance>>['order'], message: string) {
+  if (!order) return ''
+
+  const currencyFormatter = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD'
+  })
+
+  const orderLines = order.items.map(item => `
+    <tr>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${item.name}</td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:center;">${item.quantity_ordered}</td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:center;">${item.unit_type || 'each'}</td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${currencyFormatter.format(item.unit_cost)}</td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${currencyFormatter.format(item.total_cost)}</td>
+    </tr>
+  `).join('')
+
+  return `
+    <!DOCTYPE html>
+    <html>
+      <body style="font-family: Arial, sans-serif; color: #111827; background-color: #f9fafb; padding: 24px;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 640px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e5e7eb;">
+          <thead>
+            <tr>
+              <th style="background-color: #111827; color: #f9fafb; padding: 24px; text-align: left;">
+                <h1 style="margin: 0; font-size: 20px;">Purchase Order ${order.order_number}</h1>
+                <p style="margin: 8px 0 0; font-size: 14px; opacity: 0.85;">Little Cafe • purchasing@jmcpastrycoffee.com</p>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding: 24px;">
+                <p style="margin: 0 0 12px;">Hello ${order.supplier.contact_person || order.supplier.name},</p>
+                <p style="margin: 0 0 16px;">Please find attached the purchase order for the upcoming delivery.</p>
+                ${message ? `<div style="border-left: 3px solid #6366f1; padding-left: 16px; margin-bottom: 16px; color: #312e81;">${message.replace(/\n/g, '<br />')}</div>` : ''}
+                <div style="margin-bottom: 24px;">
+                  <h2 style="font-size: 16px; margin: 0 0 8px;">Order Summary</h2>
+                  <p style="margin: 4px 0;">PO Number: <strong>${order.order_number}</strong></p>
+                  <p style="margin: 4px 0;">Order Date: <strong>${formatForEmail(order.order_date)}</strong></p>
+                  <p style="margin: 4px 0;">Expected Delivery: <strong>${formatForEmail(order.expected_delivery_date) || 'Not specified'}</strong></p>
+                  <p style="margin: 4px 0 0;">Total Amount: <strong>${currencyFormatter.format(order.total_amount)}</strong></p>
+                </div>
+
+                <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse; border: 1px solid #e5e7eb;">
+                  <thead>
+                    <tr style="background-color: #f3f4f6; color: #111827; text-align: left;">
+                      <th style="padding: 10px;">Item</th>
+                      <th style="padding: 10px; text-align:center;">Qty</th>
+                      <th style="padding: 10px; text-align:center;">Unit</th>
+                      <th style="padding: 10px; text-align:right;">Unit Cost</th>
+                      <th style="padding: 10px; text-align:right;">Line Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${orderLines}
+                  </tbody>
+                </table>
+
+                ${order.notes ? `
+                  <div style="margin-top: 20px; padding: 16px; background-color: #f3f4f6; border-radius: 8px;">
+                    <h3 style="margin: 0 0 8px; font-size: 14px;">Internal Notes</h3>
+                    <p style="margin: 0; font-size: 13px;">${order.notes.replace(/\n/g, '<br />')}</p>
+                  </div>
+                ` : ''}
+
+                <p style="margin: 24px 0 8px; font-size: 13px; color: #6b7280;">
+                  Please confirm receipt of this purchase order and advise if any changes are needed.
+                </p>
+                <p style="margin: 0; font-size: 13px; color: #6b7280;">Thank you,<br />Little Cafe Purchasing</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </body>
+    </html>
+  `
+}
+
+function formatForEmail(value?: string | null) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  }).format(date)
+}

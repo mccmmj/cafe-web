@@ -66,30 +66,30 @@ export async function PUT(
       }
     }
 
-    // Mark purchase orders as received if they exist
-    const { data: purchaseOrders } = await supabase
-      .from('purchase_orders')
-      .select('id, status')
-      .eq('supplier_id', invoice.supplier_id)
-      .in('status', ['pending', 'ordered'])
-      .order('created_at', { ascending: false })
-      .limit(5)
+    // Fetch linked purchase orders
+    const { data: linkedOrders } = await supabase
+      .from('order_invoice_matches')
+      .select('purchase_order_id')
+      .eq('invoice_id', id)
 
-    if (purchaseOrders && purchaseOrders.length > 0) {
-      // Mark the most recent purchase order as received
-      const { error: poError } = await supabase
-        .from('purchase_orders')
-        .update({
-          status: 'received',
-          received_at: new Date().toISOString(),
-          notes: `Received via invoice ${invoice.invoice_number}`
-        })
-        .eq('id', purchaseOrders[0].id)
+    if (linkedOrders && linkedOrders.length > 0) {
+      for (const link of linkedOrders) {
+        if (!link.purchase_order_id) continue
+        const { error: poError } = await supabase
+          .from('purchase_orders')
+          .update({
+            status: 'received',
+            received_at: new Date().toISOString(),
+            notes: `Received via invoice ${invoice.invoice_number}`
+          })
+          .eq('id', link.purchase_order_id)
+          .in('status', ['sent', 'confirmed'])
 
-      if (poError) {
-        console.error('Failed to update purchase order:', poError)
-      } else {
-        console.log('✅ Marked purchase order as received:', purchaseOrders[0].id)
+        if (poError) {
+          console.error(`Failed to update purchase order ${link.purchase_order_id}:`, poError)
+        } else {
+          console.log('✅ Marked purchase order as received:', link.purchase_order_id)
+        }
       }
     }
 
@@ -129,7 +129,7 @@ export async function PUT(
           created_items: createdCount,
           skipped_items: skippedCount,
           inventory_updated: true,
-          purchase_order_updated: purchaseOrders && purchaseOrders.length > 0
+          purchase_order_updated: linkedOrders && linkedOrders.length > 0
         }
       }
     })

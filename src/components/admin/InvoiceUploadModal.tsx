@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Upload, X, FileText, AlertCircle, CheckCircle, Calendar, User } from 'lucide-react'
 
 interface Supplier {
@@ -12,15 +12,25 @@ interface Supplier {
 interface InvoiceUploadModalProps {
   isOpen: boolean
   onClose: () => void
-  onUploadComplete: () => void
-  suppliers: Supplier[]
+  onUploadComplete?: (invoice?: any) => void
+  suppliers?: Supplier[]
+  defaultSupplierId?: string
+  lockSupplier?: boolean
+  defaultInvoiceNumber?: string
+  defaultInvoiceDate?: string
+  purchaseOrderId?: string
 }
 
 export function InvoiceUploadModal({ 
   isOpen, 
   onClose, 
   onUploadComplete,
-  suppliers = []
+  suppliers = [],
+  defaultSupplierId,
+  lockSupplier = false,
+  defaultInvoiceNumber = '',
+  defaultInvoiceDate = '',
+  purchaseOrderId
 }: InvoiceUploadModalProps) {
   const [dragActive, setDragActive] = useState(false)
   const [file, setFile] = useState<File | null>(null)
@@ -31,6 +41,15 @@ export function InvoiceUploadModal({
     invoice_date: ''
   })
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!isOpen) return
+    setFormData(prev => ({
+      supplier_id: defaultSupplierId || prev.supplier_id || '',
+      invoice_number: defaultInvoiceNumber || prev.invoice_number || '',
+      invoice_date: defaultInvoiceDate || prev.invoice_date || ''
+    }))
+  }, [isOpen, defaultSupplierId, defaultInvoiceNumber, defaultInvoiceDate])
 
   // Handle drag events
   const handleDrag = useCallback((e: React.DragEvent) => {
@@ -97,6 +116,11 @@ export function InvoiceUploadModal({
       return
     }
 
+    if (!lockSupplier && !formData.supplier_id) {
+      setError('Please select a supplier')
+      return
+    }
+
     const fileError = validateFile(file)
     if (fileError) {
       setError(fileError)
@@ -134,17 +158,48 @@ export function InvoiceUploadModal({
 
       console.log('✅ Upload successful:', result.data)
 
-      // Reset form
+      let linkError: string | null = null
+
+      if (purchaseOrderId && result?.data?.id) {
+        try {
+          const linkResponse = await fetch(`/api/admin/purchase-orders/${purchaseOrderId}/invoices`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              invoice_id: result.data.id,
+              match_confidence: 1,
+              match_method: 'manual',
+              status: 'pending'
+            })
+          })
+
+          const linkResult = await linkResponse.json()
+          if (!linkResponse.ok) {
+            linkError = linkResult.error || 'Invoice uploaded, but linking to the purchase order failed.'
+            console.error('Failed to link invoice to purchase order:', linkResult)
+          }
+        } catch (linkErr) {
+          console.error('Error linking invoice to purchase order:', linkErr)
+          linkError = 'Invoice uploaded, but linking to the purchase order failed.'
+        }
+      }
+
       setFile(null)
       setFormData({
-        supplier_id: '',
-        invoice_number: '',
-        invoice_date: ''
+        supplier_id: lockSupplier ? (defaultSupplierId || '') : '',
+        invoice_number: defaultInvoiceNumber || '',
+        invoice_date: defaultInvoiceDate || ''
       })
 
-      // Notify parent component
-      onUploadComplete()
-      onClose()
+      if (typeof onUploadComplete === 'function') {
+        onUploadComplete(result.data)
+      }
+
+      if (linkError) {
+        setError(linkError)
+      } else {
+        onClose()
+      }
 
     } catch (error: any) {
       console.error('Upload failed:', error)
@@ -173,9 +228,9 @@ export function InvoiceUploadModal({
   const handleClose = () => {
     setFile(null)
     setFormData({
-      supplier_id: '',
-      invoice_number: '',
-      invoice_date: ''
+      supplier_id: defaultSupplierId || '',
+      invoice_number: defaultInvoiceNumber || '',
+      invoice_date: defaultInvoiceDate || ''
     })
     setError(null)
     setDragActive(false)
@@ -259,28 +314,35 @@ export function InvoiceUploadModal({
             {/* Supplier Selection */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Supplier <span className="text-gray-400">(Optional)</span>
+                Supplier {lockSupplier ? '' : <span className="text-gray-400">(Optional)</span>}
               </label>
-              <select
-                name="supplier_id"
-                value={formData.supplier_id}
-                onChange={handleInputChange}
-                disabled={uploading}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              >
-                <option value="">Select existing supplier or leave blank...</option>
-                {suppliers
-                  .filter(supplier => supplier.is_active)
-                  .map(supplier => (
-                    <option key={supplier.id} value={supplier.id}>
-                      {supplier.name}
-                    </option>
-                  ))
-                }
-              </select>
-              <p className="text-xs text-gray-500 mt-1">
-                If left blank, we'll create a new supplier from the invoice information
-              </p>
+              {lockSupplier ? (
+                <div className="px-3 py-2 border border-gray-200 rounded-md bg-gray-100 text-sm text-gray-700">
+                  {suppliers.find(supplier => supplier.id === (formData.supplier_id || defaultSupplierId))?.name || 'Current supplier'}
+                </div>
+              ) : (
+                <select
+                  name="supplier_id"
+                  value={formData.supplier_id}
+                  onChange={handleInputChange}
+                  disabled={uploading}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                >
+                  <option value="">Select existing supplier or leave blank...</option>
+                  {suppliers
+                    .filter(supplier => supplier.is_active)
+                    .map(supplier => (
+                      <option key={supplier.id} value={supplier.id}>
+                        {supplier.name}
+                      </option>
+                    ))}
+                </select>
+              )}
+              {!lockSupplier && (
+                <p className="text-xs text-gray-500 mt-1">
+                  If left blank, we'll create a new supplier from the invoice information
+                </p>
+              )}
             </div>
 
             {/* Invoice Number */}
