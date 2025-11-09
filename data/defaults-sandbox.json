@@ -1,0 +1,29 @@
+{
+  "defaultSupplier": "Premium Coffee Roasters",
+  "supplierByCategory": {
+    "pastries": "Denver Bakery Supply Co",
+    "bottled beverages": "Mountain Fresh Produce",
+    "Uncategorized": "Old Coffee Company",
+    "ESPRESSO, COFFEE & MORE": "Premium Coffee Roasters",
+    "FRAPPUCCINO® BLENDED BEVERAGES": "Eco-Friendly Packaging",
+    "COFFEE": "Premium Coffee Roasters",
+    "CREME": "Premium Coffee Roasters",
+    "TEAVANA® HANDCRAFTED TEA": "Premium Coffee Roasters",
+    "STARBUCKS REFRESHERS® ICED BEVERAGES": "Premium Coffee Roasters",
+    "Seasonal": "Eco-Friendly Packaging",
+    "Breakfast & Lunch": "Eco-Friendly Packaging",
+    "Pastries & Sweets": "Denver Bakery Supply Co",
+    "Snacks": "Eco-Friendly Packaging",
+    "Pre-packaged Drinks": "Eco-Friendly Packaging"
+  },
+  "unitByCategory": {
+    "pastries": "each",
+    "bottled beverages": "each"
+  },
+  "defaultCurrentStock": 0,
+  "defaultMinimumThreshold": 5,
+  "defaultReorderPoint": 10,
+  "defaultLocation": "Main",
+  "defaultItemType": "prepackaged"
+}
+

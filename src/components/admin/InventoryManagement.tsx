@@ -1,9 +1,11 @@
 'use client'
 
-import { useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import Link from 'next/link'
+import { useEffect, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs'
 import { Button } from '@/components/ui'
+import toast from 'react-hot-toast'
 import { 
   Package, 
   AlertTriangle, 
@@ -13,6 +15,7 @@ import {
   Filter,
   Plus,
   RefreshCw,
+  CloudDownload,
   Building2,
   ClipboardList,
   Settings
@@ -33,6 +36,8 @@ interface InventoryItem {
   unit_cost: number
   unit_type: string
   is_ingredient: boolean
+  item_type?: 'ingredient' | 'prepackaged' | 'prepared' | 'supply'
+  auto_decrement?: boolean
   supplier_id?: string
   supplier_name?: string
   location: string
@@ -111,6 +116,78 @@ const InventoryManagement = () => {
   const stockAlerts: StockAlert[] = alertsData?.alerts || []
   const suppliers: Supplier[] = suppliersData?.suppliers ?? []
 
+  // Sales sync status
+  const { data: salesSyncStatus, isFetching: salesSyncFetching, error: salesSyncError } = useQuery({
+    queryKey: ['admin-sales-sync-status'],
+    queryFn: async () => {
+      const response = await fetch('/api/admin/inventory/sales-sync/status')
+      if (!response.ok) {
+        throw new Error('Failed to fetch sales sync status')
+      }
+      return response.json()
+    },
+    refetchOnWindowFocus: false,
+    retry: false
+  })
+
+  useEffect(() => {
+    if (salesSyncError instanceof Error) {
+      toast.error(salesSyncError.message || 'Unable to load sales sync status')
+    }
+  }, [salesSyncError])
+
+  const salesSyncMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch('/api/admin/inventory/sales-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData?.error || 'Failed to sync Square sales')
+      }
+
+      return response.json()
+    },
+    onSuccess: (data) => {
+      const processed = data?.metrics?.ordersProcessed ?? 0
+      toast.success(`Synced ${processed} Square order${processed === 1 ? '' : 's'}`)
+      queryClient.invalidateQueries({ queryKey: ['admin-inventory'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-stock-alerts'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-sales-sync-status'] })
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Sync failed')
+    }
+  })
+
+  const formatRelativeTime = (iso?: string | null) => {
+    if (!iso) return 'Never synced'
+    const date = new Date(iso)
+    if (Number.isNaN(date.getTime())) return 'Unknown'
+
+    const diffMs = Date.now() - date.getTime()
+    const minute = 60 * 1000
+    const hour = 60 * minute
+    const day = 24 * hour
+
+    if (diffMs < minute) return 'Just now'
+    if (diffMs < hour) return `${Math.floor(diffMs / minute)}m ago`
+    if (diffMs < day) return `${Math.floor(diffMs / hour)}h ago`
+    return date.toLocaleString()
+  }
+
+  const lastSyncTimestamp: string | null = salesSyncStatus?.lastRun?.finished_at
+    || salesSyncStatus?.lastRun?.started_at
+    || null
+  const lastSyncLabel = formatRelativeTime(lastSyncTimestamp)
+  const pendingManualQuantity = salesSyncStatus?.pendingManual?.totalQuantity
+    ? Math.round(Number(salesSyncStatus.pendingManual.totalQuantity))
+    : 0
+  const syncStatusText = salesSyncFetching ? 'Checking status...' : lastSyncLabel
+
   // Modal handlers
   const handleEditItem = (item: InventoryItem) => {
     setSelectedItem(item)
@@ -188,72 +265,115 @@ const InventoryManagement = () => {
           <h1 className="text-2xl font-bold text-gray-900">Inventory Management</h1>
           <p className="text-gray-600 mt-1">Track stock levels, manage suppliers, and monitor inventory</p>
         </div>
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            onClick={() => queryClient.invalidateQueries({ queryKey: ['admin-inventory'] })}
-          >
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Refresh
-          </Button>
-          <Button className="bg-primary-600 hover:bg-primary-700">
-            <Plus className="w-4 h-4 mr-2" />
-            Add Item
-          </Button>
+        <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center sm:gap-4">
+          <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap sm:gap-3">
+            <Button
+              variant="outline"
+              onClick={() => salesSyncMutation.mutate()}
+              disabled={salesSyncMutation.isPending}
+            >
+              {salesSyncMutation.isPending ? (
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <CloudDownload className="w-4 h-4 mr-2" />
+              )}
+              Sync Square Sales
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                queryClient.invalidateQueries({ queryKey: ['admin-inventory'] })
+                queryClient.invalidateQueries({ queryKey: ['admin-stock-alerts'] })
+                queryClient.invalidateQueries({ queryKey: ['admin-sales-sync-status'] })
+              }}
+              disabled={inventoryLoading}
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Refresh
+            </Button>
+            <Button className="bg-primary-600 hover:bg-primary-700">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Item
+            </Button>
+            {pendingManualQuantity > 0 && (
+              <span className="inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                {pendingManualQuantity} manual adjustment{pendingManualQuantity === 1 ? '' : 's'}
+              </span>
+            )}
+          </div>
+          <div className="text-xs text-gray-500 text-right">
+            <p>Last sync: {syncStatusText}</p>
+          </div>
         </div>
       </div>
 
       {/* Summary Cards */}
-      <div className="flex flex-wrap gap-4" style={{display: 'flex', flexWrap: 'wrap', gap: '1rem'}}>
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 flex-1 min-w-48" style={{flex: '1 1 200px', minWidth: '200px'}}>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+        <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-medium text-gray-600">Total Items</p>
               <p className="text-lg font-bold text-gray-900">{totalItems}</p>
             </div>
-            <Package className="w-6 h-6 text-blue-600" />
+            <Package className="w-6 h-6 text-blue-600 shrink-0" />
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 flex-1 min-w-48" style={{flex: '1 1 200px', minWidth: '200px'}}>
+        <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-medium text-gray-600">Low Stock</p>
               <p className="text-lg font-bold text-amber-600">{lowStockItems}</p>
             </div>
-            <TrendingDown className="w-6 h-6 text-amber-600" />
+            <TrendingDown className="w-6 h-6 text-amber-600 shrink-0" />
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 flex-1 min-w-48" style={{flex: '1 1 200px', minWidth: '200px'}}>
+        <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-medium text-gray-600">Critical</p>
               <p className="text-lg font-bold text-red-600">{criticalStockItems}</p>
             </div>
-            <AlertTriangle className="w-6 h-6 text-red-600" />
+            <AlertTriangle className="w-6 h-6 text-red-600 shrink-0" />
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 flex-1 min-w-48" style={{flex: '1 1 200px', minWidth: '200px'}}>
+        <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-medium text-gray-600">Out of Stock</p>
               <p className="text-lg font-bold text-red-600">{outOfStockItems}</p>
             </div>
-            <Package className="w-6 h-6 text-red-600" />
+            <Package className="w-6 h-6 text-red-600 shrink-0" />
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 flex-1 min-w-48" style={{flex: '1 1 200px', minWidth: '200px'}}>
+        <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-medium text-gray-600">Total Value</p>
               <p className="text-lg font-bold text-green-600">${totalValue.toFixed(2)}</p>
             </div>
-            <TrendingUp className="w-6 h-6 text-green-600" />
+            <TrendingUp className="w-6 h-6 text-green-600 shrink-0" />
           </div>
         </div>
+
+        {pendingManualQuantity > 0 && (
+          <div className="bg-amber-50 p-5 rounded-lg shadow-sm border border-amber-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-amber-700">Manual Adjustments</p>
+                <p className="text-lg font-bold text-amber-900">
+                  {pendingManualQuantity}
+                </p>
+                <p className="text-[11px] text-amber-700 mt-1">Pending ingredient deductions</p>
+              </div>
+              <AlertTriangle className="w-6 h-6 text-amber-600 shrink-0" />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
@@ -279,8 +399,8 @@ const InventoryManagement = () => {
 
         <TabsContent value="overview" className="space-y-6">
           {/* Filters */}
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 flex-1 min-w-48" style={{flex: '1 1 200px', minWidth: '200px'}}>
-            <div className="flex flex-col sm:flex-row gap-4">
+          <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm border border-gray-200">
+            <div className="flex flex-col gap-4 lg:flex-row">
               {/* Search */}
               <div className="flex-1">
                 <div className="relative">
@@ -296,7 +416,7 @@ const InventoryManagement = () => {
               </div>
 
               {/* Supplier Filter */}
-              <div className="sm:w-48">
+              <div className="sm:w-56">
                 <div className="relative">
                   <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <select
@@ -316,7 +436,7 @@ const InventoryManagement = () => {
               </div>
 
               {/* Stock Level Filter */}
-              <div className="sm:w-48">
+              <div className="sm:w-56">
                 <div className="relative">
                   <Package className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <select
@@ -362,9 +482,9 @@ const InventoryManagement = () => {
 
           {/* Inventory Items Table */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-            <div className="p-4 border-b border-gray-200">
-              <h3 className="font-semibold text-gray-900">Inventory Items</h3>
-              <p className="text-sm text-gray-600 mt-1">
+            <div className="p-4 sm:p-5 border-b border-gray-200">
+              <h3 className="font-semibold text-gray-900 text-base">Inventory Items</h3>
+              <p className="text-xs text-gray-600 mt-1 sm:text-sm">
                 {filteredItems.length} of {totalItems} items
               </p>
             </div>
@@ -373,25 +493,25 @@ const InventoryManagement = () => {
               <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:px-6">
                       Item
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:px-6">
                       Current Stock
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:px-6">
                       Status
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:px-6">
                       Unit Cost
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:px-6">
                       Value
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:px-6">
                       Supplier
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:px-6">
                       Actions
                     </th>
                   </tr>
@@ -399,7 +519,7 @@ const InventoryManagement = () => {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredItems.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-12 text-center">
+                      <td colSpan={7} className="px-4 py-12 text-center sm:px-6">
                         <Package className="w-12 h-12 mx-auto text-gray-400 mb-4" />
                         <h3 className="text-lg font-medium text-gray-900 mb-2">No inventory items found</h3>
                         <p className="text-gray-600 mb-4">
@@ -418,23 +538,41 @@ const InventoryManagement = () => {
                     filteredItems.map((item) => {
                       const stockStatus = getStockStatus(item)
                       const itemValue = item.current_stock * item.unit_cost
-                      
+                      const itemType = item.item_type || (item.is_ingredient ? 'ingredient' : 'prepackaged')
+                      const typeBadge = (() => {
+                        switch (itemType) {
+                          case 'ingredient':
+                            return { label: 'Ingredient', className: 'bg-blue-100 text-blue-700' }
+                          case 'prepared':
+                            return { label: 'Prepared', className: 'bg-purple-100 text-purple-700' }
+                          case 'supply':
+                            return { label: 'Supply', className: 'bg-gray-100 text-gray-700' }
+                          default:
+                            return { label: 'Pre-packaged', className: 'bg-emerald-100 text-emerald-700' }
+                        }
+                      })()
+
                       return (
                         <tr key={item.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div>
-                              <div className="flex items-center gap-2">
+                          <td className="px-4 py-4 align-top sm:px-6">
+                            <div className="space-y-1">
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                                 <p className="text-sm font-medium text-gray-900">{item.item_name}</p>
-                                {item.is_ingredient && (
-                                  <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">
-                                    Ingredient
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${typeBadge.className}`}>
+                                    {typeBadge.label}
                                   </span>
-                                )}
+                                  {item.auto_decrement && (
+                                    <span className="px-2 py-1 text-xs font-medium bg-amber-100 text-amber-700 rounded-full">
+                                      Auto Sync
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                               <p className="text-xs text-gray-500">{item.location}</p>
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-4 py-4 text-sm text-gray-900 sm:px-6 sm:whitespace-nowrap">
                             <div className="text-sm text-gray-900">
                               {item.current_stock} {item.unit_type}
                             </div>
@@ -442,22 +580,22 @@ const InventoryManagement = () => {
                               Min: {item.minimum_threshold} • Reorder: {item.reorder_point}
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-4 py-4 sm:px-6 sm:whitespace-nowrap">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${stockStatus.color}`}>
                               {stockStatus.label}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-4 py-4 text-sm text-gray-900 sm:px-6 sm:whitespace-nowrap">
                             ${item.unit_cost.toFixed(2)}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-4 py-4 text-sm text-gray-900 sm:px-6 sm:whitespace-nowrap">
                             ${itemValue.toFixed(2)}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <td className="px-4 py-4 text-sm text-gray-500 sm:px-6 sm:whitespace-nowrap">
                             {item.supplier_name || 'No supplier'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div className="flex items-center gap-2">
+                          <td className="px-4 py-4 text-sm font-medium sm:px-6 sm:whitespace-nowrap">
+                            <div className="flex flex-wrap items-center gap-2">
                               <Button 
                                 variant="ghost" 
                                 size="sm" 
@@ -491,6 +629,18 @@ const InventoryManagement = () => {
         </TabsContent>
 
         <TabsContent value="orders" className="space-y-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-xl font-semibold text-gray-900">Purchase Orders</h3>
+              <p className="text-sm text-gray-500">Log receipts or jump into the full workflow dashboard.</p>
+            </div>
+            <Link
+              href="/admin/purchase-orders"
+              className="inline-flex items-center gap-2 rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
+            >
+              Open dashboard
+            </Link>
+          </div>
           <PurchaseOrdersManagement />
         </TabsContent>
 

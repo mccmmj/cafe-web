@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { 
   CheckCircle, 
   AlertCircle, 
@@ -16,7 +16,9 @@ import {
   Plus,
   Search,
   ChevronDown,
-  SkipForward
+  SkipForward,
+  Activity,
+  Copy
 } from 'lucide-react'
 import { Invoice } from '@/types/invoice'
 
@@ -104,14 +106,26 @@ interface ItemAction {
   }
 }
 
+const AUTO_MATCH_CONFIDENCE_THRESHOLD = 0.99
+
 export function InvoiceReviewInterface({ invoice, onClose, onConfirm }: InvoiceReviewInterfaceProps) {
   const [activeTab, setActiveTab] = useState<'items' | 'orders'>('items')
   const [itemMatches, setItemMatches] = useState<MatchingResult[]>([])
   const [orderMatches, setOrderMatches] = useState<OrderMatch[]>([])
+  const [linkedOrderMatch, setLinkedOrderMatch] = useState<OrderMatch | null>(null)
+  const [showOrderSuggestions, setShowOrderSuggestions] = useState(false)
+  const [linkingOrderId, setLinkingOrderId] = useState<string | null>(null)
   const [allInventoryItems, setAllInventoryItems] = useState<InventoryItem[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [textPreview, setTextPreview] = useState<string>('')
+  const [textPreviewLoading, setTextPreviewLoading] = useState(false)
+  const [textPreviewError, setTextPreviewError] = useState<string | null>(null)
+  const [showFullText, setShowFullText] = useState(false)
+  const [highlightRange, setHighlightRange] = useState<{ start: number; end: number } | null>(null)
+  const [copying, setCopying] = useState(false)
+  const textPreviewRef = useRef<HTMLPreElement | null>(null)
   const [selectedMatches, setSelectedMatches] = useState<Record<string, string>>({})
   const [itemActions, setItemActions] = useState<Record<string, ItemAction>>({})
   const [showDropdowns, setShowDropdowns] = useState<Record<string, boolean>>({})
@@ -123,7 +137,34 @@ export function InvoiceReviewInterface({ invoice, onClose, onConfirm }: InvoiceR
     loadMatches()
     loadAllInventoryItems()
     loadCategories()
+    loadTextPreview()
   }, [invoice.id])
+
+  useEffect(() => {
+    if (!highlightRange || !textPreviewRef.current) return
+    const markEl = textPreviewRef.current.querySelector('mark')
+    if (markEl) {
+      markEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [highlightRange])
+
+  const getAutoMatchInventoryId = (result: MatchingResult): string | null => {
+    const bestMatch = result.best_match
+    if (!bestMatch || bestMatch.confidence < AUTO_MATCH_CONFIDENCE_THRESHOLD) {
+      return null
+    }
+
+    const highConfidenceCandidates = (result.suggested_matches || []).filter(
+      match => match.confidence >= AUTO_MATCH_CONFIDENCE_THRESHOLD
+    )
+
+    if (highConfidenceCandidates.length > 1) {
+      // Multiple equally confident suggestions — require manual confirmation
+      return null
+    }
+
+    return bestMatch.inventory_item_id
+  }
 
   const loadMatches = async () => {
     try {
@@ -143,11 +184,19 @@ export function InvoiceReviewInterface({ invoice, onClose, onConfirm }: InvoiceR
         const actions: Record<string, ItemAction> = {}
         
         itemResult.data.matching_results.forEach((result: MatchingResult) => {
+          let selectedInventoryId: string | null = null
+
           if (result.current_match_id) {
-            currentMatches[result.invoice_item_id] = result.current_match_id
+            selectedInventoryId = result.current_match_id
+          } else {
+            selectedInventoryId = getAutoMatchInventoryId(result)
+          }
+
+          if (selectedInventoryId) {
+            currentMatches[result.invoice_item_id] = selectedInventoryId
             actions[result.invoice_item_id] = {
               type: 'match',
-              inventory_item_id: result.current_match_id
+              inventory_item_id: selectedInventoryId
             }
           }
         })
@@ -164,6 +213,8 @@ export function InvoiceReviewInterface({ invoice, onClose, onConfirm }: InvoiceR
       
       if (orderResult.success) {
         setOrderMatches(orderResult.data.order_matches || [])
+        setLinkedOrderMatch(orderResult.data.linked_match || null)
+        setShowOrderSuggestions(!orderResult.data.linked_match)
       }
 
     } catch (error) {
@@ -196,6 +247,83 @@ export function InvoiceReviewInterface({ invoice, onClose, onConfirm }: InvoiceR
       }
     } catch (error) {
       console.error('Error loading categories:', error)
+    }
+  }
+
+  const loadTextPreview = async () => {
+    try {
+      setTextPreviewLoading(true)
+      setTextPreviewError(null)
+      const response = await fetch(`/api/admin/invoices/${invoice.id}`)
+      const result = await response.json()
+      
+      if (result.success && result.data) {
+        setTextPreview(result.data.clean_text || result.data.raw_text || '')
+      } else {
+        throw new Error(result.error || 'Failed to load invoice text')
+      }
+    } catch (error) {
+      console.error('Error loading text preview:', error)
+      setTextPreviewError(error instanceof Error ? error.message : 'Failed to load text preview')
+    } finally {
+      setTextPreviewLoading(false)
+    }
+  }
+
+  const escapeHtml = (text: string) =>
+    text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+
+  const getHighlightedPreviewHtml = () => {
+    if (!textPreview) return ''
+    if (!highlightRange) {
+      return escapeHtml(textPreview)
+    }
+    const { start, end } = highlightRange
+    return (
+      escapeHtml(textPreview.slice(0, start)) +
+      `<mark class="bg-yellow-200 text-gray-900 rounded px-1">${escapeHtml(textPreview.slice(start, end))}</mark>` +
+      escapeHtml(textPreview.slice(end))
+    )
+  }
+
+  const focusTextForItem = (description: string, supplierCode?: string) => {
+    if (!textPreview) return
+    setTextPreviewError(null)
+    const candidates = [
+      description?.trim(),
+      supplierCode?.trim()
+    ].filter(Boolean) as string[]
+
+    for (const candidate of candidates) {
+      const idx = textPreview.toLowerCase().indexOf(candidate.toLowerCase())
+      if (idx !== -1) {
+        setShowFullText(true)
+        setHighlightRange({ start: idx, end: idx + candidate.length })
+        return
+      }
+    }
+
+    setHighlightRange(null)
+    setTextPreviewError('Unable to locate that line inside the normalized text. Try editing manually.')
+  }
+
+  const handleCopyText = async () => {
+    try {
+      setCopying(true)
+      const snippet = highlightRange
+        ? textPreview.slice(highlightRange.start, highlightRange.end)
+        : textPreview
+      await navigator.clipboard.writeText(snippet)
+    } catch (error) {
+      console.error('Failed to copy text:', error)
+      alert('Unable to copy to clipboard in this environment.')
+    } finally {
+      setCopying(false)
     }
   }
 
@@ -280,6 +408,28 @@ export function InvoiceReviewInterface({ invoice, onClose, onConfirm }: InvoiceR
         [field]: value
       }
     }))
+  }
+
+  const linkOrderToInvoice = async (purchaseOrderId: string) => {
+    try {
+      setLinkingOrderId(purchaseOrderId)
+      const response = await fetch(`/api/admin/invoices/${invoice.id}/link-order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ purchase_order_id: purchaseOrderId })
+      })
+      const result = await response.json()
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to link invoice to purchase order')
+      }
+      await loadMatches()
+      setShowOrderSuggestions(false)
+    } catch (error) {
+      console.error('Error linking invoice to purchase order:', error)
+      alert(error instanceof Error ? error.message : 'Failed to link invoice to purchase order')
+    } finally {
+      setLinkingOrderId(null)
+    }
   }
 
   const confirmCreateNew = (invoiceItemId: string) => {
@@ -436,6 +586,108 @@ export function InvoiceReviewInterface({ invoice, onClose, onConfirm }: InvoiceR
           </button>
         </div>
 
+        {invoice.text_analysis && (
+          <div
+            className={`mb-6 rounded-lg border p-4 ${
+              invoice.text_analysis.needs_manual_review || invoice.text_analysis.needs_ocr
+                ? 'border-orange-200 bg-orange-50'
+                : 'border-green-200 bg-green-50'
+            }`}
+          >
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-gray-900 flex items-center">
+                  <Activity className="w-4 h-4 mr-2" />
+                  Text analysis snapshot
+                </p>
+                <p className="text-sm text-gray-700 mt-1">
+                  {invoice.text_analysis.extraction_method
+                    ? `Source: ${invoice.text_analysis.extraction_method.replace(/-/g, ' ')}`
+                    : 'Source unknown'}
+                  {' • '}
+                  {invoice.text_analysis.text_length?.toLocaleString() || '0'} chars
+                  {' • '}
+                  {invoice.text_analysis.line_item_candidates ?? 0} line candidates
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {invoice.text_analysis.needs_ocr && (
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800">
+                    Needs OCR review
+                  </span>
+                )}
+                {invoice.text_analysis.needs_manual_review && (
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-800">
+                    Keep in review queue
+                  </span>
+                )}
+                {invoice.text_analysis.validation_confidence !== undefined && (
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800">
+                    Confidence {Math.round(invoice.text_analysis.validation_confidence * 100)}%
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {(invoice.text_analysis.warnings?.length || 0) > 0 && (
+              <div className="mt-3 text-sm text-red-700 space-y-1">
+                {invoice.text_analysis.warnings!.map((warning, index) => (
+                  <div key={`review-warning-${index}`} className="flex items-start">
+                    <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0 mt-0.5" />
+                    <span>{warning}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <p className="text-sm font-semibold text-gray-900 flex items-center">
+                <FileText className="w-4 h-4 mr-2 text-gray-500" />
+                Normalized text preview
+              </p>
+              {textPreview && (
+                <button
+                  onClick={handleCopyText}
+                  disabled={copying}
+                  className="inline-flex items-center text-xs font-medium text-gray-600 hover:text-gray-900 disabled:opacity-50"
+                >
+                  <Copy className="w-3 h-3 mr-1" />
+                  {copying ? 'Copying…' : 'Copy snippet'}
+                </button>
+              )}
+            </div>
+            {textPreview && textPreview.length > 600 && (
+              <button
+                onClick={() => setShowFullText(prev => !prev)}
+                className="text-xs font-medium text-indigo-600 hover:text-indigo-800"
+              >
+                {showFullText ? 'Collapse' : 'Expand'}
+              </button>
+            )}
+          </div>
+          {textPreviewLoading ? (
+            <div className="mt-3 h-24 animate-pulse rounded bg-white" />
+          ) : textPreviewError ? (
+            <p className="mt-3 text-sm text-red-600">{textPreviewError}</p>
+          ) : textPreview ? (
+            <pre
+              ref={textPreviewRef}
+              className={`mt-3 whitespace-pre-wrap font-mono text-xs text-gray-700 bg-white border border-gray-200 rounded p-3 ${
+                showFullText ? 'max-h-80' : 'max-h-40'
+              } overflow-y-auto`}
+              dangerouslySetInnerHTML={{ __html: getHighlightedPreviewHtml() }}
+            />
+          ) : (
+            <p className="mt-3 text-sm text-gray-500">
+              No normalized text available yet. Run the parser to capture a clean text snapshot.
+            </p>
+          )}
+        </div>
+
         {/* Tabs */}
         <div className="border-b border-gray-200 mb-6">
           <nav className="-mb-px flex space-x-8">
@@ -459,7 +711,7 @@ export function InvoiceReviewInterface({ invoice, onClose, onConfirm }: InvoiceR
               }`}
             >
               <FileText className="w-4 h-4 inline mr-2" />
-              Order Matching ({orderMatches.length})
+              Order Matching ({linkedOrderMatch ? 1 : orderMatches.length})
             </button>
           </nav>
         </div>
@@ -508,6 +760,12 @@ export function InvoiceReviewInterface({ invoice, onClose, onConfirm }: InvoiceR
                         ) : (
                           <span className="text-red-600">No matches found</span>
                         )}
+                        <button
+                          onClick={() => focusTextForItem(matchResult.item_description, matchResult.supplier_item_code)}
+                          className="ml-3 text-xs font-medium text-indigo-600 hover:text-indigo-800"
+                        >
+                          Find in text
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -756,39 +1014,81 @@ export function InvoiceReviewInterface({ invoice, onClose, onConfirm }: InvoiceR
 
           {activeTab === 'orders' && (
             <div className="space-y-4">
-              {orderMatches.length > 0 ? (
-                orderMatches.map((match) => (
-                  <div key={match.purchase_order_id} className="border rounded-lg p-4 bg-gray-50">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <div className="flex items-center">
-                          <h4 className="font-medium text-gray-900">
-                            Order {match.purchase_order.order_number}
-                          </h4>
-                          <span className={`ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getConfidenceColor(match.confidence)}`}>
-                            {getConfidenceIcon(match.confidence)}
-                            <span className="ml-1">{Math.round(match.confidence * 100)}%</span>
-                          </span>
-                        </div>
-                        <div className="text-sm text-gray-500 mt-2 space-y-1">
-                          <div>Order Date: {new Date(match.purchase_order.order_date).toLocaleDateString()}</div>
-                          <div>Order Total: ${match.purchase_order.total_amount.toFixed(2)}</div>
-                          <div>Amount Variance: ${Math.abs(match.amount_variance).toFixed(2)}</div>
-                          <div>Items Matched: {match.matched_items}/{match.total_items}</div>
-                        </div>
-                        <div className="text-sm text-blue-600 mt-2">
-                          {match.match_reasons.join(' • ')}
+              {linkedOrderMatch ? (
+                <div className="border rounded-lg p-4 bg-green-50 border-green-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-medium text-green-800">
+                        Linked to Order {linkedOrderMatch.purchase_order.order_number}
+                      </h4>
+                      <p className="text-sm text-green-700 mt-1">
+                        Confidence {Math.round((linkedOrderMatch.confidence || 0.9) * 100)}% • Linked from {linkedOrderMatch.match_reasons.join(', ')}
+                      </p>
+                      <p className="text-sm text-green-700 mt-1">
+                        Order Total ${linkedOrderMatch.purchase_order.total_amount.toFixed(2)} • Amount Variance ${Math.abs(linkedOrderMatch.amount_variance).toFixed(2)}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setShowOrderSuggestions(prev => !prev)}
+                      className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
+                    >
+                      {showOrderSuggestions ? 'Hide other options' : 'Change linked PO'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="border rounded-lg p-4 bg-yellow-50 border-yellow-200">
+                  <h4 className="font-medium text-yellow-800">No purchase order linked yet</h4>
+                  <p className="text-sm text-yellow-700 mt-1">
+                    Select one of the suggested orders below to link this invoice.
+                  </p>
+                </div>
+              )}
+
+              {(!linkedOrderMatch || showOrderSuggestions) && (
+                orderMatches.length > 0 ? (
+                  orderMatches.map((match) => (
+                    <div key={match.purchase_order_id} className="border rounded-lg p-4 bg-gray-50">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center">
+                            <h4 className="font-medium text-gray-900">
+                              Order {match.purchase_order.order_number}
+                            </h4>
+                            <span className={`ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getConfidenceColor(match.confidence)}`}>
+                              {getConfidenceIcon(match.confidence)}
+                              <span className="ml-1">{Math.round(match.confidence * 100)}%</span>
+                            </span>
+                          </div>
+                          <div className="text-sm text-gray-500 mt-2 space-y-1">
+                            <div>Order Date: {new Date(match.purchase_order.order_date).toLocaleDateString()}</div>
+                            <div>Order Total: ${match.purchase_order.total_amount.toFixed(2)}</div>
+                            <div>Amount Variance: ${Math.abs(match.amount_variance).toFixed(2)}</div>
+                            <div>Items Matched: {match.matched_items}/{match.total_items}</div>
+                          </div>
+                          <div className="text-sm text-blue-600 mt-2">
+                            {match.match_reasons.join(' • ')}
+                          </div>
                         </div>
                       </div>
+                      <div className="mt-4">
+                        <button
+                          onClick={() => { void linkOrderToInvoice(match.purchase_order_id) }}
+                          disabled={linkingOrderId === match.purchase_order_id}
+                          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
+                        >
+                          {linkingOrderId === match.purchase_order_id ? 'Linking…' : 'Link this PO'}
+                        </button>
+                      </div>
                     </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <FileText className="w-12 h-12 mx-auto mb-4" />
+                    <p>No matching purchase orders found</p>
+                    <p className="text-sm">Orders are matched by supplier, date, and amount similarity</p>
                   </div>
-                ))
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <FileText className="w-12 h-12 mx-auto mb-4" />
-                  <p>No matching purchase orders found</p>
-                  <p className="text-sm">Orders are matched by supplier, date, and amount similarity</p>
-                </div>
+                )
               )}
             </div>
           )}

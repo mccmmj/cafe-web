@@ -1,0 +1,49 @@
+{
+  "invoice_number": "INV-88271",
+  "purchase_order_number": "PO-2025-0101",
+  "invoice_date": "2025-01-16",
+  "due_date": "2025-02-15",
+  "supplier": {
+    "id": "sup_mock_coffee",
+    "name": "Premium Coffee Roasters",
+    "email": "support@premiumcoffeeroasters.com"
+  },
+  "bill_to": {
+    "name": "KP3 Cafe",
+    "address": "123 Beans Ave, Denver, CO 80202"
+  },
+  "line_items": [
+    {
+      "description": "Espresso Beans - 5lb bag",
+      "inventory_item_id": "inv_espresso_beans",
+      "quantity": 12,
+      "unit_cost": 48.5,
+      "total": 582
+    },
+    {
+      "description": "Vanilla Syrup (1L)",
+      "inventory_item_id": "inv_vanilla_syrup",
+      "quantity": 8,
+      "unit_cost": 9.75,
+      "total": 78
+    },
+    {
+      "description": "Mocha Sauce (2kg tub)",
+      "inventory_item_id": "inv_mocha_mix",
+      "quantity": 6,
+      "unit_cost": 22,
+      "total": 132
+    }
+  ],
+  "totals": {
+    "subtotal": 792,
+    "shipping": 35,
+    "tax": 70.32,
+    "grand_total": 897.32,
+    "currency": "USD"
+  },
+  "metadata": {
+    "shipping_method": "Ground Service (3 days)",
+    "raw_source": "data/purchase-orders/mock_invoice_raw.txt"
+  }
+}

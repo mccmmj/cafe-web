@@ -1,0 +1,8 @@
+[project]
+name = "kp3-cafe-tools"
+version = "0.1.0"
+description = "Local tooling and scripts for the KP3 Cafe project"
+authors = [
+  { name = "KP3 Cafe" }
+]
+requires-python = ">=3.10"

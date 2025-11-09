@@ -2,6 +2,53 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminAuth } from '@/lib/admin/middleware'
 import { createClient } from '@/lib/supabase/server'
 
+type TextQueue =
+  | 'all'
+  | 'needs-ocr'
+  | 'manual-review'
+  | 'high-confidence'
+  | 'ready-to-match'
+
+interface FilterParams {
+  status?: string | null
+  supplier_id?: string | null
+  start_date?: string | null
+  end_date?: string | null
+}
+
+function applyBaseFilters(query: any, filters: FilterParams) {
+  const { status, supplier_id, start_date, end_date } = filters
+  if (status) query = query.eq('status', status)
+  if (supplier_id) query = query.eq('supplier_id', supplier_id)
+  if (start_date) query = query.gte('invoice_date', start_date)
+  if (end_date) query = query.lte('invoice_date', end_date)
+  return query
+}
+
+function applyTextQueueFilter(query: any, queue: TextQueue | null) {
+  if (!queue || queue === 'all') {
+    return query
+  }
+
+  switch (queue) {
+    case 'needs-ocr':
+      return query.eq('text_analysis->>needs_ocr', 'true')
+    case 'manual-review':
+      return query.eq('text_analysis->>needs_manual_review', 'true')
+    case 'high-confidence':
+      return query
+        .gte('text_analysis->>validation_confidence', '0.75')
+        .neq('text_analysis->>needs_manual_review', 'true')
+    case 'ready-to-match':
+      return query
+        .eq('status', 'parsed')
+        .gt('text_analysis->>line_item_candidates', '0')
+        .neq('text_analysis->>needs_manual_review', 'true')
+    default:
+      return query
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     // Verify admin authentication
@@ -17,43 +64,38 @@ export async function GET(request: NextRequest) {
     const supplier_id = searchParams.get('supplier_id')
     const start_date = searchParams.get('start_date')
     const end_date = searchParams.get('end_date')
+    const text_queue = (searchParams.get('text_queue') as TextQueue) || 'all'
 
     const supabase = await createClient()
+    const filters: FilterParams = { status, supplier_id, start_date, end_date }
+
+    const columns = `
+      id,
+      invoice_number,
+      invoice_date,
+      due_date,
+      total_amount,
+      status,
+      file_name,
+      file_type,
+      parsing_confidence,
+      parsing_error,
+      text_analysis,
+      created_at,
+      updated_at,
+      suppliers (
+        id,
+        name
+      )
+    `
 
     // Build query
     let query = supabase
       .from('invoices')
-      .select(`
-        id,
-        invoice_number,
-        invoice_date,
-        due_date,
-        total_amount,
-        status,
-        file_name,
-        file_type,
-        parsing_confidence,
-        created_at,
-        updated_at,
-        suppliers (
-          id,
-          name
-        )
-      `)
+      .select(columns, { count: 'exact' })
 
-    // Apply filters
-    if (status) {
-      query = query.eq('status', status)
-    }
-    if (supplier_id) {
-      query = query.eq('supplier_id', supplier_id)
-    }
-    if (start_date) {
-      query = query.gte('invoice_date', start_date)
-    }
-    if (end_date) {
-      query = query.lte('invoice_date', end_date)
-    }
+    query = applyBaseFilters(query, filters)
+    query = applyTextQueueFilter(query, text_queue)
 
     // Apply pagination
     const offset = (page - 1) * limit
@@ -71,19 +113,53 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Get total count for pagination
-    const { count: totalCount } = await supabase
-      .from('invoices')
-      .select('*', { count: 'exact', head: true })
+    // Gather summary stats
+    const [{ count: pendingReviewCount }, { count: confirmedCount }, { count: errorCount }] = await Promise.all([
+      supabase
+        .from('invoices')
+        .select('*', { count: 'exact', head: true })
+        .in('status', ['uploaded', 'parsing', 'parsed', 'reviewing']),
+      supabase
+        .from('invoices')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'confirmed'),
+      supabase
+        .from('invoices')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'error')
+    ])
+
+    // Compute queue counts for filter tabs
+    const textQueueIds: TextQueue[] = ['all', 'needs-ocr', 'manual-review', 'high-confidence', 'ready-to-match']
+    const queueCountResults = await Promise.all(
+      textQueueIds.map(async (queueId) => {
+        let queueQuery = supabase
+          .from('invoices')
+          .select('*', { count: 'exact', head: true })
+        queueQuery = applyBaseFilters(queueQuery, filters)
+        queueQuery = applyTextQueueFilter(queueQuery, queueId)
+        const { count } = await queueQuery
+        return [queueId, count || 0] as const
+      })
+    )
+
+    const textQueueCounts = Object.fromEntries(queueCountResults) as Record<TextQueue, number>
 
     return NextResponse.json({
       success: true,
       data: invoices,
+      stats: {
+        total: queueCountResults.find(([queueId]) => queueId === 'all')?.[1] || 0,
+        pending_review: pendingReviewCount || 0,
+        confirmed: confirmedCount || 0,
+        errors: errorCount || 0
+      },
+      text_queue_counts: textQueueCounts,
       pagination: {
         page,
         limit,
-        total: totalCount || 0,
-        pages: Math.ceil((totalCount || 0) / limit)
+        total: count || 0,
+        pages: Math.ceil((count || 0) / limit)
       }
     })
 

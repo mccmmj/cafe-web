@@ -176,6 +176,8 @@ export async function PUT(request: NextRequest) {
       unit_cost, 
       unit_type, 
       is_ingredient, 
+      item_type,
+      auto_decrement,
       supplier_id, 
       location, 
       notes 
@@ -200,6 +202,8 @@ export async function PUT(request: NextRequest) {
     if (unit_cost !== undefined) updateData.unit_cost = unit_cost
     if (unit_type !== undefined) updateData.unit_type = unit_type
     if (is_ingredient !== undefined) updateData.is_ingredient = is_ingredient
+    if (item_type !== undefined) updateData.item_type = item_type
+    if (auto_decrement !== undefined) updateData.auto_decrement = auto_decrement
     if (supplier_id !== undefined) updateData.supplier_id = supplier_id || null
     if (location !== undefined) updateData.location = location
     if (notes !== undefined) updateData.notes = notes || null

@@ -3,6 +3,7 @@ import { requireAdminAuth } from '@/lib/admin/middleware'
 import { createClient } from '@/lib/supabase/server'
 import { parseInvoiceWithAI } from '@/lib/ai/openai-service'
 import { processInvoiceFile, validateInvoiceText } from '@/lib/document/pdf-processor'
+import { InvoiceTextAnalysis } from '@/types/invoice'
 
 interface RouteContext {
   params: Promise<{ id: string }>
@@ -36,6 +37,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         invoice_number,
         status,
         file_url,
+        file_path,
         file_type,
         supplier_id,
         suppliers (
@@ -92,12 +94,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
       console.log('📄 Processing document:', invoice.file_type)
       
       // Extract file path from URL for Supabase storage access
-      let filePath: string | undefined
-      if (invoice.file_url && invoice.file_url.includes('/storage/v1/object/public/invoices/')) {
-        filePath = invoice.file_url.split('/storage/v1/object/public/invoices/')[1]
-        console.log('🗂️ Extracted file path:', filePath)
-      }
-      
+      const filePath = invoice.file_path || undefined
+
       const documentResult = await processInvoiceFile(
         invoice.file_url, 
         invoice.file_type || 'application/pdf',
@@ -123,6 +121,27 @@ export async function POST(request: NextRequest, context: RouteContext) {
       // Step 2: Validate the extracted text
       const validation = validateInvoiceText(documentResult.text)
       console.log('✅ Text validation result:', validation)
+
+      const textAnalysisPayload: InvoiceTextAnalysis = {
+        ...(documentResult.analysis || {}),
+        validation_confidence: validation.confidence,
+        is_valid: validation.isValid,
+        indicators: documentResult.analysis?.indicators || validation.indicators,
+        warnings: documentResult.analysis?.warnings || validation.warnings
+      }
+
+      const { error: textPersistError } = await supabase
+        .from('invoices')
+        .update({
+          raw_text: documentResult.rawText || documentResult.text,
+          clean_text: documentResult.text,
+          text_analysis: textAnalysisPayload
+        })
+        .eq('id', id)
+
+      if (textPersistError) {
+        console.error('Failed to persist extraction text:', textPersistError)
+      }
 
       if (!validation.isValid) {
         await supabase
@@ -339,6 +358,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
           status,
           parsing_confidence,
           parsed_data,
+          clean_text,
+          text_analysis,
           suppliers (name),
           invoice_items (
             id,

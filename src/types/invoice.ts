@@ -13,7 +13,11 @@ export interface Invoice {
   file_name?: string
   file_size?: number
   file_type?: string
-  
+  file_path?: string
+  raw_text?: string
+  clean_text?: string
+  text_analysis?: InvoiceTextAnalysis
+
   // Processing status
   status: InvoiceStatus
   
@@ -168,6 +172,25 @@ export interface InvoiceImportSession {
   
   created_at: string
   updated_at: string
+}
+
+export interface InvoiceTextAnalysis {
+  extraction_method?: string
+  text_length?: number
+  raw_text_length?: number
+  line_count?: number
+  page_count?: number
+  keyword_matches?: number
+  line_item_candidates?: number
+  is_valid?: boolean
+  needs_ocr?: boolean
+  needs_manual_review?: boolean
+  normalization_steps?: string[]
+  indicators?: string[]
+  warnings?: string[]
+  validation_confidence?: number
+  ocr_confidence?: number
+  metadata?: Record<string, unknown>
 }
 
 // Enums and Types

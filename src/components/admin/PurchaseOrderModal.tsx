@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui'
 import { X, Plus, Trash2, Package, Building2, Calendar, Search, ChevronDown } from 'lucide-react'
@@ -155,6 +155,7 @@ const PurchaseOrderModal = ({ order, isOpen, onClose }: PurchaseOrderModalProps)
     notes: '',
     items: [] as PurchaseOrderItem[]
   })
+  const [bulkSelections, setBulkSelections] = useState<Record<string, { selected: boolean; quantity: number }>>({})
 
   const queryClient = useQueryClient()
 
@@ -186,6 +187,22 @@ const PurchaseOrderModal = ({ order, isOpen, onClose }: PurchaseOrderModalProps)
 
   const suppliers = suppliersData?.suppliers || []
   const inventoryItems = inventoryData?.items || []
+  const selectedSupplier = suppliers.find((supplier: any) => supplier.id === formData.supplier_id)
+
+  const orderableItems = useMemo(() => {
+    if (!formData.supplier_id) return []
+    return inventoryItems
+      .filter((invItem: any) => invItem.supplier_id === formData.supplier_id && invItem.item_type !== 'prepared')
+      .map((invItem: any) => ({
+        ...invItem,
+        recommendedQuantity: Math.max(1, (invItem.reorder_point || 0) - (invItem.current_stock || 0))
+      }))
+      .sort((a: any, b: any) => {
+        const aGap = (a.reorder_point || 0) - (a.current_stock || 0)
+        const bGap = (b.reorder_point || 0) - (b.current_stock || 0)
+        return bGap - aGap
+      })
+  }, [inventoryItems, formData.supplier_id])
 
   // Reset form when modal opens/closes or order changes
   useEffect(() => {
@@ -210,8 +227,13 @@ const PurchaseOrderModal = ({ order, isOpen, onClose }: PurchaseOrderModalProps)
           items: []
         })
       }
+      setBulkSelections({})
     }
   }, [isOpen, order])
+
+  useEffect(() => {
+    setBulkSelections({})
+  }, [formData.supplier_id])
 
   // Create/Update mutation
   const saveMutation = useMutation({
@@ -327,11 +349,86 @@ const PurchaseOrderModal = ({ order, isOpen, onClose }: PurchaseOrderModalProps)
     return formData.items.reduce((sum, item) => sum + item.total_cost, 0)
   }
 
+  const toggleBulkSelection = (itemId: string, recommended: number) => {
+    setBulkSelections(prev => {
+      const current = prev[itemId]
+      const selected = !(current?.selected)
+      return {
+        ...prev,
+        [itemId]: {
+          selected,
+          quantity: current?.quantity || recommended || 1
+        }
+      }
+    })
+  }
+
+  const updateBulkQuantity = (itemId: string, quantity: number) => {
+    if (quantity < 1) quantity = 1
+    setBulkSelections(prev => ({
+      ...prev,
+      [itemId]: {
+        selected: prev[itemId]?.selected ?? true,
+        quantity
+      }
+    }))
+  }
+
+  const addBulkSelectedItems = () => {
+    const selections = Object.entries(bulkSelections).filter(([, data]) => data.selected && data.quantity > 0)
+    if (selections.length === 0) {
+      toast.error('Select at least one item to add')
+      return
+    }
+
+    setFormData(prev => {
+      const existingItems = [...prev.items]
+      const existingMap = new Map(existingItems.map((item, index) => [item.inventory_item_id, index]))
+
+      selections.forEach(([itemId, data]) => {
+        const inventoryItem = orderableItems.find((item: any) => item.id === itemId)
+        if (!inventoryItem) return
+        const quantity = data.quantity || 1
+        const unitCost = inventoryItem.unit_cost || 0
+
+        if (existingMap.has(itemId)) {
+          const idx = existingMap.get(itemId) as number
+          const existing = existingItems[idx]
+          const newQuantity = existing.quantity_ordered + quantity
+          existingItems[idx] = {
+            ...existing,
+            quantity_ordered: newQuantity,
+            unit_cost: unitCost,
+            total_cost: newQuantity * unitCost
+          }
+        } else {
+          existingItems.push({
+            inventory_item_id: itemId,
+            inventory_item_name: inventoryItem.item_name,
+            quantity_ordered: quantity,
+            unit_cost: unitCost,
+            total_cost: quantity * unitCost,
+            unit_type: inventoryItem.unit_type
+          })
+        }
+      })
+
+      return { ...prev, items: existingItems }
+    })
+
+    setBulkSelections({})
+    toast.success('Selected items added to the purchase order')
+  }
+
+  const hasBulkSelection = useMemo(() => {
+    return Object.values(bulkSelections).some(entry => entry.selected && entry.quantity > 0)
+  }, [bulkSelections])
+
   if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
+      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center gap-3">
             <Package className="w-6 h-6 text-primary-600" />
@@ -349,8 +446,188 @@ const PurchaseOrderModal = ({ order, isOpen, onClose }: PurchaseOrderModalProps)
           </Button>
         </div>
 
-        <div className="overflow-y-auto max-h-[calc(90vh-80px)]">
+        <div className="flex-1 overflow-y-auto">
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
+            {/* Order Items */}
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Order Items</h3>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addItem}
+                  className="text-primary-600 border-primary-600 hover:bg-primary-50"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Item
+                </Button>
+              </div>
+
+              {formData.supplier_id && orderableItems.length > 0 && (
+                <div className="mb-4 rounded-lg border border-primary-200 bg-primary-50/40 p-4 space-y-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-primary-700">
+                        Quick add items from {selectedSupplier?.name || 'supplier'}
+                      </p>
+                      <p className="text-xs text-primary-700/70">
+                        Select multiple items and adjust quantities before adding them to this order.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={addBulkSelectedItems}
+                      disabled={!hasBulkSelection}
+                      className="bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Add Selected Items
+                    </Button>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {orderableItems.slice(0, 18).map((invItem: any) => {
+                      const selection = bulkSelections[invItem.id] || { selected: false, quantity: invItem.recommendedQuantity }
+                      const quantityValue = selection.quantity || invItem.recommendedQuantity || 1
+                      const reorderGap = (invItem.reorder_point || 0) - (invItem.current_stock || 0)
+                      return (
+                        <label
+                          key={invItem.id}
+                          className={`flex items-start gap-3 rounded-md border p-3 text-sm shadow-sm transition-colors ${
+                            selection.selected ? 'border-primary-300 bg-white' : 'border-gray-200 bg-white'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            className="mt-1 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                            checked={selection.selected}
+                            onChange={() => toggleBulkSelection(invItem.id, invItem.recommendedQuantity)}
+                          />
+                          <div className="flex-1 space-y-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-medium text-gray-900">{invItem.item_name}</span>
+                              <span className="text-xs text-gray-500">{invItem.unit_type}</span>
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Stock: {invItem.current_stock ?? 0}{' '}
+                              {typeof invItem.reorder_point === 'number' && (
+                                <>| Reorder at {invItem.reorder_point}</>
+                              )}
+                              {reorderGap > 0 && (
+                                <span className="ml-2 text-primary-600">Needs +{reorderGap}</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-gray-600">
+                              <span>Quantity:</span>
+                              <input
+                                type="number"
+                                min="1"
+                                value={quantityValue}
+                                disabled={!selection.selected}
+                                onChange={(e) => updateBulkQuantity(invItem.id, parseInt(e.target.value) || 1)}
+                                className="w-20 rounded border border-gray-300 px-2 py-1 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:bg-gray-100"
+                              />
+                              {invItem.unit_cost > 0 && (
+                                <span className="text-gray-400">${invItem.unit_cost.toFixed(2)} ea</span>
+                              )}
+                            </div>
+                          </div>
+                        </label>
+                      )
+                    })}
+                    {orderableItems.length > 18 && (
+                      <div className="text-xs text-gray-500">
+                        Showing top 18 items. Use "Add Item" to select others.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-4">
+                {formData.items.map((item, index) => (
+                  <div key={index} className="border border-gray-200 rounded-lg p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Inventory Item *
+                        </label>
+                        {formData.supplier_id ? (
+                          <SearchableDropdown
+                            items={orderableItems}
+                            value={item.inventory_item_id}
+                            onChange={(value) => updateItem(index, 'inventory_item_id', value)}
+                            placeholder="Search and select an item"
+                            className="w-full"
+                          />
+                        ) : (
+                          <div className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500">
+                            Select a supplier first
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Quantity *
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={item.quantity_ordered}
+                          onChange={(e) => updateItem(index, 'quantity_ordered', parseInt(e.target.value) || 0)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Unit Cost
+                        </label>
+                        <input
+                          type="text"
+                          value={`$${item.unit_cost.toFixed(2)}`}
+                          readOnly
+                          className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md text-gray-600 cursor-not-allowed"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Total
+                          </label>
+                          <span className="text-lg font-semibold text-gray-900">
+                            ${item.total_cost.toFixed(2)}
+                          </span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeItem(index)}
+                          className="text-red-600 hover:text-red-800 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {formData.items.length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    <Package className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                    <p className="text-lg font-medium mb-2">No items added yet</p>
+                    <p className="text-sm">Use the button above to add items from the selected supplier.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Basic Info */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
@@ -451,7 +728,10 @@ const PurchaseOrderModal = ({ order, isOpen, onClose }: PurchaseOrderModalProps)
                         </label>
                         {formData.supplier_id ? (
                           <SearchableDropdown
-                            items={inventoryItems.filter((invItem: any) => invItem.supplier_id === formData.supplier_id)}
+                            items={inventoryItems.filter((invItem: any) => 
+                              invItem.supplier_id === formData.supplier_id &&
+                              invItem.item_type !== 'prepared'
+                            )}
                             value={item.inventory_item_id}
                             onChange={(value) => updateItem(index, 'inventory_item_id', value)}
                             placeholder="Search and select an item"
