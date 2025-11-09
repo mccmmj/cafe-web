@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs'
@@ -628,6 +629,18 @@ const InventoryManagement = () => {
         </TabsContent>
 
         <TabsContent value="orders" className="space-y-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-xl font-semibold text-gray-900">Purchase Orders</h3>
+              <p className="text-sm text-gray-500">Log receipts or jump into the full workflow dashboard.</p>
+            </div>
+            <Link
+              href="/admin/purchase-orders"
+              className="inline-flex items-center gap-2 rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
+            >
+              Open dashboard
+            </Link>
+          </div>
           <PurchaseOrdersManagement />
         </TabsContent>
 

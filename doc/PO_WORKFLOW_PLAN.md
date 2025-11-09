@@ -30,5 +30,49 @@
 - Scheduled jobs/cron for overdue POs and unapproved drafts.
 
 ## Phase 6: Reporting & Supplier Metrics
-- Dashboards for spend by supplier, outstanding POs, processing time, exception rate.
-- Supplier scorecards (on-time delivery %, price variance, backorder frequency).
+Phase 6 turns the operational data we’ve built into decision support. Skip Phase 5 for now and focus on actionable supplier intelligence.
+
+### 6.1 Metrics Definition & Data Inventory
+- Finalize KPIs and their sources:
+  - `Spend by Supplier`, `Open PO Balance`, `Aging` → `purchase_orders.total_amount`, `status`, `order_date`, `expected_delivery_date`.
+  - `Cycle Time` (draft→approved→sent→received) → `purchase_order_status_history`, plus workflow columns (`approved_at`, `sent_at`, `received_at`, `confirmed_at`).
+  - `Fulfillment Accuracy` / `Partial Receipts` → `purchase_order_receipts.quantity_received`, `purchase_order_items.quantity_ordered`.
+  - `Price / Quantity Variance` → `order_invoice_matches.amount_variance`, `quantity_variance`.
+  - `Invoice Throughput` / `Exception Rate` → `invoices.status`, `order_invoice_matches.status`.
+- Gap check migrations: ensure `purchase_orders` has `approved_at`, `sent_by`, `received_at`, `confirmed_at`; confirm `purchase_order_receipts` captures `received_by`, `notes`, `photo_path`.
+- Document formulas + edge cases (e.g., cancelled orders excluded from SLAs) inside this plan for visibility.
+
+### 6.2 Analytics Layer (SQL Views / RPC)
+- Create parameterized Supabase SQL:
+  - `po_supplier_metrics_v`: aggregates spend, outstanding balance, avg cycle time, on-time %, variance counts grouped by supplier + time window.
+  - `po_workflow_timings_v`: flattens `purchase_order_status_history` into phase durations for charting.
+  - `po_exception_summary_v`: tallies invoices/receipts with variances or missing confirmations.
+- Expose each via RPC (`rpc_po_supplier_metrics(start_date, end_date, supplier_ids[])`) so the Next.js API can paginate/filter without shipping SQL to the client.
+- Add unit tests (psql snapshots or Vitest hitting Supabase test schema) to lock expected aggregates.
+
+### 6.3 Admin API Endpoints
+- Build `/api/admin/purchase-orders/metrics`:
+  - Query params: `range`, `supplierId`, `status`, `limit`.
+  - Returns KPI cards + chart datasets (monthly series, leaderboard arrays).
+  - Cache layer (in-memory or edge) with 5‑minute TTL to keep UI snappy.
+- Add `/api/admin/suppliers/[id]/scorecard` for drilldowns, reusing analytics RPC.
+- Enforce auth + role checks; surface `x-cache` headers for observability.
+
+### 6.4 UI / Dashboard Surfaces
+- New page `src/app/admin/(protected)/purchase-orders/insights/page.tsx`:
+  - KPI cards (spend, open POs, on-time %, exception rate).
+  - Charts: trend line for spend, stacked bar for status aging, heatmap for supplier performance.
+  - Tables: “Top Suppliers by Spend”, “At-Risk Suppliers” (low on-time %, high variance), “Oldest Outstanding POs”.
+- Reuse shared charts (Victory/Recharts) and create hooks in `src/hooks/usePurchaseOrderMetrics.ts`.
+- Ensure responsive layout + dark mode alignment.
+
+### 6.5 Supplier Scorecards & PO Detail Integration
+- Extend supplier sidebar/modal to show metrics snapshot (on-time %, avg variance, last receipt date, outstanding balance).
+- In PO modal, show linked invoice/receipt counts and variance flags pulled from analytics view.
+- Add deep links from cards/tables back to PO list filtered appropriately.
+
+### 6.6 QA, Monitoring & Docs
+- Seed realistic data (existing `seed-square`, manual receipts, invoice imports) and validate dashboards match SQL.
+- Add logging/metrics for API latency + cache hits.
+- Document the workflow in `README.md` + internal runbook (how metrics are calculated, how to add new KPIs).
+- Plan future enhancements (Phase 6.1) for exporting CSVs or scheduling email summaries once dashboards prove useful.

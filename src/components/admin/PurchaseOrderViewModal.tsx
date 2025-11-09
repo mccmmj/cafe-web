@@ -8,6 +8,7 @@ import { X, Package, Building2, Calendar, Truck, Clock, CheckCircle, Send, Paper
 import { InvoiceUploadModal } from './InvoiceUploadModal'
 import { InvoiceDetailsModal } from './InvoiceDetailsModal'
 import type { Invoice, InvoiceStatus } from '@/types/invoice'
+import { usePurchaseOrderMetrics } from '@/hooks/usePurchaseOrderMetrics'
 
 interface PurchaseOrderItem {
   id: string
@@ -202,6 +203,29 @@ const PurchaseOrderViewModal = ({ order, isOpen, onClose }: PurchaseOrderViewMod
     weight_unit: '',
     file: null
   })
+
+  const supplierRange = useMemo(() => {
+    if (!orderState?.supplier_id) return null
+    const endDate = new Date()
+    const startDate = new Date()
+    startDate.setMonth(endDate.getMonth() - 6 + 1)
+    return {
+      start: startDate.toISOString(),
+      end: endDate.toISOString()
+    }
+  }, [orderState?.supplier_id])
+
+  const {
+    data: supplierScorecardData,
+    isLoading: supplierScorecardLoading
+  } = usePurchaseOrderMetrics({
+    start: supplierRange?.start,
+    end: supplierRange?.end,
+    supplierId: orderState?.supplier_id,
+    enabled: Boolean(orderState?.supplier_id && supplierRange)
+  })
+
+  const supplierScorecardSummary = supplierScorecardData?.summary
 
   useEffect(() => {
     if (order) {
@@ -728,6 +752,13 @@ const PurchaseOrderViewModal = ({ order, isOpen, onClose }: PurchaseOrderViewMod
     }).format(amount)
   }
 
+  const formatPercentValue = (value?: number | null) => {
+    if (value === null || value === undefined || Number.isNaN(value)) {
+      return '—'
+    }
+    return `${(value * 100).toFixed(1)}%`
+  }
+
   const getInvoiceStatusBadge = (status: string) => {
     switch (status) {
       case 'uploaded':
@@ -897,6 +928,41 @@ const PurchaseOrderViewModal = ({ order, isOpen, onClose }: PurchaseOrderViewMod
                       <label className="block text-sm font-medium text-gray-600 mb-1">Phone</label>
                       <p className="text-gray-900">{orderState.supplier_phone}</p>
                     </div>
+                  )}
+                </div>
+                <div className="mt-4 rounded-lg border border-indigo-100 bg-indigo-50/80 p-4">
+                  <p className="text-sm font-semibold text-indigo-900">Performance (last 6 months)</p>
+                  {supplierScorecardLoading ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {Array.from({ length: 3 }).map((_, index) => (
+                        <div key={index} className="h-14 w-32 animate-pulse rounded-md bg-white/60" />
+                      ))}
+                    </div>
+                  ) : supplierScorecardSummary ? (
+                    <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-indigo-600">Spend</p>
+                        <p className="text-base font-semibold text-gray-900">
+                          {formatCurrency(supplierScorecardSummary.totalSpend)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-indigo-600">On-Time</p>
+                        <p className="text-base font-semibold text-gray-900">
+                          {formatPercentValue(supplierScorecardSummary.avgOnTimeRatio)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-indigo-600">Exceptions</p>
+                        <p className="text-base font-semibold text-gray-900">
+                          {formatPercentValue(supplierScorecardSummary.avgInvoiceExceptionRate)}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm text-indigo-900/80">
+                      No recent metrics found for this supplier.
+                    </p>
                   )}
                 </div>
               </div>
