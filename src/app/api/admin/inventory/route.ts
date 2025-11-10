@@ -82,14 +82,28 @@ export async function POST(request: NextRequest) {
       notes 
     } = body
 
-    if (!square_item_id || !item_name || current_stock === undefined) {
+    const requiresSquareId = !is_ingredient
+
+    if (!item_name || current_stock === undefined) {
       return NextResponse.json(
-        { error: 'Missing required fields: square_item_id, item_name, current_stock' },
+        { error: 'Missing required fields: item_name, current_stock' },
         { status: 400 }
       )
     }
 
-    console.log('Creating new inventory item:', { square_item_id, item_name, current_stock })
+    if (requiresSquareId && !square_item_id) {
+      return NextResponse.json(
+        { error: 'Missing required field: square_item_id' },
+        { status: 400 }
+      )
+    }
+
+    const finalSquareId =
+      square_item_id && square_item_id.trim().length > 0
+        ? square_item_id.trim()
+        : `manual-${crypto.randomUUID()}`
+
+    console.log('Creating new inventory item:', { square_item_id: finalSquareId, item_name, current_stock })
 
     const supabase = await createClient()
 
@@ -97,7 +111,7 @@ export async function POST(request: NextRequest) {
     const { data: newItem, error } = await supabase
       .from('inventory_items')
       .insert({
-        square_item_id,
+        square_item_id: finalSquareId,
         item_name,
         current_stock,
         minimum_threshold: minimum_threshold || 5,
