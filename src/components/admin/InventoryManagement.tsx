@@ -21,6 +21,7 @@ import {
   Settings
 } from 'lucide-react'
 import InventoryEditModal from './InventoryEditModal'
+import InventoryCreateModal from './InventoryCreateModal'
 import RestockModal from './RestockModal'
 import SuppliersManagement, { type Supplier } from './SuppliersManagement'
 import PurchaseOrdersManagement from './PurchaseOrdersManagement'
@@ -65,6 +66,7 @@ const InventoryManagement = () => {
   const [supplierFilter, setSupplierFilter] = useState('all') // all, or supplier_id
   
   // Modal states
+  const [createModalOpen, setCreateModalOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [restockModalOpen, setRestockModalOpen] = useState(false)
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null)
@@ -200,6 +202,7 @@ const InventoryManagement = () => {
   }
 
   const closeModals = () => {
+    setCreateModalOpen(false)
     setEditModalOpen(false)
     setRestockModalOpen(false)
     setSelectedItem(null)
@@ -291,7 +294,7 @@ const InventoryManagement = () => {
               <RefreshCw className="w-4 h-4 mr-2" />
               Refresh
             </Button>
-            <Button className="bg-primary-600 hover:bg-primary-700">
+            <Button className="bg-primary-600 hover:bg-primary-700" onClick={() => setCreateModalOpen(true)}>
               <Plus className="w-4 h-4 mr-2" />
               Add Item
             </Button>
@@ -650,6 +653,12 @@ const InventoryManagement = () => {
       </Tabs>
 
       {/* Modals */}
+      <InventoryCreateModal
+        suppliers={suppliers}
+        isOpen={createModalOpen}
+        onClose={closeModals}
+      />
+
       <InventoryEditModal
         item={selectedItem}
         suppliers={suppliers}
