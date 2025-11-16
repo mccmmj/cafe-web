@@ -364,7 +364,6 @@ const PurchaseOrderModal = ({ order, isOpen, onClose }: PurchaseOrderModalProps)
   }
 
   const updateBulkQuantity = (itemId: string, quantity: number) => {
-    if (quantity < 1) quantity = 1
     setBulkSelections(prev => ({
       ...prev,
       [itemId]: {
@@ -489,7 +488,7 @@ const PurchaseOrderModal = ({ order, isOpen, onClose }: PurchaseOrderModalProps)
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {orderableItems.slice(0, 18).map((invItem: any) => {
                       const selection = bulkSelections[invItem.id] || { selected: false, quantity: invItem.recommendedQuantity }
-                      const quantityValue = selection.quantity || invItem.recommendedQuantity || 1
+                      const quantityValue = selection.quantity ?? invItem.recommendedQuantity ?? 1
                       const reorderGap = (invItem.reorder_point || 0) - (invItem.current_stock || 0)
                       return (
                         <label
@@ -523,9 +522,27 @@ const PurchaseOrderModal = ({ order, isOpen, onClose }: PurchaseOrderModalProps)
                               <input
                                 type="number"
                                 min="1"
-                                value={quantityValue}
+                                value={quantityValue > 0 ? quantityValue : ''}
                                 disabled={!selection.selected}
-                                onChange={(e) => updateBulkQuantity(invItem.id, parseInt(e.target.value) || 1)}
+                                onChange={(e) => {
+                                  if (!selection.selected) return
+                                  const raw = e.target.value
+                                  if (raw === '') {
+                                    updateBulkQuantity(invItem.id, 0)
+                                    return
+                                  }
+                                  const parsed = Number.parseInt(raw, 10)
+                                  updateBulkQuantity(invItem.id, Number.isNaN(parsed) ? 0 : parsed)
+                                }}
+                                onBlur={(e) => {
+                                  if (!selection.selected) return
+                                  const raw = e.target.value
+                                  let parsed = Number.parseInt(raw, 10)
+                                  if (Number.isNaN(parsed) || parsed < 1) {
+                                    parsed = 1
+                                  }
+                                  updateBulkQuantity(invItem.id, parsed)
+                                }}
                                 className="w-20 rounded border border-gray-300 px-2 py-1 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:bg-gray-100"
                               />
                               {invItem.unit_cost > 0 && (
@@ -576,8 +593,21 @@ const PurchaseOrderModal = ({ order, isOpen, onClose }: PurchaseOrderModalProps)
                           type="number"
                           min="1"
                           step="1"
-                          value={item.quantity_ordered}
-                          onChange={(e) => updateItem(index, 'quantity_ordered', parseInt(e.target.value) || 0)}
+                          value={item.quantity_ordered > 0 ? item.quantity_ordered : ''}
+                          onChange={(e) => {
+                            const raw = e.target.value
+                            if (raw === '') {
+                              updateItem(index, 'quantity_ordered', 0)
+                              return
+                            }
+                            const parsed = Number.parseInt(raw, 10)
+                            updateItem(index, 'quantity_ordered', Number.isNaN(parsed) ? 0 : parsed)
+                          }}
+                          onBlur={() => {
+                            if (item.quantity_ordered < 1) {
+                              updateItem(index, 'quantity_ordered', 1)
+                            }
+                          }}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                           required
                         />
@@ -752,8 +782,21 @@ const PurchaseOrderModal = ({ order, isOpen, onClose }: PurchaseOrderModalProps)
                           type="number"
                           min="1"
                           step="1"
-                          value={item.quantity_ordered}
-                          onChange={(e) => updateItem(index, 'quantity_ordered', parseInt(e.target.value) || 0)}
+                          value={item.quantity_ordered > 0 ? item.quantity_ordered : ''}
+                          onChange={(e) => {
+                            const raw = e.target.value
+                            if (raw === '') {
+                              updateItem(index, 'quantity_ordered', 0)
+                              return
+                            }
+                            const parsed = Number.parseInt(raw, 10)
+                            updateItem(index, 'quantity_ordered', Number.isNaN(parsed) ? 0 : parsed)
+                          }}
+                          onBlur={() => {
+                            if (item.quantity_ordered < 1) {
+                              updateItem(index, 'quantity_ordered', 1)
+                            }
+                          }}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                           required
                         />
