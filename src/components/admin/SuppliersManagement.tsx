@@ -13,10 +13,12 @@ import {
   MapPin, 
   User,
   Archive,
-  ArchiveRestore
+  ArchiveRestore,
+  FileText
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import SupplierModal from './SupplierModal'
+import SupplierEmailTemplateModal from './SupplierEmailTemplateModal'
 
 export interface Supplier {
   id: string
@@ -46,6 +48,8 @@ const SuppliersManagement = ({
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null)
+  const [templateModalOpen, setTemplateModalOpen] = useState(false)
+  const [templateSupplier, setTemplateSupplier] = useState<Supplier | null>(null)
   
   const queryClient = useQueryClient()
 
@@ -116,6 +120,11 @@ const SuppliersManagement = ({
   const handleEditSupplier = (supplier: Supplier) => {
     setSelectedSupplier(supplier)
     setEditModalOpen(true)
+  }
+
+  const handleManageTemplate = (supplier: Supplier) => {
+    setTemplateSupplier(supplier)
+    setTemplateModalOpen(true)
   }
 
   const handleCreateSupplier = () => {
@@ -313,6 +322,18 @@ const SuppliersManagement = ({
                         <Edit className="w-4 h-4 mr-1" />
                         Edit
                       </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleManageTemplate(supplier)
+                        }}
+                        className="text-indigo-600"
+                      >
+                        <FileText className="w-4 h-4 mr-1" />
+                        Email Template
+                      </Button>
                       <Button 
                         variant="ghost" 
                         size="sm"
@@ -393,6 +414,14 @@ const SuppliersManagement = ({
           setCreateModalOpen(false)
           setEditModalOpen(false)
           setSelectedSupplier(null)
+        }}
+      />
+      <SupplierEmailTemplateModal
+        supplier={templateSupplier}
+        isOpen={templateModalOpen}
+        onClose={() => {
+          setTemplateModalOpen(false)
+          setTemplateSupplier(null)
         }}
       />
     </div>

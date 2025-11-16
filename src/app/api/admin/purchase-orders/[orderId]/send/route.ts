@@ -5,6 +5,7 @@ import { requireAdminAuth, isAdminAuthSuccess } from '@/lib/admin/middleware'
 import { createClient } from '@/lib/supabase/server'
 import { fetchPurchaseOrderForIssuance } from '@/lib/purchase-orders/load'
 import { generatePurchaseOrderPdf } from '@/lib/purchase-orders/pdf'
+import { fetchSupplierTemplate, buildPurchaseOrderTemplateContext, renderTemplate } from '@/lib/purchase-orders/templates'
 import { canonicalStatus, canTransition, insertStatusHistory } from '../../status-utils'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
@@ -81,8 +82,17 @@ export async function POST(
     }
 
     const cc = normaliseAddresses(body.cc)
-    const subject = body.subject?.trim() || `Purchase Order ${order.order_number}`
-    const message = body.message?.trim() || ''
+    const templateContext = buildPurchaseOrderTemplateContext(order)
+    const supplierTemplate = await fetchSupplierTemplate(supabase, order.supplier?.id)
+    const templateSubject = supplierTemplate
+      ? renderTemplate(supplierTemplate.subject_template, templateContext).trim()
+      : ''
+    const templateBody = supplierTemplate
+      ? renderTemplate(supplierTemplate.body_template, templateContext).trim()
+      : ''
+
+    const subject = body.subject?.trim() || templateSubject || `Purchase Order ${order.order_number}`
+    const noteMessage = body.message?.trim() || ''
 
     const pdfBytes = await generatePurchaseOrderPdf(order)
     const attachmentFileName = `PO-${order.order_number || order.id}.pdf`
@@ -92,7 +102,7 @@ export async function POST(
       to: recipients,
       cc: cc.length > 0 ? cc : undefined,
       subject,
-      html: buildEmailHtml(order, message),
+      html: buildEmailHtml(order, noteMessage, templateBody),
       attachments: [
         {
           filename: attachmentFileName,
@@ -130,7 +140,7 @@ export async function POST(
           status: statusChanged ? targetStatus : currentStatus,
           sent_at: new Date().toISOString(),
           sent_via: 'email',
-          sent_notes: message || 'Sent to supplier via email',
+          sent_notes: noteMessage || 'Sent to supplier via email',
           sent_by: admin.userId
         })
         .eq('id', order.id)
@@ -185,7 +195,11 @@ function normaliseAddresses(addresses?: string | string[] | null): string[] {
   return addresses.split(',').map(value => value.trim()).filter(Boolean)
 }
 
-function buildEmailHtml(order: Awaited<ReturnType<typeof fetchPurchaseOrderForIssuance>>['order'], message: string) {
+function buildEmailHtml(
+  order: Awaited<ReturnType<typeof fetchPurchaseOrderForIssuance>>['order'],
+  message: string,
+  templateBody = ''
+) {
   if (!order) return ''
 
   const currencyFormatter = new Intl.NumberFormat('en-US', {
@@ -219,9 +233,13 @@ function buildEmailHtml(order: Awaited<ReturnType<typeof fetchPurchaseOrderForIs
           <tbody>
             <tr>
               <td style="padding: 24px;">
-                <p style="margin: 0 0 12px;">Hello ${order.supplier.contact_person || order.supplier.name},</p>
-                <p style="margin: 0 0 16px;">Please find attached the purchase order for the upcoming delivery.</p>
-                ${message ? `<div style="border-left: 3px solid #6366f1; padding-left: 16px; margin-bottom: 16px; color: #312e81;">${message.replace(/\n/g, '<br />')}</div>` : ''}
+                ${templateBody
+                  ? `<div style="margin-bottom: 16px; color: #111827;">${formatMessageHtml(templateBody)}</div>`
+                  : `<div>
+                      <p style="margin: 0 0 12px;">Hello ${order.supplier.contact_person || order.supplier.name},</p>
+                      <p style="margin: 0 0 16px;">Please find attached the purchase order for the upcoming delivery.</p>
+                    </div>`}
+                ${message ? `<div style="border-left: 3px solid #6366f1; padding-left: 16px; margin-bottom: 16px; color: #312e81;">${formatMessageHtml(message)}</div>` : ''}
                 <div style="margin-bottom: 24px;">
                   <h2 style="font-size: 16px; margin: 0 0 8px;">Order Summary</h2>
                   <p style="margin: 4px 0;">PO Number: <strong>${order.order_number}</strong></p>
@@ -274,4 +292,17 @@ function formatForEmail(value?: string | null) {
     month: 'long',
     day: 'numeric'
   }).format(date)
+}
+
+function formatMessageHtml(message: string) {
+  return escapeHtml(message).replace(/\n/g, '<br />')
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }

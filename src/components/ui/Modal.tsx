@@ -48,12 +48,12 @@ const Modal = ({
       
       {/* Modal */}
       <div 
-        className="fixed inset-0 flex items-center justify-center p-4 overflow-y-auto"
+        className="fixed inset-0 flex items-center justify-center p-4"
         style={{ zIndex: 1050 }}
       >
         <div
           className={cn(
-            'relative w-full rounded-lg bg-white shadow-lg my-8 mx-auto max-h-[calc(100vh-4rem)]',
+            'relative w-full rounded-lg bg-white shadow-lg my-8 mx-auto max-h-[90vh] overflow-y-auto',
             sizes[size],
             className
           )}
@@ -86,7 +86,7 @@ const Modal = ({
           </div>
 
           {/* Content */}
-          <div className="px-6 pb-6 overflow-y-auto">
+          <div className="px-6 pb-6">
             {children}
           </div>
         </div>

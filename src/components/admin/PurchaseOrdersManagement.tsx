@@ -24,6 +24,8 @@ import {
 import toast from 'react-hot-toast'
 import PurchaseOrderModal from './PurchaseOrderModal'
 import PurchaseOrderViewModal from './PurchaseOrderViewModal'
+import { buildPurchaseOrderTemplateContext, renderTemplate } from '@/lib/purchase-orders/templates'
+import type { SupplierEmailTemplate } from '@/lib/purchase-orders/templates'
 
 interface PurchaseOrderItem {
   id: string
@@ -124,6 +126,8 @@ const PurchaseOrdersManagement = ({
     markAsSent: true
   })
   const [emailSending, setEmailSending] = useState(false)
+  const [emailTemplateLoading, setEmailTemplateLoading] = useState(false)
+  const [emailTemplatePreview, setEmailTemplatePreview] = useState('')
   const [markingReceiptOrderId, setMarkingReceiptOrderId] = useState<string | null>(null)
   
   const queryClient = useQueryClient()
@@ -202,23 +206,110 @@ const PurchaseOrdersManagement = ({
       message: '',
       markAsSent: true
     })
+    setEmailTemplateLoading(false)
+    setEmailTemplatePreview('')
   }
 
-  const handleEmailSupplier = (order: PurchaseOrder) => {
+  const buildEmailTemplateDefaults = (
+    order: PurchaseOrder,
+    template?: SupplierEmailTemplate | null
+  ) => {
+    const base = {
+      to: order.supplier_email || '',
+      cc: '',
+      subject: `Purchase Order ${order.order_number}`,
+      message: '',
+      markAsSent: true
+    }
+
+    const context = buildPurchaseOrderTemplateContext({
+      order_number: order.order_number,
+      order_date: order.order_date,
+      expected_delivery_date: order.expected_delivery_date,
+      total_amount: order.total_amount,
+      supplier: {
+        name: order.supplier_name,
+        contact_person: order.supplier_contact,
+        payment_terms: undefined
+      }
+    })
+
+    if (!template) {
+      setEmailTemplatePreview(buildDefaultTemplatePreview(order))
+      return base
+    }
+
+    const templatedSubject = renderTemplate(template.subject_template, context).trim()
+    const templatedBody = renderTemplate(template.body_template, context).trim()
+    setEmailTemplatePreview(templatedBody || buildDefaultTemplatePreview(order))
+
+    return {
+      ...base,
+      subject: templatedSubject || base.subject,
+      message: ''
+    }
+  }
+
+  const fetchSupplierEmailTemplate = async (supplierId: string) => {
+    const response = await fetch(`/api/admin/suppliers/${supplierId}/email-templates`)
+    if (!response.ok) {
+      const error = await response.json().catch(() => null)
+      throw new Error(error?.error || 'Failed to load supplier template')
+    }
+    const result = await response.json()
+    return result.template as SupplierEmailTemplate | null
+  }
+
+  const handleEmailSupplier = async (order: PurchaseOrder) => {
     if (!order.supplier_email) {
       toast.error('Supplier email is missing. Update the supplier record before emailing.')
       return
     }
 
     setSelectedOrder(order)
-    setEmailForm({
-      to: order.supplier_email,
-      cc: '',
-      subject: `Purchase Order ${order.order_number}`,
-      message: '',
-      markAsSent: true
-    })
+    setEmailTemplateLoading(Boolean(order.supplier_id))
+    setEmailForm(buildEmailTemplateDefaults(order))
     setEmailModalOpen(true)
+
+    if (!order.supplier_id) {
+      setEmailTemplateLoading(false)
+      return
+    }
+
+    try {
+      const template = await fetchSupplierEmailTemplate(order.supplier_id)
+      if (template) {
+        setEmailForm(buildEmailTemplateDefaults(order, template))
+      } else {
+        setEmailTemplatePreview(buildDefaultTemplatePreview(order))
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to load supplier template'
+      toast.error(message)
+    } finally {
+      setEmailTemplateLoading(false)
+    }
+  }
+
+  const buildDefaultTemplatePreview = (order: PurchaseOrder) => {
+    const greeting = order.supplier_contact || order.supplier_name
+    const expectedDate = order.expected_delivery_date
+      ? new Date(order.expected_delivery_date).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        })
+      : 'Not specified'
+
+    return [
+      `Hello ${greeting},`,
+      '',
+      `Please find attached purchase order ${order.order_number}.`,
+      `Expected delivery: ${expectedDate}`,
+      '',
+      'Thank you,',
+      'Little Cafe Purchasing'
+    ].join('\n')
   }
 
   const handleEmailSubmit = async () => {
@@ -226,6 +317,11 @@ const PurchaseOrdersManagement = ({
 
     if (!emailForm.to.trim()) {
       toast.error('Please provide at least one recipient email.')
+      return
+    }
+
+    if (emailTemplateLoading) {
+      toast.error('Please wait for the supplier template to finish loading.')
       return
     }
 
@@ -677,7 +773,7 @@ const PurchaseOrdersManagement = ({
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleEmailSupplier(order)}
+                            onClick={() => { void handleEmailSupplier(order) }}
                               className="text-indigo-600"
                               disabled={emailSending && selectedOrder?.id === order.id}
                             >
@@ -933,18 +1029,29 @@ const PurchaseOrdersManagement = ({
               type="text"
               value={emailForm.subject}
               onChange={(e) => setEmailForm(prev => ({ ...prev, subject: e.target.value }))}
-              className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              disabled={emailTemplateLoading}
+              className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:opacity-70"
             />
           </div>
-          <div>
+          <div className="min-w-0">
+            <label className="block text-sm font-medium text-gray-700">Template Preview</label>
+            <div className="mt-1 rounded-md border border-dashed border-gray-300 bg-gray-50 p-3 text-sm text-gray-700 whitespace-pre-wrap">
+              {emailTemplatePreview || 'Default greeting will be used.'}
+            </div>
+          </div>
+          <div className="min-w-0">
             <label className="block text-sm font-medium text-gray-700">Message (optional)</label>
             <textarea
               rows={6}
               value={emailForm.message}
               onChange={(e) => setEmailForm(prev => ({ ...prev, message: e.target.value }))}
-              className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              disabled={emailTemplateLoading}
+              className="mt-1 block w-full max-w-full min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:opacity-70 resize-y"
               placeholder="Include any special instructions or delivery notes for the supplier..."
             />
+            {emailTemplateLoading && (
+              <p className="mt-1 text-xs text-gray-500">Loading supplier template…</p>
+            )}
           </div>
           <label className="inline-flex items-center space-x-2">
             <input
@@ -972,9 +1079,9 @@ const PurchaseOrdersManagement = ({
             <Button
               onClick={() => { void handleEmailSubmit() }}
               className="bg-indigo-600 hover:bg-indigo-700"
-              disabled={emailSending}
+              disabled={emailSending || emailTemplateLoading}
             >
-              {emailSending ? 'Sending…' : 'Send Email'}
+              {emailSending ? 'Sending…' : (emailTemplateLoading ? 'Loading template…' : 'Send Email')}
             </Button>
           </div>
         </div>
