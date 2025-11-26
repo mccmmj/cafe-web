@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { X, Plus } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { CostCalculator } from './CostCalculator'
 
 interface Supplier {
   id: string
@@ -47,15 +48,17 @@ export default function InventoryCreateModal({ suppliers, isOpen, onClose }: Inv
   const [squareResults, setSquareResults] = useState<SquareSearchResult[]>([])
   const [squareSearchLoading, setSquareSearchLoading] = useState(false)
   const [squareSearchError, setSquareSearchError] = useState<string | null>(null)
+  const [packPrice, setPackPrice] = useState<string>('0')
   const [formData, setFormData] = useState({
     square_item_id: '',
     item_name: '',
-    current_stock: 0,
-    minimum_threshold: 5,
-    reorder_point: 10,
-    unit_cost: 0,
+    current_stock: '0',
+    minimum_threshold: '5',
+    reorder_point: '10',
+    unit_cost: '0',
     unit_type: 'each',
-    is_ingredient: false,
+    pack_size: '1',
+    is_ingredient: true,
     item_type: 'ingredient' as 'ingredient' | 'prepackaged' | 'prepared' | 'supply',
     supplier_id: '',
     location: 'main',
@@ -66,17 +69,19 @@ export default function InventoryCreateModal({ suppliers, isOpen, onClose }: Inv
     setFormData({
       square_item_id: '',
       item_name: '',
-      current_stock: 0,
-      minimum_threshold: 5,
-      reorder_point: 10,
-      unit_cost: 0,
+      current_stock: '0',
+      minimum_threshold: '5',
+      reorder_point: '10',
+      unit_cost: '0',
       unit_type: 'each',
-      is_ingredient: false,
+      pack_size: '1',
+      is_ingredient: true,
       item_type: 'ingredient',
       supplier_id: '',
       location: 'main',
       notes: ''
     })
+    setPackPrice('0')
     setSquareResults([])
     setSquareSearchError(null)
   }
@@ -114,21 +119,44 @@ export default function InventoryCreateModal({ suppliers, isOpen, onClose }: Inv
       square_item_id: result.variationId,
       item_name: prev.item_name || result.itemName,
       unit_cost:
-        prev.unit_cost && prev.unit_cost > 0
+        Number(prev.unit_cost) > 0
           ? prev.unit_cost
-          : result.price ?? prev.unit_cost
+          : (typeof result.price === 'number' ? result.price.toString() : prev.unit_cost)
     }))
     setSquareResults([])
     toast.success('Linked Square catalog item')
   }
 
+  const handleApplyUnitCost = (value: number) => {
+    const rounded = Number(value.toFixed(2))
+    setFormData(prev => ({ ...prev, unit_cost: rounded.toString() }))
+    toast.success('Unit cost applied from calculator')
+  }
+
+  const parsedPackSize = Number(formData.pack_size) || 1
+  const parsedPackPrice = Number(packPrice) || 0
+
   const createItemMutation = useMutation({
     mutationFn: async () => {
+      const parsedCurrentStock = formData.current_stock === '' ? 0 : Number(formData.current_stock)
+      const parsedMinThreshold = formData.minimum_threshold === '' ? 0 : Number(formData.minimum_threshold)
+      const parsedReorderPoint = formData.reorder_point === '' ? 0 : Number(formData.reorder_point)
+      const parsedUnitCost = formData.unit_cost === '' ? 0 : Number(parseFloat(formData.unit_cost).toFixed(2))
+      const parsedPackSize = formData.pack_size === '' ? 1 : Number(formData.pack_size)
+      const derivedIsIngredient = formData.item_type === 'ingredient'
+
       const response = await fetch('/api/admin/inventory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
+          current_stock: parsedCurrentStock,
+          minimum_threshold: parsedMinThreshold,
+          reorder_point: parsedReorderPoint,
+          unit_cost: parsedUnitCost,
+          pack_size: parsedPackSize > 0 ? parsedPackSize : 1,
+          is_ingredient: derivedIsIngredient,
+          item_type: formData.item_type,
           supplier_id: formData.supplier_id || null,
           notes: formData.notes || null
         })
@@ -162,13 +190,13 @@ export default function InventoryCreateModal({ suppliers, isOpen, onClose }: Inv
       return
     }
 
-    if (requiresSquareId && !formData.square_item_id.trim()) {
-      toast.error('Square Item ID is required for non-ingredient items')
+    if (formData.current_stock !== '' && Number(formData.current_stock) < 0) {
+      toast.error('Current stock cannot be negative')
       return
     }
 
-    if (formData.current_stock < 0) {
-      toast.error('Current stock cannot be negative')
+    if (requiresSquareId && !formData.square_item_id.trim()) {
+      toast.error('Square Item ID is required for non-ingredient items')
       return
     }
 
@@ -272,9 +300,7 @@ export default function InventoryCreateModal({ suppliers, isOpen, onClose }: Inv
                 type="number"
                 min="0"
                 value={formData.current_stock}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, current_stock: parseInt(e.target.value, 10) || 0 }))
-                }
+                onChange={(e) => setFormData((prev) => ({ ...prev, current_stock: e.target.value }))}
                 className="w-full rounded-lg border px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
             </div>
@@ -284,9 +310,7 @@ export default function InventoryCreateModal({ suppliers, isOpen, onClose }: Inv
                 type="number"
                 min="0"
                 value={formData.minimum_threshold}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, minimum_threshold: parseInt(e.target.value, 10) || 0 }))
-                }
+                onChange={(e) => setFormData((prev) => ({ ...prev, minimum_threshold: e.target.value }))}
                 className="w-full rounded-lg border px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
             </div>
@@ -296,9 +320,7 @@ export default function InventoryCreateModal({ suppliers, isOpen, onClose }: Inv
                 type="number"
                 min="0"
                 value={formData.reorder_point}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, reorder_point: parseInt(e.target.value, 10) || 0 }))
-                }
+                onChange={(e) => setFormData((prev) => ({ ...prev, reorder_point: e.target.value }))}
                 className="w-full rounded-lg border px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
             </div>
@@ -312,9 +334,7 @@ export default function InventoryCreateModal({ suppliers, isOpen, onClose }: Inv
                 min="0"
                 step="0.01"
                 value={formData.unit_cost}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, unit_cost: parseFloat(e.target.value) || 0 }))
-                }
+                onChange={(e) => setFormData((prev) => ({ ...prev, unit_cost: e.target.value }))}
                 className="w-full rounded-lg border px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
             </div>
@@ -331,6 +351,39 @@ export default function InventoryCreateModal({ suppliers, isOpen, onClose }: Inv
                   </option>
                 ))}
               </select>
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Pack Size</label>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={formData.pack_size}
+                onChange={(e) => setFormData((prev) => ({ ...prev, pack_size: e.target.value }))}
+                className="w-full rounded-lg border px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+              <p className="mt-1 text-xs text-gray-500">How many units are in one supplier pack/case.</p>
+            </div>
+            <div className="rounded-lg border p-3 bg-gray-50">
+              <div className="text-sm font-medium text-gray-700 mb-2">Pack → Unit Calculator</div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Pack Cost ($)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={packPrice}
+                onChange={(e) => setPackPrice(e.target.value)}
+                className="w-full rounded-md border px-2 py-1 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 mb-2"
+                placeholder="e.g. 4.17"
+              />
+              <CostCalculator
+                packSize={parsedPackSize}
+                packPrice={parsedPackPrice}
+                onUnitCost={handleApplyUnitCost}
+              />
             </div>
           </div>
 
@@ -367,7 +420,14 @@ export default function InventoryCreateModal({ suppliers, isOpen, onClose }: Inv
               <select
                 value={formData.item_type}
                 onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, item_type: e.target.value as typeof prev.item_type }))
+                  setFormData((prev) => {
+                    const nextType = e.target.value as typeof prev.item_type
+                    return {
+                      ...prev,
+                      item_type: nextType,
+                      is_ingredient: nextType === 'ingredient'
+                    }
+                  })
                 }
                 className="w-full rounded-lg border px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               >
@@ -383,7 +443,19 @@ export default function InventoryCreateModal({ suppliers, isOpen, onClose }: Inv
                 id="is-ingredient"
                 type="checkbox"
                 checked={formData.is_ingredient}
-                onChange={(e) => setFormData((prev) => ({ ...prev, is_ingredient: e.target.checked }))}
+                onChange={(e) =>
+                  setFormData((prev) => {
+                    const checked = e.target.checked
+                    // If toggled to ingredient, force item_type to ingredient; if toggled off while item_type is ingredient, default to prepackaged
+                    const nextType =
+                      checked ? 'ingredient' : prev.item_type === 'ingredient' ? 'prepackaged' : prev.item_type
+                    return {
+                      ...prev,
+                      is_ingredient: checked,
+                      item_type: nextType
+                    }
+                  })
+                }
                 className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
               />
               <label htmlFor="is-ingredient" className="text-sm text-gray-700">

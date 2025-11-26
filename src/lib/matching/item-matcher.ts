@@ -22,6 +22,7 @@ export interface InventoryItem {
   current_stock: number
   unit_cost: number
   unit_type: string
+  pack_size?: number
   supplier_name?: string
   square_item_id?: string
 }
@@ -223,45 +224,19 @@ function calculateQuantityConversion(
     package_info: 'Direct match'
   }
 
-  // Handle package size conversions
-  if (invoiceItem.package_size) {
-    const packageInfo = invoiceItem.package_size.toLowerCase()
-    
-    // Common package size patterns
-    const packagePatterns = {
-      '12x': 12,
-      '12-pack': 12,
-      '12pk': 12,
-      '24x': 24,
-      '24-pack': 24,
-      '24pk': 24,
-      'case': 24, // Default case size
-      'dozen': 12,
-      'dz': 12
-    }
-
-    for (const [pattern, multiplier] of Object.entries(packagePatterns)) {
-      if (packageInfo.includes(pattern)) {
-        conversion.conversion_factor = multiplier
-        conversion.inventory_quantity = invoiceItem.quantity * multiplier
-        conversion.package_info = `${invoiceItem.quantity} ${pattern} = ${conversion.inventory_quantity} units`
-        break
-      }
-    }
-
-    // Try to extract number from package size (e.g., "50ct", "100 count")
-    const numberMatch = packageInfo.match(/(\d+)(?:x|ct|count|pk|pack)?/)
-    if (numberMatch && !Object.keys(packagePatterns).some(p => packageInfo.includes(p))) {
-      const multiplier = parseInt(numberMatch[1])
-      if (multiplier > 1) {
-        conversion.conversion_factor = multiplier
-        conversion.inventory_quantity = invoiceItem.quantity * multiplier
-        conversion.package_info = `${invoiceItem.quantity} packages of ${multiplier} = ${conversion.inventory_quantity} units`
-      }
+  // If inventory item has a pack size, present an equivalent-in-packs helper WITHOUT multiplying stock
+  const packSize = Number((inventoryItem as any)?.pack_size) || 1
+  if (packSize > 1) {
+    const approxPacks = (invoiceItem.quantity || 0) / packSize
+    return {
+      invoice_quantity: invoiceItem.quantity,
+      inventory_quantity: invoiceItem.quantity, // stock change uses invoice units
+      conversion_factor: 1,
+      package_info: `Invoice qty ${invoiceItem.quantity} units • Pack size ${packSize} → ~${approxPacks.toFixed(2)} packs (no extra multiplier applied)`
     }
   }
 
-  return conversion
+  return packSize === 1 ? conversion : undefined
 }
 
 /**

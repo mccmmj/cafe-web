@@ -12,9 +12,11 @@ export async function GET(request: NextRequest) {
     console.log('Admin fetching inventory items...')
 
     const supabase = await createClient()
+    const { searchParams } = new URL(request.url)
+    const includeArchived = searchParams.get('includeArchived') === '1'
 
-    // Fetch inventory items with supplier information
-    const { data: inventoryItems, error } = await supabase
+    // Fetch inventory items with supplier information (excluding archived)
+    let query = supabase
       .from('inventory_items')
       .select(`
         *,
@@ -24,6 +26,12 @@ export async function GET(request: NextRequest) {
         )
       `)
       .order('item_name')
+
+    if (!includeArchived) {
+      query = query.is('deleted_at', null)
+    }
+
+    const { data: inventoryItems, error } = await query
 
     if (error) {
       console.error('Database error fetching inventory:', error)
@@ -77,12 +85,16 @@ export async function POST(request: NextRequest) {
       unit_cost, 
       unit_type, 
       is_ingredient, 
+      item_type,
       supplier_id, 
       location, 
-      notes 
+      notes,
+      pack_size
     } = body
 
-    const requiresSquareId = !is_ingredient
+    const finalItemType = item_type || (is_ingredient ? 'ingredient' : 'prepackaged')
+    const derivedIsIngredient = finalItemType === 'ingredient' || !!is_ingredient
+    const requiresSquareId = !derivedIsIngredient
 
     if (!item_name || current_stock === undefined) {
       return NextResponse.json(
@@ -118,7 +130,9 @@ export async function POST(request: NextRequest) {
         reorder_point: reorder_point || 10,
         unit_cost: unit_cost || 0,
         unit_type: unit_type || 'each',
-        is_ingredient: is_ingredient || false,
+        pack_size: pack_size || 1,
+        is_ingredient: derivedIsIngredient,
+        item_type: finalItemType,
         supplier_id: supplier_id || null,
         location: location || 'main',
         notes: notes || null,
@@ -194,7 +208,8 @@ export async function PUT(request: NextRequest) {
       auto_decrement,
       supplier_id, 
       location, 
-      notes 
+      notes,
+      pack_size
     } = body
 
     if (!id) {
@@ -204,9 +219,24 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    console.log('Updating inventory item:', id)
-
     const supabase = await createClient()
+
+    // Load current values for change tracking (unit_cost, pack_size)
+    const { data: existing, error: existingError } = await supabase
+      .from('inventory_items')
+      .select('unit_cost, pack_size')
+      .eq('id', id)
+      .single()
+
+    if (existingError || !existing) {
+      console.error('Failed to load inventory item before update:', existingError)
+      return NextResponse.json(
+        { error: 'Inventory item not found' },
+        { status: 404 }
+      )
+    }
+
+    console.log('Updating inventory item:', id)
 
     // Build update object with only provided fields
     const updateData: Record<string, unknown> = {}
@@ -214,6 +244,7 @@ export async function PUT(request: NextRequest) {
     if (minimum_threshold !== undefined) updateData.minimum_threshold = minimum_threshold
     if (reorder_point !== undefined) updateData.reorder_point = reorder_point
     if (unit_cost !== undefined) updateData.unit_cost = unit_cost
+    if (pack_size !== undefined) updateData.pack_size = pack_size
     if (unit_type !== undefined) updateData.unit_type = unit_type
     if (is_ingredient !== undefined) updateData.is_ingredient = is_ingredient
     if (item_type !== undefined) updateData.item_type = item_type
@@ -238,6 +269,23 @@ export async function PUT(request: NextRequest) {
       )
     }
 
+    // Cost history: log when unit_cost changes
+    if (unit_cost !== undefined && Number(existing.unit_cost) !== Number(unit_cost)) {
+      const packSize = Number(updatedItem.pack_size) || 1
+      await supabase
+        .from('inventory_item_cost_history')
+        .insert({
+          inventory_item_id: id,
+          previous_unit_cost: existing.unit_cost,
+          new_unit_cost: unit_cost,
+          pack_size: packSize,
+          source: 'manual_edit',
+          source_ref: null,
+          notes: 'Inventory edit',
+          changed_by: authResult.userId
+        })
+    }
+
     console.log('✅ Successfully updated inventory item:', id)
 
     return NextResponse.json({
@@ -251,6 +299,56 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json(
       { 
         error: 'Failed to update inventory item', 
+        details: error instanceof Error ? error.message : 'Unknown error' 
+      },
+      { status: 500 }
+    )
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const authResult = await requireAdminAuth(request)
+    if (!isAdminAuthSuccess(authResult)) {
+      return authResult
+    }
+
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get('id')
+
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Missing required parameter: id' },
+        { status: 400 }
+      )
+    }
+
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from('inventory_items')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Failed to archive inventory item:', error)
+      return NextResponse.json(
+        { error: 'Failed to archive inventory item', details: error.message },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({
+      success: true,
+      item: data,
+      message: 'Inventory item archived'
+    })
+  } catch (error) {
+    console.error('Failed to archive inventory item:', error)
+    return NextResponse.json(
+      { 
+        error: 'Failed to archive inventory item', 
         details: error instanceof Error ? error.message : 'Unknown error' 
       },
       { status: 500 }

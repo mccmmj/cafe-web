@@ -32,7 +32,9 @@ export async function GET(request: NextRequest) {
         purchase_order_items!purchase_order_items_purchase_order_id_fkey (
           *,
           inventory_items!purchase_order_items_inventory_item_id_fkey (
-            item_name
+            item_name,
+            unit_type,
+            pack_size
           )
         ),
         purchase_order_status_history!purchase_order_status_history_purchase_order_id_fkey (
@@ -131,7 +133,9 @@ export async function GET(request: NextRequest) {
         supplier_phone: order.suppliers?.phone,
         items: order.purchase_order_items?.map((item: any) => ({
           ...item,
-          inventory_item_name: item.inventory_items?.item_name || 'Unknown Item'
+          inventory_item_name: item.inventory_items?.item_name || 'Unknown Item',
+          unit_type: item.inventory_items?.unit_type || item.unit_type || 'each',
+          pack_size: item.inventory_items?.pack_size || item.pack_size || null
         })) || [],
         status_history: history,
         sent_by_profile: order.sent_by ? sentByProfiles[order.sent_by] || null : null
@@ -204,16 +208,60 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         )
       }
+
+      if (item.ordered_pack_qty !== undefined && item.ordered_pack_qty !== null) {
+        const packQty = Number(item.ordered_pack_qty)
+        if (!Number.isFinite(packQty) || packQty <= 0) {
+          return NextResponse.json(
+            { error: 'ordered_pack_qty must be positive when provided' },
+            { status: 400 }
+          )
+        }
+      }
     }
 
     console.log('Creating new purchase order:', order_number)
 
     const supabase = await createClient()
 
-    // Calculate total amount
-    const totalAmount = items.reduce((sum: number, item: any) => {
-      return sum + (item.quantity_ordered * item.unit_cost)
-    }, 0)
+    // Fetch pack sizes from inventory for missing values
+    const inventoryIds = Array.from(new Set(items.map((item: any) => item.inventory_item_id).filter(Boolean)))
+    const inventoryPackMap: Record<string, number> = {}
+    if (inventoryIds.length > 0) {
+      const { data: invRows } = await supabase
+        .from('inventory_items')
+        .select('id, pack_size')
+        .in('id', inventoryIds)
+      ;(invRows || []).forEach((row: any) => {
+        inventoryPackMap[row.id] = Number(row.pack_size) || 1
+      })
+    }
+
+    // Normalize items to unit quantities
+    const normalizedItems = items.map((item: any) => {
+      const packSize = item.pack_size ?? inventoryPackMap[item.inventory_item_id] ?? 1
+      const sourceQty = Number(item.quantity_ordered) || 0
+      const derivedOrderUnit = item.order_unit || (packSize > 1 ? 'pack' : 'each')
+      const packCount = derivedOrderUnit === 'pack'
+        ? (item.ordered_pack_qty ?? sourceQty)
+        : null
+      const quantityOrdered =
+        derivedOrderUnit === 'pack'
+          ? (packCount || 0) * packSize
+          : sourceQty
+      const lineTotal = quantityOrdered * (item.unit_cost || 0)
+      return {
+        ...item,
+        order_unit: derivedOrderUnit,
+        pack_size: packSize,
+        ordered_pack_qty: derivedOrderUnit === 'pack' ? packCount : null,
+        quantity_ordered: quantityOrdered,
+        total_cost: lineTotal
+      }
+    })
+
+    // Calculate total amount using unit quantities
+    const totalAmount = normalizedItems.reduce((sum: number, item: any) => sum + (item.total_cost || 0), 0)
 
     // Start transaction by creating the purchase order
     const { data: newOrder, error: orderError } = await supabase
@@ -239,12 +287,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Insert purchase order items
-    const orderItems = items.map((item: any) => ({
+    const orderItems = normalizedItems.map((item: any) => ({
       purchase_order_id: newOrder.id,
       inventory_item_id: item.inventory_item_id,
       quantity_ordered: item.quantity_ordered,
       quantity_received: 0,
-      unit_cost: item.unit_cost
+      unit_cost: item.unit_cost,
+      ordered_pack_qty: item.ordered_pack_qty || null,
+      pack_size: item.pack_size ?? 1
     }))
 
     const { error: itemsError } = await supabase

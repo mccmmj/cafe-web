@@ -102,7 +102,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
         .limit(20)
 
       if (matchedInvoiceIds.length > 0) {
-        const idList = matchedInvoiceIds.map(id => `${id}::uuid`).join(',')
+        // Exclude already-linked invoices; the PostgREST `in` filter accepts a comma list of UUIDs
+        const idList = matchedInvoiceIds.join(',')
         availableQuery = availableQuery.not('id', 'in', `(${idList})`)
       }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button, Modal } from '@/components/ui'
 import { 
@@ -19,13 +19,40 @@ import {
   Edit,
   Send,
   Download,
-  Mail
+  Mail,
+  Copy,
+  RefreshCcw,
+  MoreVertical
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import PurchaseOrderModal from './PurchaseOrderModal'
 import PurchaseOrderViewModal from './PurchaseOrderViewModal'
 import { buildPurchaseOrderTemplateContext, renderTemplate } from '@/lib/purchase-orders/templates'
 import type { SupplierEmailTemplate } from '@/lib/purchase-orders/templates'
+import { CostCalculator } from './CostCalculator'
+
+const ActionMenuButton = ({
+  label,
+  icon,
+  colorClass = 'text-gray-700',
+  disabled,
+  onClick
+}: {
+  label: string
+  icon: React.ReactNode
+  colorClass?: string
+  disabled?: boolean
+  onClick: () => void
+}) => (
+  <button
+    className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 ${colorClass} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+    onClick={onClick}
+    disabled={disabled}
+  >
+    {icon}
+    <span className="truncate">{label}</span>
+  </button>
+)
 
 interface PurchaseOrderItem {
   id: string
@@ -36,6 +63,11 @@ interface PurchaseOrderItem {
   quantity_received: number
   unit_cost: number
   total_cost: number
+  unit_type?: string
+  is_excluded?: boolean
+  exclusion_reason?: string | null
+  ordered_pack_qty?: number | null
+  pack_size?: number | null
 }
 
 type PurchaseOrderStatus =
@@ -79,6 +111,7 @@ interface PurchaseOrder {
     changed_at: string
     note?: string | null
   }[]
+  pack_size?: number | null
 }
 
 interface PurchaseOrdersManagementProps {
@@ -123,12 +156,16 @@ const PurchaseOrdersManagement = ({
     cc: '',
     subject: '',
     message: '',
-    markAsSent: true
+    markAsSent: true,
+    excludedItemIds: [] as string[]
   })
   const [emailSending, setEmailSending] = useState(false)
   const [emailTemplateLoading, setEmailTemplateLoading] = useState(false)
   const [emailTemplatePreview, setEmailTemplatePreview] = useState('')
   const [markingReceiptOrderId, setMarkingReceiptOrderId] = useState<string | null>(null)
+  const [inlinePackPrice, setInlinePackPrice] = useState<Record<string, string>>({})
+  const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null)
+  const [filtersOpen, setFiltersOpen] = useState<boolean>(false)
   
   const queryClient = useQueryClient()
 
@@ -198,28 +235,75 @@ const PurchaseOrdersManagement = ({
     setEditModalOpen(true)
   }
 
+  const handleDuplicateOrder = (order: PurchaseOrder) => {
+    const duplicatedItems = (order.items || []).map(item => ({
+      id: '',
+      purchase_order_id: '',
+      inventory_item_id: item.inventory_item_id,
+      inventory_item_name: item.inventory_item_name,
+      quantity_ordered: item.quantity_ordered,
+      quantity_received: 0,
+      unit_cost: item.unit_cost,
+      total_cost: item.total_cost ?? (item.quantity_ordered || 0) * (item.unit_cost || 0),
+      unit_type: item.unit_type,
+      is_excluded: false,
+      exclusion_reason: null
+    }))
+
+    const duplicatedOrder: PurchaseOrder = {
+      ...order,
+      id: '',
+      status: 'draft',
+      order_number: `PO-${Date.now().toString().slice(-6)}`,
+      sent_at: undefined,
+      sent_via: undefined,
+      sent_notes: undefined,
+      total_amount: duplicatedItems.reduce((sum, item) => sum + (item.total_cost || 0), 0),
+      items: duplicatedItems
+    }
+
+    setSelectedOrder(duplicatedOrder)
+    setCreateModalOpen(true)
+    setEditModalOpen(false)
+  }
+
   const resetEmailForm = () => {
     setEmailForm({
       to: '',
       cc: '',
       subject: '',
       message: '',
-      markAsSent: true
+      markAsSent: true,
+      excludedItemIds: []
     })
     setEmailTemplateLoading(false)
     setEmailTemplatePreview('')
+  }
+
+  const toggleExcludedItem = (itemId: string) => {
+    setEmailForm(prev => {
+      const exists = prev.excludedItemIds.includes(itemId)
+      return {
+        ...prev,
+        excludedItemIds: exists
+          ? prev.excludedItemIds.filter(id => id !== itemId)
+          : [...prev.excludedItemIds, itemId]
+      }
+    })
   }
 
   const buildEmailTemplateDefaults = (
     order: PurchaseOrder,
     template?: SupplierEmailTemplate | null
   ) => {
+    const preExcluded = order.items?.filter((i) => i.is_excluded)?.map((i) => i.id) || []
     const base = {
       to: order.supplier_email || '',
       cc: '',
       subject: `Purchase Order ${order.order_number}`,
       message: '',
-      markAsSent: true
+      markAsSent: true,
+      excludedItemIds: preExcluded
     }
 
     const context = buildPurchaseOrderTemplateContext({
@@ -325,6 +409,13 @@ const PurchaseOrdersManagement = ({
       return
     }
 
+    const totalItems = selectedOrder.items?.length || 0
+    const excludedCount = emailForm.excludedItemIds.length
+    if (totalItems > 0 && excludedCount >= totalItems) {
+      toast.error('At least one item must be included when sending the purchase order.')
+      return
+    }
+
     try {
       setEmailSending(true)
 
@@ -336,7 +427,8 @@ const PurchaseOrdersManagement = ({
           cc: emailForm.cc || undefined,
           subject: emailForm.subject,
           message: emailForm.message,
-          markAsSent: emailForm.markAsSent
+          markAsSent: emailForm.markAsSent,
+          excluded_item_ids: emailForm.excludedItemIds
         })
       })
 
@@ -563,7 +655,7 @@ const PurchaseOrdersManagement = ({
 
       {/* Filters and Search */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div className="flex items-center justify-between gap-3">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <input
@@ -574,47 +666,73 @@ const PurchaseOrdersManagement = ({
               className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
           </div>
-          
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-            {/* Status Filter */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0">
-              {Object.entries(STATUS_CONFIG).map(([status, config]) => (
+          <Button
+            variant="outline"
+            size="sm"
+            className="lg:hidden"
+            onClick={() => setFiltersOpen(prev => !prev)}
+          >
+            <Filter className="w-4 h-4 mr-1" />
+            Filters
+          </Button>
+        </div>
+
+        <div className={`${filtersOpen ? 'mt-4 block' : 'mt-4 hidden'} lg:block`}>
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 flex-1">
+              {/* Status Filter */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0">
+                {Object.entries(STATUS_CONFIG).map(([status, config]) => (
+                  <button
+                    key={status}
+                    onClick={() => setStatusFilter(status)}
+                    className={`px-3 py-1 text-sm rounded-full font-medium transition-colors whitespace-nowrap flex items-center gap-1 ${
+                      statusFilter === status
+                        ? 'bg-primary-100 text-primary-700'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    }`}
+                  >
+                    <config.icon className="w-3 h-3" />
+                    {config.label} ({statusCounts[status] ?? 0})
+                  </button>
+                ))}
                 <button
-                  key={status}
-                  onClick={() => setStatusFilter(status)}
-                  className={`px-3 py-1 text-sm rounded-full font-medium transition-colors whitespace-nowrap flex items-center gap-1 ${
-                    statusFilter === status
+                  onClick={() => setStatusFilter('all')}
+                  className={`px-3 py-1 text-sm rounded-full font-medium transition-colors whitespace-nowrap ${
+                    statusFilter === 'all'
                       ? 'bg-primary-100 text-primary-700'
                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                   }`}
                 >
-                  <config.icon className="w-3 h-3" />
-                  {config.label} ({statusCounts[status] ?? 0})
+                  All ({statusCounts.all})
                 </button>
-              ))}
-              <button
-                onClick={() => setStatusFilter('all')}
-                className={`px-3 py-1 text-sm rounded-full font-medium transition-colors whitespace-nowrap ${
-                  statusFilter === 'all'
-                    ? 'bg-primary-100 text-primary-700'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
-              >
-                All ({statusCounts.all})
-              </button>
-            </div>
+              </div>
 
-            {/* Date Filter */}
-            <select
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value as typeof dateFilter)}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            >
-              <option value="all">All Time</option>
-              <option value="this_week">This Week</option>
-              <option value="this_month">This Month</option>
-              <option value="overdue">Overdue</option>
-            </select>
+              {/* Date Filter */}
+              <select
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value as typeof dateFilter)}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              >
+                <option value="all">All Time</option>
+                <option value="this_week">This Week</option>
+                <option value="this_month">This Month</option>
+                <option value="overdue">Overdue</option>
+              </select>
+
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSearchQuery('')
+                  setStatusFilter('all')
+                  setDateFilter('all')
+                }}
+                className="flex items-center gap-2 text-sm"
+              >
+                <RefreshCcw className="w-4 h-4" />
+                Reset
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -679,6 +797,7 @@ const PurchaseOrdersManagement = ({
                   const outstandingItems = getOutstandingItems(order)
                   const totalOrdered = order.items?.reduce((sum, item) => sum + (item.quantity_ordered || 0), 0) || 0
                   const totalReceived = order.items?.reduce((sum, item) => sum + (item.quantity_received || 0), 0) || 0
+                  const excludedCount = order.items?.filter((item) => item.is_excluded).length || 0
                   
                   return (
                     <tr key={order.id} className={`hover:bg-gray-50 ${overdue ? 'bg-red-50' : ''}`}>
@@ -693,6 +812,11 @@ const PurchaseOrdersManagement = ({
                           {overdue && (
                             <div className="text-xs text-red-600 font-medium">
                               OVERDUE
+                            </div>
+                          )}
+                          {excludedCount > 0 && (
+                            <div className="mt-1 inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700">
+                              {excludedCount} item{excludedCount === 1 ? '' : 's'} excluded
                             </div>
                           )}
                         </div>
@@ -734,7 +858,8 @@ const PurchaseOrdersManagement = ({
                       </td>
                       
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex flex-wrap items-center gap-2">
+                        {/* Desktop / wide: show inline buttons */}
+                        <div className="hidden md:flex flex-wrap items-center gap-2">
                           <Button 
                             variant="ghost" 
                             size="sm"
@@ -773,7 +898,7 @@ const PurchaseOrdersManagement = ({
                             <Button
                               variant="ghost"
                               size="sm"
-                            onClick={() => { void handleEmailSupplier(order) }}
+                              onClick={() => { void handleEmailSupplier(order) }}
                               className="text-indigo-600"
                               disabled={emailSending && selectedOrder?.id === order.id}
                             >
@@ -781,6 +906,16 @@ const PurchaseOrdersManagement = ({
                               Email
                             </Button>
                           )}
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDuplicateOrder(order)}
+                            className="text-gray-700"
+                          >
+                            <Copy className="w-4 h-4 mr-1" />
+                            Duplicate
+                          </Button>
 
                           {order.status === 'draft' && (
                             <Button
@@ -857,6 +992,89 @@ const PurchaseOrdersManagement = ({
                               <XCircle className="w-4 h-4 mr-1" />
                               Cancel
                             </Button>
+                          )}
+                        </div>
+
+                        {/* Mobile / narrow: kebab menu */}
+                        <div className="md:hidden relative">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setOpenActionMenuId(prev => prev === order.id ? null : order.id)}
+                            className="text-gray-700"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </Button>
+                          {openActionMenuId === order.id && (
+                            <div className="absolute right-0 mt-2 w-52 rounded-md border border-gray-200 bg-white shadow-lg z-20">
+                              <div className="py-1">
+                                <ActionMenuButton label="View" icon={<Eye className="w-4 h-4" />} onClick={() => { setOpenActionMenuId(null); handleViewOrder(order) }} />
+                                {(['draft', 'pending_approval', 'approved', 'sent'] as PurchaseOrderStatus[]).includes(order.status) && (
+                                  <ActionMenuButton label="Edit" icon={<Edit className="w-4 h-4" />} onClick={() => { setOpenActionMenuId(null); handleEditOrder(order) }} />
+                                )}
+                                {(['approved', 'confirmed', 'sent', 'received'] as PurchaseOrderStatus[]).includes(order.status) && (
+                                  <ActionMenuButton label="PDF" icon={<Download className="w-4 h-4" />} onClick={() => { setOpenActionMenuId(null); void handleDownloadPdf(order) }} />
+                                )}
+                                {(['approved', 'confirmed', 'sent'] as PurchaseOrderStatus[]).includes(order.status) && (
+                                  <ActionMenuButton label="Email" icon={<Mail className="w-4 h-4" />} onClick={() => { setOpenActionMenuId(null); void handleEmailSupplier(order) }} />
+                                )}
+                                <ActionMenuButton label="Duplicate" icon={<Copy className="w-4 h-4" />} onClick={() => { setOpenActionMenuId(null); handleDuplicateOrder(order) }} />
+                                {order.status === 'draft' && (
+                                  <ActionMenuButton
+                                    label="Submit for Approval"
+                                    icon={<Clock className="w-4 h-4" />}
+                                    colorClass="text-amber-600"
+                                    onClick={() => { setOpenActionMenuId(null); void handleStatusChange(order, 'pending_approval', 'Purchase order submitted for approval') }}
+                                  />
+                                )}
+                                {order.status === 'pending_approval' && (
+                                  <ActionMenuButton
+                                    label="Approve"
+                                    icon={<CheckCircle className="w-4 h-4" />}
+                                    colorClass="text-blue-600"
+                                    onClick={() => { setOpenActionMenuId(null); void handleStatusChange(order, 'approved', 'Purchase order approved') }}
+                                  />
+                                )}
+                                {(order.status === 'approved' || order.status === 'confirmed') && (
+                                  <ActionMenuButton
+                                    label="Mark Sent"
+                                    icon={<Send className="w-4 h-4" />}
+                                    colorClass="text-indigo-600"
+                                    onClick={() => {
+                                      setOpenActionMenuId(null)
+                                      setSelectedOrder(order)
+                                      setSendForm({
+                                        method: order.sent_via || 'email',
+                                        notes: order.sent_notes || '',
+                                        sent_at: (order.sent_at ? new Date(order.sent_at).toISOString() : new Date().toISOString()).slice(0, 16)
+                                      })
+                                      setSendModalOpen(true)
+                                    }}
+                                  />
+                                )}
+                                {(order.status === 'sent' || order.status === 'approved' || order.status === 'confirmed') && (
+                                  <ActionMenuButton
+                                    label={markingReceiptOrderId === order.id ? 'Receiving...' : 'Mark Received'}
+                                    icon={<CheckCircle className="w-4 h-4" />}
+                                    colorClass="text-green-600"
+                                    disabled={
+                                      updateStatusMutation.isPending ||
+                                      markingReceiptOrderId === order.id ||
+                                      outstandingItems.length === 0
+                                    }
+                                    onClick={() => { setOpenActionMenuId(null); void handleMarkReceived(order) }}
+                                  />
+                                )}
+                                {(order.status !== 'cancelled' && order.status !== 'received') && (
+                                  <ActionMenuButton
+                                    label="Cancel"
+                                    icon={<XCircle className="w-4 h-4" />}
+                                    colorClass="text-red-600"
+                                    onClick={() => { setOpenActionMenuId(null); void handleStatusChange(order, 'cancelled', 'Purchase order cancelled') }}
+                                  />
+                                )}
+                              </div>
+                            </div>
                           )}
                         </div>
                       </td>
@@ -1053,6 +1271,39 @@ const PurchaseOrdersManagement = ({
               <p className="mt-1 text-xs text-gray-500">Loading supplier template…</p>
             )}
           </div>
+          {selectedOrder?.items?.length ? (
+            <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-medium text-gray-800">Items to include</p>
+                <p className="text-xs text-gray-500">Uncheck to exclude out-of-stock items from this send</p>
+              </div>
+              <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                {selectedOrder.items.map((item) => (
+                  <label key={item.id} className="flex items-center justify-between gap-3 rounded border border-gray-200 bg-white px-3 py-2 text-sm">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-gray-900 truncate">
+                        {item.inventory_item_name}
+                        {item.is_excluded && (
+                          <span className="ml-2 inline-flex items-center rounded bg-red-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700">
+                            Excluded
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Qty: {item.quantity_ordered} {item.unit_type || ''} • ${typeof item.unit_cost === 'number' ? item.unit_cost.toFixed(2) : '0.00'} ea
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={!emailForm.excludedItemIds.includes(item.id)}
+                      onChange={(e) => toggleExcludedItem(item.id)}
+                      className="h-4 w-4 text-primary-600 border-gray-300 rounded"
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <label className="inline-flex items-center space-x-2">
             <input
               type="checkbox"

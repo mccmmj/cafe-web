@@ -29,6 +29,7 @@ interface ItemMatch {
     item_name: string
     current_stock: number
     unit_cost: number
+    pack_size?: number
   }
   confidence: number
   match_reasons: string[]
@@ -83,6 +84,7 @@ interface InventoryItem {
   current_stock: number
   unit_cost: number
   unit_type: string
+  pack_size?: number
   location: string
 }
 
@@ -117,6 +119,7 @@ export function InvoiceReviewInterface({ invoice, onClose, onConfirm }: InvoiceR
   const [linkingOrderId, setLinkingOrderId] = useState<string | null>(null)
   const [allInventoryItems, setAllInventoryItems] = useState<InventoryItem[]>([])
   const [categories, setCategories] = useState<Category[]>([])
+  const [costHistory, setCostHistory] = useState<Record<string, any[]>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [textPreview, setTextPreview] = useState<string>('')
@@ -234,6 +237,19 @@ export function InvoiceReviewInterface({ invoice, onClose, onConfirm }: InvoiceR
       }
     } catch (error) {
       console.error('Error loading inventory items:', error)
+    }
+  }
+
+  const loadCostHistory = async (itemId: string) => {
+    if (!itemId || costHistory[itemId]) return
+    try {
+      const res = await fetch(`/api/admin/inventory/cost-history?id=${itemId}&limit=5`)
+      const json = await res.json()
+      if (json.success) {
+        setCostHistory(prev => ({ ...prev, [itemId]: json.history }))
+      }
+    } catch (error) {
+      console.error('Error loading cost history:', error)
     }
   }
 
@@ -985,11 +1001,43 @@ export function InvoiceReviewInterface({ invoice, onClose, onConfirm }: InvoiceR
                                 <span className="ml-1">{Math.round(match.confidence * 100)}%</span>
                               </span>
                             </div>
-                            <div className="text-sm text-gray-500 mt-1">
-                              Stock: {match.inventory_item.current_stock} • 
-                              Cost: ${match.inventory_item.unit_cost.toFixed(2)} • 
-                              {match.match_reasons.join(', ')}
+                          <div className="text-sm text-gray-500 mt-1">
+                            Stock: {match.inventory_item.current_stock} • 
+                            Cost: ${match.inventory_item.unit_cost.toFixed(2)} • 
+                            {match.match_reasons.join(', ')}
+                          </div>
+                          {match.quantity_conversion && (
+                            <div className="text-xs text-indigo-600 mt-1">
+                              {match.quantity_conversion.package_info}
                             </div>
+                          )}
+                          {match.inventory_item.pack_size && match.inventory_item.pack_size > 1 && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              Pack size: {match.inventory_item.pack_size}
+                            </div>
+                          )}
+                          {match.inventory_item.id && (
+                            <div className="text-xs text-blue-700 mt-1">
+                              <button
+                                className="underline"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  loadCostHistory(match.inventory_item.id)
+                                }}
+                              >
+                                View recent cost history
+                              </button>
+                              {costHistory[match.inventory_item.id] && costHistory[match.inventory_item.id].length > 0 && (
+                                <div className="mt-1 space-y-1">
+                                  {costHistory[match.inventory_item.id].map((h, idx) => (
+                                    <div key={idx} className="text-[11px] text-gray-600">
+                                      {new Date(h.changed_at).toLocaleDateString()} • {h.previous_unit_cost ?? '—'} → {h.new_unit_cost} ({h.source})
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
                             {match.quantity_conversion && match.quantity_conversion.conversion_factor > 1 && (
                               <div className="text-sm text-blue-600 mt-1">
                                 📦 {match.quantity_conversion.package_info}
