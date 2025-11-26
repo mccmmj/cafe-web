@@ -16,6 +16,7 @@ type SendRequestBody = {
   subject?: string
   message?: string
   markAsSent?: boolean
+  excluded_item_ids?: string[]
 }
 
 export async function POST(
@@ -82,7 +83,84 @@ export async function POST(
     }
 
     const cc = normaliseAddresses(body.cc)
-    const templateContext = buildPurchaseOrderTemplateContext(order)
+  const excludedItemIds = Array.isArray(body.excluded_item_ids)
+    ? body.excluded_item_ids.filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
+    : []
+
+  // Persist exclusions before sending (so they apply to future phases as well)
+  if (excludedItemIds.length > 0) {
+    const { error: exclusionError } = await supabase
+      .from('purchase_order_items')
+      .update({
+        is_excluded: true,
+        exclusion_reason: body.message || 'Marked out-of-stock during send',
+        exclusion_phase: 'pre_send',
+        excluded_at: new Date().toISOString(),
+        excluded_by: admin.userId
+      })
+      .in('id', excludedItemIds)
+
+    if (exclusionError) {
+      console.error('Failed to persist excluded items:', exclusionError)
+      return NextResponse.json(
+        { error: 'Failed to save excluded items', details: exclusionError.message },
+        { status: 500 }
+      )
+    }
+  }
+
+  // Clear previous exclusions if user re-included items
+  const clearQuery = supabase
+    .from('purchase_order_items')
+    .update({
+      is_excluded: false,
+      exclusion_reason: null,
+      exclusion_phase: null,
+      excluded_at: null,
+      excluded_by: null
+    })
+    .eq('purchase_order_id', orderId)
+    .eq('is_excluded', true)
+
+  if (excludedItemIds.length > 0) {
+    clearQuery.not('id', 'in', `(${excludedItemIds.map(id => `'${id}'`).join(',')})`)
+  }
+
+  const { error: clearError } = await clearQuery
+  if (clearError) {
+    console.warn('Failed to clear previous exclusions:', clearError)
+  }
+
+  const filteredItems = (order.items || []).filter(item => !excludedItemIds.includes(item.id))
+
+    if (filteredItems.length === 0) {
+      return NextResponse.json(
+        { error: 'Cannot send purchase order with zero items after exclusions' },
+        { status: 400 }
+      )
+    }
+
+    const filteredOrder = {
+      ...order,
+      items: filteredItems,
+      total_amount: filteredItems.reduce((sum, item) => {
+        const lineTotal = typeof item.total_cost === 'number'
+          ? item.total_cost
+          : (item.quantity_ordered || 0) * (item.unit_cost || 0)
+        return sum + lineTotal
+      }, 0)
+    }
+
+    // Update order total to reflect exclusions
+    const { error: totalUpdateError } = await supabase
+      .from('purchase_orders')
+      .update({ total_amount: filteredOrder.total_amount })
+      .eq('id', order.id)
+    if (totalUpdateError) {
+      console.warn('Failed to update purchase order total after exclusions:', totalUpdateError)
+    }
+
+    const templateContext = buildPurchaseOrderTemplateContext(filteredOrder)
     const supplierTemplate = await fetchSupplierTemplate(supabase, order.supplier?.id)
     const templateSubject = supplierTemplate
       ? renderTemplate(supplierTemplate.subject_template, templateContext).trim()
@@ -94,7 +172,7 @@ export async function POST(
     const subject = body.subject?.trim() || templateSubject || `Purchase Order ${order.order_number}`
     const noteMessage = body.message?.trim() || ''
 
-    const pdfBytes = await generatePurchaseOrderPdf(order)
+    const pdfBytes = await generatePurchaseOrderPdf(filteredOrder)
     const attachmentFileName = `PO-${order.order_number || order.id}.pdf`
 
     const emailResponse = await resend.emails.send({
@@ -102,7 +180,7 @@ export async function POST(
       to: recipients,
       cc: cc.length > 0 ? cc : undefined,
       subject,
-      html: buildEmailHtml(order, noteMessage, templateBody),
+      html: buildEmailHtml(filteredOrder, noteMessage, templateBody),
       attachments: [
         {
           filename: attachmentFileName,

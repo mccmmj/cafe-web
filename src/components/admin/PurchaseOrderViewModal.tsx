@@ -18,7 +18,11 @@ interface PurchaseOrderItem {
   quantity_received: number
   unit_cost: number
   total_cost: number
+  is_excluded?: boolean
+  exclusion_reason?: string | null
   unit_type?: string
+  ordered_pack_qty?: number | null
+  pack_size?: number | null
 }
 
 type PurchaseOrderStatus =
@@ -63,6 +67,7 @@ interface PurchaseOrder {
   created_at: string
   updated_at: string
   status_history?: StatusHistoryEntry[]
+  pack_size?: number | null
 }
 
 interface PurchaseOrderAttachment {
@@ -203,6 +208,7 @@ const PurchaseOrderViewModal = ({ order, isOpen, onClose }: PurchaseOrderViewMod
     weight_unit: '',
     file: null
   })
+  const [togglingItemId, setTogglingItemId] = useState<string | null>(null)
 
   const supplierRange = useMemo(() => {
     if (!orderState?.supplier_id) return null
@@ -232,6 +238,45 @@ const PurchaseOrderViewModal = ({ order, isOpen, onClose }: PurchaseOrderViewMod
       setOrderState(order)
     }
   }, [order])
+
+  const toggleItemExclusion = async (itemId: string, nextExcluded: boolean) => {
+    if (!orderState) return
+    try {
+      setTogglingItemId(itemId)
+      const response = await fetch(`/api/admin/purchase-orders/${orderState.id}/items/${itemId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          is_excluded: nextExcluded,
+          phase: 'post_send',
+          reason: nextExcluded ? 'Marked out-of-stock after approval' : null
+        })
+      })
+
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result?.error || 'Failed to update item')
+      }
+
+      const updatedItem = result.item
+      setOrderState((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          total_amount: result.total_amount ?? prev.total_amount,
+          items: prev.items?.map((item) => (item.id === itemId ? { ...item, ...updatedItem } : item))
+        }
+      })
+
+      toast.success(nextExcluded ? 'Item marked out-of-stock' : 'Item re-included')
+      queryClient.invalidateQueries({ queryKey: ['admin-purchase-orders'] })
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Failed to update item'
+      toast.error(msg)
+    } finally {
+      setTogglingItemId(null)
+    }
+  }
 
   useEffect(() => {
     if (!isOpen || !orderState?.id) return
@@ -465,6 +510,10 @@ const PurchaseOrderViewModal = ({ order, isOpen, onClose }: PurchaseOrderViewMod
   }, [orderState?.items])
 
   const totalRemaining = Math.max(0, totalOrdered - totalReceived)
+
+  const computedTotalAmount = useMemo(() => {
+    return orderState?.items?.reduce((sum, item) => sum + (item.total_cost || 0), 0) || 0
+  }, [orderState?.items])
 
   const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), [])
 
@@ -1214,6 +1263,9 @@ const PurchaseOrderViewModal = ({ order, isOpen, onClose }: PurchaseOrderViewMod
                           Outstanding
                         </th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Out of Stock
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Unit Cost
                         </th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1242,8 +1294,29 @@ const PurchaseOrderViewModal = ({ order, isOpen, onClose }: PurchaseOrderViewMod
                           </td>
                           <td className="px-4 py-4 text-sm">
                             <span className={item.quantity_received === item.quantity_ordered ? 'text-green-600' : 'text-amber-600'}>
-                              {Math.max(0, item.quantity_ordered - item.quantity_received)}
+                              {item.is_excluded ? '—' : Math.max(0, item.quantity_ordered - item.quantity_received)}
                             </span>
+                          </td>
+                          <td className="px-4 py-4 text-sm">
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                className={`inline-flex items-center rounded px-2 py-1 text-xs font-medium border ${
+                                  item.is_excluded
+                                    ? 'bg-red-50 text-red-700 border-red-200'
+                                    : 'bg-green-50 text-green-700 border-green-200'
+                                } ${togglingItemId === item.id ? 'opacity-70 cursor-wait' : ''}`}
+                                onClick={() => toggleItemExclusion(item.id, !item.is_excluded)}
+                                disabled={togglingItemId === item.id}
+                              >
+                                {item.is_excluded ? 'Excluded' : 'Included'}
+                              </button>
+                              {item.exclusion_reason && (
+                                <span className="text-xs text-gray-500 truncate max-w-[120px]" title={item.exclusion_reason}>
+                                  {item.exclusion_reason}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 py-4 text-sm text-gray-900">
                             {formatCurrency(item.unit_cost)}
@@ -1256,11 +1329,11 @@ const PurchaseOrderViewModal = ({ order, isOpen, onClose }: PurchaseOrderViewMod
                     </tbody>
                     <tfoot className="bg-gray-50">
                       <tr>
-                        <td colSpan={5} className="px-4 py-3 text-right text-sm font-medium text-gray-900">
+                        <td colSpan={6} className="px-4 py-3 text-right text-sm font-medium text-gray-900">
                           Total Amount:
                         </td>
                         <td className="px-4 py-3 text-sm font-bold text-gray-900">
-                          {formatCurrency(orderState.total_amount)}
+                          {formatCurrency(computedTotalAmount || orderState.total_amount)}
                         </td>
                       </tr>
                     </tfoot>

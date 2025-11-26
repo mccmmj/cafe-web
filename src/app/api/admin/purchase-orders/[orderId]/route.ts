@@ -41,7 +41,8 @@ export async function GET(
           *,
           inventory_items!purchase_order_items_inventory_item_id_fkey (
             item_name,
-            unit_type
+            unit_type,
+            pack_size
           )
         ),
         purchase_order_status_history!purchase_order_status_history_purchase_order_id_fkey (
@@ -103,7 +104,8 @@ export async function GET(
       items: order.purchase_order_items?.map((item: any) => ({
         ...item,
         inventory_item_name: item.inventory_items?.item_name || 'Unknown Item',
-        unit_type: item.inventory_items?.unit_type || 'each'
+        unit_type: item.inventory_items?.unit_type || item.unit_type || 'each',
+        pack_size: item.inventory_items?.pack_size || item.pack_size || null
       })) || [],
       status_history: history,
       sent_by_profile: sentByProfile
@@ -254,7 +256,17 @@ export async function PATCH(
       // Get purchase order items
       const { data: orderItems, error: itemsError } = await supabase
         .from('purchase_order_items')
-        .select('inventory_item_id, quantity_ordered')
+        .select(`
+          id,
+          inventory_item_id,
+          quantity_ordered,
+          ordered_pack_qty,
+          pack_size,
+          inventory_items!purchase_order_items_inventory_item_id_fkey (
+            square_item_id,
+            pack_size
+          )
+        `)
         .eq('purchase_order_id', orderId)
 
       if (itemsError) {
@@ -262,23 +274,52 @@ export async function PATCH(
       } else if (orderItems && orderItems.length > 0) {
         // Update inventory levels for each item
         for (const item of orderItems) {
+          const itemPackSize = (item as any).pack_size ?? (item as any).inventory_items?.pack_size ?? 1
+          const unitQuantity = (item.quantity_ordered ?? ((item.ordered_pack_qty || 0) * itemPackSize)) || 0
+
+          // Determine target inventory item to increment (prefer single-unit item with same Square ID)
+          let targetInventoryId = item.inventory_item_id
+          const squareId = (item as any).inventory_items?.square_item_id || null
+          if (squareId) {
+            const { data: baseItem } = await supabase
+              .from('inventory_items')
+              .select('id')
+              .eq('square_item_id', squareId)
+              .eq('pack_size', 1)
+              .is('deleted_at', null)
+              .maybeSingle()
+            if (baseItem?.id) {
+              targetInventoryId = baseItem.id
+            }
+          }
+
           const { error: updateError } = await supabase
             .rpc('increment_inventory_stock', {
-              item_id: item.inventory_item_id,
-              quantity: item.quantity_ordered
+              item_id: targetInventoryId,
+              quantity: unitQuantity
             })
 
           if (updateError) {
             console.error('Failed to update inventory for item:', item.inventory_item_id, updateError)
+          } else {
+            // Ensure purchase_order_items.quantity_received reflects what was received
+            const { error: poUpdateError } = await supabase
+              .from('purchase_order_items')
+              .update({ quantity_received: unitQuantity })
+              .eq('id', item.id)
+
+            if (poUpdateError) {
+              console.warn('Failed to update quantity_received for item:', item.id, poUpdateError)
+            }
           }
 
           // Create stock movement record
           await supabase
             .from('stock_movements')
             .insert({
-              inventory_item_id: item.inventory_item_id,
+              inventory_item_id: targetInventoryId,
               movement_type: 'in',
-              quantity: item.quantity_ordered,
+              quantity: unitQuantity,
               reference_type: 'purchase_order',
               reference_id: orderId,
               notes: `Received from purchase order #${updatedOrder.order_number}`

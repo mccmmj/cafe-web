@@ -69,6 +69,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         current_stock,
         unit_cost,
         unit_type,
+        pack_size,
         square_item_id,
         suppliers (
           name
@@ -84,15 +85,16 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     // Transform inventory items for matching
-    const formattedInventoryItems = (inventoryItems || []).map(item => ({
-      id: item.id,
-      item_name: item.item_name,
-      current_stock: item.current_stock,
-      unit_cost: item.unit_cost,
-      unit_type: item.unit_type,
-      supplier_name: (item.suppliers as any)?.name,
-      square_item_id: item.square_item_id
-    }))
+  const formattedInventoryItems = (inventoryItems || []).map(item => ({
+    id: item.id,
+    item_name: item.item_name,
+    current_stock: item.current_stock,
+    unit_cost: item.unit_cost,
+    unit_type: item.unit_type,
+    pack_size: item.pack_size,
+    supplier_name: (item.suppliers as any)?.name,
+    square_item_id: item.square_item_id
+  }))
 
     // Find matches for each invoice item
     const itemMatches: any = {}

@@ -290,6 +290,41 @@ export async function POST(
       )
     }
 
+    const supabase = await createClient()
+
+    // Block receipts for excluded/out-of-stock items
+    const { data: poItem, error: poItemError } = await supabase
+      .from('purchase_order_items')
+      .select(`
+        id,
+        inventory_item_id,
+        is_excluded,
+        exclusion_reason,
+        pack_size,
+        ordered_pack_qty,
+        inventory_items!purchase_order_items_inventory_item_id_fkey (
+          square_item_id,
+          pack_size
+        )
+      `)
+      .eq('id', purchaseOrderItemId)
+      .single()
+
+    if (poItemError) {
+      console.error('Failed to fetch purchase order item before receipt:', poItemError)
+      return NextResponse.json(
+        { error: 'Unable to validate purchase order item', details: poItemError.message },
+        { status: 500 }
+      )
+    }
+
+    if (poItem?.is_excluded) {
+      return NextResponse.json(
+        { error: 'Item is marked out-of-stock/excluded and cannot be received', details: poItem.exclusion_reason || undefined },
+        { status: 400 }
+      )
+    }
+
     const notes = item.notes?.trim() || null
     const weightValue = item.weight !== undefined && item.weight !== null ? Number(item.weight) : null
     const weight = weightValue !== null && Number.isFinite(weightValue) ? weightValue : null
@@ -337,10 +372,42 @@ export async function POST(
     }
 
     const serviceSupabase = createServiceClient()
+    // Determine target inventory item (prefer base single-unit with same Square ID)
+    let targetInventoryId = poItem.inventory_item_id
+    const squareId = (poItem as any).inventory_items?.square_item_id || null
+    if (squareId) {
+      const { data: baseItem } = await serviceSupabase
+        .from('inventory_items')
+        .select('id')
+        .eq('square_item_id', squareId)
+        .eq('pack_size', 1)
+        .is('deleted_at', null)
+        .maybeSingle()
+      if (baseItem?.id) {
+        targetInventoryId = baseItem.id
+      }
+    }
+
+    // Use entered quantity as units (PO line is stored in units already); informational only
+    const packSize = (poItem as any).pack_size ?? (poItem as any).inventory_items?.pack_size ?? 1
+    const unitQuantity = quantity
+
+    console.log('[PO receipt] info only (no stock change)', {
+      po_item_id: purchaseOrderItemId,
+      pack_size: packSize,
+      ordered_pack_qty: poItem.ordered_pack_qty,
+      input_qty: quantity,
+      unit_qty: unitQuantity,
+      from_item_id: poItem.inventory_item_id,
+      target_item_id: targetInventoryId,
+      square_id: squareId
+    })
+
+    // Log receipt record only (no stock mutation here)
     const { data, error } = await serviceSupabase.rpc('log_purchase_order_receipt', {
       p_purchase_order_id: orderId,
       p_purchase_order_item_id: purchaseOrderItemId,
-      p_quantity: quantity,
+      p_quantity: unitQuantity,
       p_received_by: admin.userId,
       p_notes: notes,
       p_weight: weight,
@@ -380,6 +447,8 @@ export async function POST(
         enrichedReceipt = enriched[0] ?? null
       }
     }
+
+    // No stock shifts here; inventory updates occur during invoice confirmation.
 
     return NextResponse.json({
       success: true,

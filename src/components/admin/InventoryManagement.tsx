@@ -36,6 +36,7 @@ interface InventoryItem {
   reorder_point: number
   unit_cost: number
   unit_type: string
+  pack_size?: number
   is_ingredient: boolean
   item_type?: 'ingredient' | 'prepackaged' | 'prepared' | 'supply'
   auto_decrement?: boolean
@@ -46,6 +47,7 @@ interface InventoryItem {
   last_restocked_at?: string
   created_at: string
   updated_at: string
+  deleted_at?: string | null
 }
 
 interface StockAlert {
@@ -64,12 +66,14 @@ const InventoryManagement = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [stockFilter, setStockFilter] = useState('all') // all, low, critical, out_of_stock
   const [supplierFilter, setSupplierFilter] = useState('all') // all, or supplier_id
+  const [showArchived, setShowArchived] = useState(false)
   
   // Modal states
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [restockModalOpen, setRestockModalOpen] = useState(false)
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null)
+  const [calculatorDefaults, setCalculatorDefaults] = useState<{ packSize?: number; packPrice?: number }>({ packSize: 1, packPrice: 0 })
   
   const queryClient = useQueryClient()
 
@@ -78,9 +82,9 @@ const InventoryManagement = () => {
     data: inventoryData, 
     isLoading: inventoryLoading
   } = useQuery({
-    queryKey: ['admin-inventory'],
+    queryKey: ['admin-inventory', showArchived],
     queryFn: async () => {
-      const response = await fetch('/api/admin/inventory')
+      const response = await fetch(`/api/admin/inventory${showArchived ? '?includeArchived=1' : ''}`)
       if (!response.ok) {
         throw new Error('Failed to fetch inventory')
       }
@@ -201,6 +205,58 @@ const InventoryManagement = () => {
     setRestockModalOpen(true)
   }
 
+  const archiveItemMutation = useMutation({
+    mutationFn: async (itemId: string) => {
+      const response = await fetch(`/api/admin/inventory?id=${itemId}`, { method: 'DELETE' })
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result?.error || 'Failed to archive item')
+      }
+      return result
+    },
+    onSuccess: () => {
+      toast.success('Item archived')
+      queryClient.invalidateQueries({ queryKey: ['admin-inventory'] })
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to archive item')
+    }
+  })
+
+  const restoreItemMutation = useMutation({
+    mutationFn: async (itemId: string) => {
+      const response = await fetch(`/api/admin/inventory/restore`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: itemId })
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result?.error || 'Failed to restore item')
+      }
+      return result
+    },
+    onSuccess: () => {
+      toast.success('Item restored')
+      queryClient.invalidateQueries({ queryKey: ['admin-inventory'] })
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to restore item')
+    }
+  })
+
+  const handleArchiveItem = (item: InventoryItem) => {
+    if (!item.id) return
+    const confirmArchive = window.confirm(`Archive ${item.item_name}? This hides it from inventory but keeps history.`)
+    if (!confirmArchive) return
+    archiveItemMutation.mutate(item.id)
+  }
+
+  const handleRestoreItem = (item: InventoryItem) => {
+    if (!item.id) return
+    restoreItemMutation.mutate(item.id)
+  }
+
   const closeModals = () => {
     setCreateModalOpen(false)
     setEditModalOpen(false)
@@ -294,7 +350,13 @@ const InventoryManagement = () => {
               <RefreshCw className="w-4 h-4 mr-2" />
               Refresh
             </Button>
-            <Button className="bg-primary-600 hover:bg-primary-700" onClick={() => setCreateModalOpen(true)}>
+            <Button
+              className="bg-primary-600 hover:bg-primary-700"
+              onClick={() => {
+                setSelectedItem(null)
+                setCreateModalOpen(true)
+              }}
+            >
               <Plus className="w-4 h-4 mr-2" />
               Add Item
             </Button>
@@ -487,9 +549,20 @@ const InventoryManagement = () => {
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             <div className="p-4 sm:p-5 border-b border-gray-200">
               <h3 className="font-semibold text-gray-900 text-base">Inventory Items</h3>
-              <p className="text-xs text-gray-600 mt-1 sm:text-sm">
-                {filteredItems.length} of {totalItems} items
-              </p>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                <p className="text-xs text-gray-600 mt-1 sm:text-sm">
+                  {filteredItems.length} of {totalItems} items
+                </p>
+                <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={showArchived}
+                    onChange={(e) => setShowArchived(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  Show archived items
+                </label>
+              </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -589,7 +662,25 @@ const InventoryManagement = () => {
                             </span>
                           </td>
                           <td className="px-4 py-4 text-sm text-gray-900 sm:px-6 sm:whitespace-nowrap">
-                            ${item.unit_cost.toFixed(2)}
+                            {(() => {
+                              const packSize = item.pack_size || 1
+                              const rawPackPrice = (item as any).pack_price as number | undefined
+                              let packPrice: number
+                              if (packSize > 1) {
+                                if (rawPackPrice !== undefined && rawPackPrice > 0) {
+                                  packPrice = Number(rawPackPrice.toFixed(2))
+                                } else if (item.unit_cost > 10) {
+                                  // Heuristic: large unit_cost for a pack item likely represents the full pack price.
+                                  packPrice = Number(item.unit_cost.toFixed(2))
+                                } else {
+                                  packPrice = Number((item.unit_cost * packSize).toFixed(2))
+                                }
+                              } else {
+                                packPrice = item.unit_cost
+                              }
+                              const displayPrice = packSize > 1 ? packPrice : item.unit_cost
+                              return `$${displayPrice.toFixed(2)}${packSize > 1 ? ' /pack' : ''}`
+                            })()}
                           </td>
                           <td className="px-4 py-4 text-sm text-gray-900 sm:px-6 sm:whitespace-nowrap">
                             ${itemValue.toFixed(2)}
@@ -615,6 +706,27 @@ const InventoryManagement = () => {
                               >
                                 Restock
                               </Button>
+                              {item.deleted_at ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-emerald-600"
+                                  onClick={() => handleRestoreItem(item)}
+                                  disabled={restoreItemMutation.isPending}
+                                >
+                                  Restore
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-red-600"
+                                  onClick={() => handleArchiveItem(item)}
+                                  disabled={archiveItemMutation.isPending}
+                                >
+                                  Archive
+                                </Button>
+                              )}
                             </div>
                           </td>
                         </tr>
