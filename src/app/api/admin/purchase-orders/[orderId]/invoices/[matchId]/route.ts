@@ -59,7 +59,12 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     if (!remainingMatches || remainingMatches.length === 0) {
       await supabase
         .from('invoices')
-        .update({ status: 'uploaded' })
+        .update({
+          status: 'uploaded',
+          processed_at: null,
+          processed_by: null,
+          confirmed_at: null
+        })
         .eq('id', match.invoice_id)
     }
 

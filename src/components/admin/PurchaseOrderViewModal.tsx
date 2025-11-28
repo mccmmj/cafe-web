@@ -166,7 +166,7 @@ const STATUS_CONFIG: Record<string, { color: string; label: string; icon: any }>
   sent: { color: 'bg-indigo-100 text-indigo-800', label: 'Sent to Supplier', icon: Send },
   received: { color: 'bg-green-100 text-green-800', label: 'Received', icon: Truck },
   cancelled: { color: 'bg-red-100 text-red-800', label: 'Cancelled', icon: X },
-  confirmed: { color: 'bg-blue-100 text-blue-800', label: 'Approved', icon: CheckCircle }
+  confirmed: { color: 'bg-emerald-100 text-emerald-800', label: 'Confirmed', icon: CheckCircle }
 }
 
 const PurchaseOrderViewModal = ({ order, isOpen, onClose }: PurchaseOrderViewModalProps) => {
@@ -772,12 +772,34 @@ const PurchaseOrderViewModal = ({ order, isOpen, onClose }: PurchaseOrderViewMod
     }
   }
 
+  const invoiceSummary = useMemo(() => {
+    let confirmed = 0
+    let parsedOrMatched = 0
+    let totalAmount = 0
+    invoiceMatches.forEach(m => {
+      const status = m.invoices?.status
+      if (status === 'confirmed') confirmed += 1
+      if (status === 'parsed' || status === 'matched') parsedOrMatched += 1
+      totalAmount += Number(m.invoices?.total_amount || 0)
+    })
+    return {
+      totalLinked: invoiceMatches.length,
+      confirmed,
+      parsedOrMatched,
+      totalAmount
+    }
+  }, [invoiceMatches])
+
   const selectedOutstanding = outstandingItems.find(item => item.id === receiptForm.purchase_order_item_id) || null
 
   if (!isOpen || !orderState) return null
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    if (!dateString) return '—'
+    const localDate = dateString.includes('T')
+      ? new Date(dateString)
+      : new Date(`${dateString}T00:00:00`)
+    return localDate.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
       day: 'numeric'
@@ -785,6 +807,7 @@ const PurchaseOrderViewModal = ({ order, isOpen, onClose }: PurchaseOrderViewMod
   }
 
   const formatDateTime = (dateString: string) => {
+    if (!dateString) return '—'
     return new Date(dateString).toLocaleString('en-US', {
       year: 'numeric',
       month: 'long',
@@ -1121,7 +1144,23 @@ const PurchaseOrderViewModal = ({ order, isOpen, onClose }: PurchaseOrderViewMod
                   <FileText className="w-5 h-5 text-primary-600" />
                   <h3 className="text-lg font-medium text-gray-900">Supplier Invoices</h3>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-1">
+                      <span className="font-semibold text-gray-900">{invoiceSummary.totalLinked}</span> linked
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-emerald-700">
+                      <CheckCircle className="w-3 h-3" />
+                      {invoiceSummary.confirmed} confirmed
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-blue-700">
+                      <FileText className="w-3 h-3" />
+                      {invoiceSummary.parsedOrMatched} parsed/matched
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-1 text-indigo-700">
+                      Total {formatCurrency(invoiceSummary.totalAmount)}
+                    </span>
+                  </div>
                   <Button
                     variant="outline"
                     onClick={handleOpenLinkInvoice}
@@ -1523,7 +1562,11 @@ const PurchaseOrderViewModal = ({ order, isOpen, onClose }: PurchaseOrderViewMod
           suppliers={[{ id: orderState.supplier_id, name: orderState.supplier_name, is_active: true }]}
           defaultSupplierId={orderState.supplier_id}
           lockSupplier
-          defaultInvoiceNumber={orderState.order_number}
+          defaultInvoiceNumber={
+            orderState.order_number
+              ? `${orderState.order_number}-${(invoiceSummary.totalLinked || 0) + 1}`
+              : `INV-${Date.now().toString().slice(-6)}`
+          }
           defaultInvoiceDate={todayIso}
           purchaseOrderId={orderState.id}
         />

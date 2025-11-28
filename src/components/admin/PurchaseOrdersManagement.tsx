@@ -125,12 +125,12 @@ const STATUS_CONFIG: Record<string, { color: string; label: string; icon: any }>
   approved: { color: 'bg-blue-100 text-blue-800', label: 'Approved', icon: CheckCircle },
   sent: { color: 'bg-indigo-100 text-indigo-800', label: 'Sent to Supplier', icon: Send },
   received: { color: 'bg-green-100 text-green-800', label: 'Received', icon: Package },
+  confirmed: { color: 'bg-emerald-100 text-emerald-800', label: 'Confirmed', icon: CheckCircle },
   cancelled: { color: 'bg-red-100 text-red-800', label: 'Cancelled', icon: XCircle }
 }
 
 const getStatusConfig = (status: PurchaseOrderStatus) => {
-  const canonical = status === 'confirmed' ? 'approved' : status
-  return STATUS_CONFIG[canonical] || STATUS_CONFIG.draft
+  return STATUS_CONFIG[status] || STATUS_CONFIG.draft
 }
 
 const PurchaseOrdersManagement = ({ 
@@ -569,8 +569,12 @@ const PurchaseOrdersManagement = ({
     }
   }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+  const formatDate = (dateString?: string | null) => {
+    if (!dateString) return '—'
+    const localDate = dateString.includes('T')
+      ? new Date(dateString)
+      : new Date(`${dateString}T00:00:00`)
+    return localDate.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric'
@@ -620,15 +624,15 @@ const PurchaseOrdersManagement = ({
     approved: 0,
     sent: 0,
     received: 0,
+    confirmed: 0,
     cancelled: 0,
     all: orders.length,
     overdue: 0
   }
 
   orders.forEach(order => {
-    const canonical = order.status === 'confirmed' ? 'approved' : order.status
-    if (statusCounts[canonical] !== undefined) {
-      statusCounts[canonical] += 1
+    if (statusCounts[order.status] !== undefined) {
+      statusCounts[order.status] += 1
     }
   })
 
@@ -669,7 +673,7 @@ const PurchaseOrdersManagement = ({
           <Button
             variant="outline"
             size="sm"
-            className="lg:hidden"
+            className="md:hidden"
             onClick={() => setFiltersOpen(prev => !prev)}
           >
             <Filter className="w-4 h-4 mr-1" />
@@ -677,11 +681,11 @@ const PurchaseOrdersManagement = ({
           </Button>
         </div>
 
-        <div className={`${filtersOpen ? 'mt-4 block' : 'mt-4 hidden'} lg:block`}>
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 flex-1">
+        <div className={`${filtersOpen ? 'mt-4 block' : 'mt-4 hidden'} md:block`}>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2 flex-1">
               {/* Status Filter */}
-              <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0">
+              <div className="flex items-center gap-2 flex-wrap pb-2 sm:pb-0">
                 {Object.entries(STATUS_CONFIG).map(([status, config]) => (
                   <button
                     key={status}
@@ -801,7 +805,7 @@ const PurchaseOrdersManagement = ({
                   
                   return (
                     <tr key={order.id} className={`hover:bg-gray-50 ${overdue ? 'bg-red-50' : ''}`}>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-6 py-4 align-top whitespace-normal break-words">
                         <div>
                           <div className="text-sm font-medium text-gray-900">
                             #{order.order_number}
@@ -822,7 +826,7 @@ const PurchaseOrdersManagement = ({
                         </div>
                       </td>
                       
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-6 py-4 align-top whitespace-normal break-words">
                         <div className="text-sm text-gray-900">{order.supplier_name}</div>
                         {totalOrdered > 0 && totalReceived > 0 && totalReceived < totalOrdered && (
                           <div className="text-xs text-indigo-600 mt-1">
@@ -838,7 +842,7 @@ const PurchaseOrdersManagement = ({
                         </span>
                       </td>
                       
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 whitespace-normal text-sm text-gray-500">
                         <div>Ordered: {formatDate(order.order_date)}</div>
                         {order.expected_delivery_date && (
                           <div>Expected: {formatDate(order.expected_delivery_date)}</div>
@@ -857,9 +861,9 @@ const PurchaseOrdersManagement = ({
                         {formatCurrency(order.total_amount)}
                       </td>
                       
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <td className="px-6 py-4 whitespace-normal text-sm font-medium">
                         {/* Desktop / wide: show inline buttons */}
-                        <div className="hidden md:flex flex-wrap items-center gap-2">
+                        <div className="hidden lg:flex flex-wrap items-center gap-2">
                           <Button 
                             variant="ghost" 
                             size="sm"
@@ -996,7 +1000,7 @@ const PurchaseOrdersManagement = ({
                         </div>
 
                         {/* Mobile / narrow: kebab menu */}
-                        <div className="md:hidden relative">
+                        <div className="lg:hidden relative">
                           <Button
                             variant="ghost"
                             size="sm"

@@ -15,16 +15,15 @@ export const VALID_STATUSES = new Set<string>(RAW_STATUSES)
 const STATUS_TRANSITIONS: Record<string, string[]> = {
   draft: ['pending_approval', 'approved', 'cancelled'],
   pending_approval: ['approved', 'draft', 'cancelled'],
-  approved: ['sent', 'received', 'cancelled'],
-  confirmed: ['sent', 'received', 'cancelled'],
-  sent: ['received', 'approved', 'cancelled'],
-  received: [],
-  cancelled: []
+  approved: ['sent', 'received', 'confirmed', 'cancelled'],
+  confirmed: ['cancelled'],
+  sent: ['received', 'approved', 'confirmed', 'cancelled'],
+  received: ['confirmed', 'cancelled'],
+  cancelled: [],
 }
 
 export function canonicalStatus(status: string | null | undefined): string | null {
   if (!status) return null
-  if (status === 'confirmed') return 'approved'
   return status
 }
 

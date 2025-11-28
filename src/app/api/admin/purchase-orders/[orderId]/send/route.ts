@@ -238,7 +238,16 @@ export async function POST(
           currentStatus,
           targetStatus,
           admin.userId,
-          'Automatically marked as sent after emailing supplier'
+          `Automatically marked as sent after emailing supplier (Resend id: ${emailResponse.data?.id || 'n/a'}, to: ${recipients.join(',')}${cc.length ? `, cc: ${cc.join(',')}` : ''})`
+        )
+      } else {
+        await insertStatusHistory(
+          supabase,
+          order.id,
+          currentStatus,
+          currentStatus,
+          admin.userId,
+          `Email sent via Resend (id: ${emailResponse.data?.id || 'n/a'}, to: ${recipients.join(',')}${cc.length ? `, cc: ${cc.join(',')}` : ''})`
         )
       }
     }

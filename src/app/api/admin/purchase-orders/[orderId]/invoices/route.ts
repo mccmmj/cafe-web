@@ -203,16 +203,17 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const { data: existingMatch } = await supabase
       .from('order_invoice_matches')
-      .select('id')
+      .select(INVOICE_MATCH_SELECT)
       .eq('purchase_order_id', orderId)
       .eq('invoice_id', invoice_id)
       .maybeSingle()
 
     if (existingMatch) {
-      return NextResponse.json(
-        { error: 'Invoice already linked to this purchase order' },
-        { status: 409 }
-      )
+      // Idempotent response: if already linked, return existing match instead of failing
+      return NextResponse.json({
+        success: true,
+        match: existingMatch
+      })
     }
 
     const { data: insertedMatch, error: insertError } = await supabase
