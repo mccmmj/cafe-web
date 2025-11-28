@@ -21,7 +21,7 @@ const OUTPUT_DIR = path.join('data', 'purchase-orders')
 function parseArgs() {
   const args = minimist(process.argv.slice(2), {
     string: ['order', 'order-id', 'invoice', 'date', 'due-in', 'shipping', 'tax-rate', 'output-prefix'],
-    boolean: ['overwrite', 'generate-images'],
+    boolean: ['overwrite', 'generate-images', 'split-two'],
     alias: {
       o: 'order',
       i: 'invoice',
@@ -33,7 +33,8 @@ function parseArgs() {
       'due-in': '30',
       overwrite: false,
       'output-prefix': null,
-      'generate-images': false
+      'generate-images': false,
+      'split-two': false
     }
   })
 
@@ -66,7 +67,8 @@ function parseArgs() {
     taxRate,
     overwrite: Boolean(args.overwrite),
     outputPrefix,
-    generateImages: Boolean(args['generate-images'])
+    generateImages: Boolean(args['generate-images']),
+    splitIntoTwo: Boolean(args['split-two'])
   }
 }
 
@@ -132,6 +134,27 @@ function writeFileSafely(filePath, contents, overwrite) {
 
 function formatCurrency(amount) {
   return amount.toFixed(2)
+}
+
+function calculateTotals(items, shippingAmount, taxRate) {
+  const subtotal = items.reduce((sum, item) => sum + item.quantity_ordered * (item.unit_cost || 0), 0)
+  const tax = taxRate > 0 ? subtotal * taxRate : 0
+  return {
+    subtotal,
+    shipping: shippingAmount,
+    taxRate,
+    tax,
+    grandTotal: subtotal + shippingAmount + tax
+  }
+}
+
+function shuffle(array) {
+  const copy = [...array]
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[copy[i], copy[j]] = [copy[j], copy[i]]
+  }
+  return copy
 }
 
 function buildRawInvoiceText(order, supplierName, billingAddress, invoiceInfo, totals) {
@@ -237,17 +260,7 @@ async function main() {
       name: 'Unknown Supplier'
     }
 
-    const totals = {
-      subtotal: order.purchase_order_items.reduce((sum, item) => sum + item.quantity_ordered * (item.unit_cost || 0), 0),
-      shipping: options.shippingAmount,
-      taxRate: options.taxRate,
-      tax: 0,
-      grandTotal: 0
-    }
-    totals.tax = totals.taxRate > 0 ? totals.subtotal * totals.taxRate : 0
-    totals.grandTotal = totals.subtotal + totals.shipping + totals.tax
-
-    const files = buildFiles(options.outputPrefix)
+    const filesForSnapshot = buildFiles(options.outputPrefix)
 
     const poSnapshot = {
       id: order.id,
@@ -267,7 +280,7 @@ async function main() {
       }))
     }
 
-    writeFileSafely(files.poSnapshot, JSON.stringify(poSnapshot, null, 2), options.overwrite)
+    writeFileSafely(filesForSnapshot.poSnapshot, JSON.stringify(poSnapshot, null, 2), options.overwrite)
 
     const billingAddress = [
       'KP3 Cafe',
@@ -275,50 +288,98 @@ async function main() {
       'Denver, CO 80202'
     ]
 
-    const invoiceInfo = {
+    const baseInvoiceInfo = {
       invoiceNumber: options.invoiceNumber,
       invoiceDate: options.invoiceDate,
       dueDate: options.dueDate
     }
 
-    const rawText = buildRawInvoiceText(order, supplier.name || 'Supplier', billingAddress, invoiceInfo, totals)
-    writeFileSafely(files.rawInvoice, rawText, options.overwrite)
+    const generateArtifacts = (itemsSubset, invoiceInfo, prefix, shippingAmountShare) => {
+      const clonedOrder = { ...order, purchase_order_items: itemsSubset }
+      const totals = calculateTotals(itemsSubset, shippingAmountShare, options.taxRate)
+      const files = buildFiles(prefix)
 
-    const parsedInvoice = buildParsedInvoice(order, supplier, invoiceInfo, totals, files)
-    writeFileSafely(files.parsedInvoice, JSON.stringify(parsedInvoice, null, 2), options.overwrite)
+      const rawText = buildRawInvoiceText(clonedOrder, supplier.name || 'Supplier', billingAddress, invoiceInfo, totals)
+      writeFileSafely(files.rawInvoice, rawText, options.overwrite)
 
-    const pdfResult = spawnSync('node', [
-      path.join('scripts', 'generate-mock-invoice-pdf.js'),
-      '--input', files.rawInvoice,
-      '--output', files.pdfInvoice
-    ], { stdio: 'inherit' })
+      const parsedInvoice = buildParsedInvoice(clonedOrder, supplier, invoiceInfo, totals, files)
+      writeFileSafely(files.parsedInvoice, JSON.stringify(parsedInvoice, null, 2), options.overwrite)
 
-    if (pdfResult.status !== 0) {
-      throw new Error('Failed to generate PDF invoice')
-    }
-
-    if (options.generateImages) {
-      const pythonResult = spawnSync(process.env.PYTHON || 'python', [
-        path.join('scripts', 'render_invoice_images.py'),
-        '--input', files.pdfInvoice,
-        '--png', files.pngInvoice,
-        '--jpg', files.jpgInvoice
+      const pdfResult = spawnSync('node', [
+        path.join('scripts', 'generate-mock-invoice-pdf.js'),
+        '--input', files.rawInvoice,
+        '--output', files.pdfInvoice
       ], { stdio: 'inherit' })
 
-      if (pythonResult.status !== 0) {
-        console.warn('Warning: failed to generate PNG/JPG rendition. Check dependencies (PyMuPDF/pdf2image).')
+      if (pdfResult.status !== 0) {
+        throw new Error('Failed to generate PDF invoice')
       }
+
+      if (options.generateImages) {
+        const pythonResult = spawnSync(process.env.PYTHON || 'python', [
+          path.join('scripts', 'render_invoice_images.py'),
+          '--input', files.pdfInvoice,
+          '--png', files.pngInvoice,
+          '--jpg', files.jpgInvoice
+        ], { stdio: 'inherit' })
+
+        if (pythonResult.status !== 0) {
+          console.warn('Warning: failed to generate PNG/JPG rendition. Check dependencies (PyMuPDF/pdf2image).')
+        }
+      }
+
+      return files
+    }
+
+    let createdFiles = []
+
+    if (options.splitIntoTwo && order.purchase_order_items.length > 1) {
+      const shuffled = shuffle(order.purchase_order_items)
+      const splitIndex = Math.max(1, Math.floor(shuffled.length / 2))
+      const itemsA = shuffled.slice(0, splitIndex)
+      const itemsB = shuffled.slice(splitIndex)
+      const shippingA = options.shippingAmount / 2
+      const shippingB = options.shippingAmount - shippingA
+
+      createdFiles.push(
+        generateArtifacts(
+          itemsA,
+          { ...baseInvoiceInfo, invoiceNumber: `${baseInvoiceInfo.invoiceNumber}-A` },
+          `${options.outputPrefix}_part1`,
+          shippingA
+        )
+      )
+      createdFiles.push(
+        generateArtifacts(
+          itemsB,
+          { ...baseInvoiceInfo, invoiceNumber: `${baseInvoiceInfo.invoiceNumber}-B` },
+          `${options.outputPrefix}_part2`,
+          shippingB
+        )
+      )
+    } else {
+      createdFiles.push(
+        generateArtifacts(
+          order.purchase_order_items,
+          baseInvoiceInfo,
+          options.outputPrefix,
+          options.shippingAmount
+        )
+      )
     }
 
     console.log('\nArtifacts created:')
-    console.log(`  • PO Snapshot: ${files.poSnapshot}`)
-    console.log(`  • Invoice Raw Text: ${files.rawInvoice}`)
-    console.log(`  • Invoice Parsed JSON: ${files.parsedInvoice}`)
-    console.log(`  • Invoice PDF: ${files.pdfInvoice}`)
-    if (options.generateImages) {
-      console.log(`  • Invoice PNG: ${files.pngInvoice}`)
-      console.log(`  • Invoice JPG: ${files.jpgInvoice}`)
-    }
+    console.log(`  • PO Snapshot: ${filesForSnapshot.poSnapshot}`)
+    createdFiles.forEach((files, idx) => {
+      const label = createdFiles.length > 1 ? ` (part ${idx + 1})` : ''
+      console.log(`  • Invoice Raw Text${label}: ${files.rawInvoice}`)
+      console.log(`  • Invoice Parsed JSON${label}: ${files.parsedInvoice}`)
+      console.log(`  • Invoice PDF${label}: ${files.pdfInvoice}`)
+      if (options.generateImages) {
+        console.log(`  • Invoice PNG${label}: ${files.pngInvoice}`)
+        console.log(`  • Invoice JPG${label}: ${files.jpgInvoice}`)
+      }
+    })
   } catch (error) {
     console.error('Failed to create invoice mock:', error.message)
     process.exit(1)

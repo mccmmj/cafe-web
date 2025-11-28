@@ -186,20 +186,22 @@ export async function PUT(
     if (linkedOrders && linkedOrders.length > 0) {
       for (const link of linkedOrders) {
         if (!link.purchase_order_id) continue
+        const nowIso = new Date().toISOString()
         const { error: poError } = await supabase
           .from('purchase_orders')
           .update({
-            status: 'received',
-            received_at: new Date().toISOString(),
-            notes: `Received via invoice ${invoice.invoice_number}`
+            status: 'confirmed',
+            confirmed_at: nowIso,
+            received_at: nowIso,
+            notes: `Confirmed via invoice ${invoice.invoice_number}`
           })
           .eq('id', link.purchase_order_id)
-          .in('status', ['sent', 'confirmed'])
+          .in('status', ['sent', 'approved', 'received', 'confirmed'])
 
         if (poError) {
           console.error(`Failed to update purchase order ${link.purchase_order_id}:`, poError)
         } else {
-          console.log('✅ Marked purchase order as received:', link.purchase_order_id)
+          console.log('✅ Marked purchase order as confirmed:', link.purchase_order_id)
         }
       }
     }

@@ -355,7 +355,10 @@ const PurchaseOrderModal = ({ order, isOpen, onClose }: PurchaseOrderModalProps)
       }
     }
 
-    saveMutation.mutate(formData)
+    saveMutation.mutate({
+      ...formData,
+      expected_delivery_date: formData.expected_delivery_date || ''
+    })
   }
 
 const addItem = () => {

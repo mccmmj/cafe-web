@@ -22,6 +22,13 @@ Context: Source prompt `prompts/inv_mgmt_updates.md`
 - **Invoice re-upload resilience**: After unlink, permit new upload; add explicit “Replace invoice” flow.
 - **Email delivery feedback**: Capture RESEND status/ID; show delivered/bounced/pending on PO list/detail. Add optional Supabase SMTP sender toggle + health check.
 
+## Phase 2 – Invoice resilience & partial coverage
+- Allow multiple invoices per PO to support split deliveries; PO can be partially confirmed until all items are covered.
+- Upload: if an invoice with the same supplier + invoice_number exists and is not confirmed, replace/update the existing row instead of failing; only block when status is confirmed.
+- Unlink: removing a match should revert the invoice to `uploaded` when it has no remaining matches so it can be reused.
+- PO detail: list multiple invoices with statuses; allow unlink per invoice; show coverage (received vs ordered) and keep PO in partial state until fully covered.
+- Confirmation: confirming an invoice updates stock/coverage; PO transitions to fully received only when coverage is complete (or manually overridden).
+
 ## Backend/Data Tasks
 - Schema: add `inventory_item_cost_history`, `inventory_items.deleted_at`, `inventory_items.pack_size` (done), composite unique (square_item_id, pack_size) (done), `purchase_order_items.excluded`, `purchase_order_items.ordered_pack_qty` (done), `purchase_order_items.pack_size` (done), `po_email_logs` with provider/status.
 - API: inventory POST/PATCH handles pack_size & soft delete; PO endpoints support duplicate-from-id, pack quantities, item exclusion, cost updates; invoice unlink clears references; email send logs provider responses.

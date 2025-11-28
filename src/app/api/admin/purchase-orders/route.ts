@@ -48,11 +48,7 @@ export async function GET(request: NextRequest) {
 
     // Filter by status
     if (status && status !== 'all') {
-      if (status === 'approved') {
-        query = query.in('status', ['approved', 'confirmed'])
-      } else {
-        query = query.eq('status', status)
-      }
+      query = query.eq('status', status)
     }
 
     // Filter by date

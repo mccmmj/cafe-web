@@ -16,10 +16,11 @@ Prepared: 2025-11-23
 - Soft delete/archive inventory items: 🟢
 - Pack-size awareness & stock math: 🟢
 - Unit cost calculator & history: 🟢
-- Invoice unlink/re-upload resilience: ⚪
-- Responsive PO table actions: ⚪
-- Email delivery feedback/logging: ⚪
-- Tests & lint for new flows: ⚪
+- Invoice unlink/re-upload resilience: 🟡
+- Responsive PO table actions: 🟡
+- Email delivery feedback/logging: 🟡 (not started; needs provider webhook + PO UI surfacing)
+- Tests & lint for new flows: 🟢
+- PO confirmed state and visibility: 🟢
 
 ## Notes
 - Report will be updated as each item moves to in-progress/done and when code changes land.
@@ -31,3 +32,4 @@ Prepared: 2025-11-23
   - Surface recent cost history (last 5 changes) in inventory detail drawer and PO line hover, with ability to revert to a prior value. ✅
   - Invoice confirmation writes cost history when it updates unit_cost; must not regress current_stock. ✅
   - Validation: unit_cost >= 0, pack_cost >= 0; prevents saving if required data missing. ✅
+- Invoice resilience — current work: upload endpoint now reuses/replaces an existing invoice (same supplier + number) when it is not confirmed, resetting file, parsing state, and invoice items so re-uploads after unlink do not fail on uniqueness. Confirmed invoices remain protected.

@@ -63,19 +63,28 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient()
 
     // Check for duplicate invoice (only if supplier_id is provided)
+    let existingInvoice: {
+      id: string
+      status: string
+      file_path: string | null
+    } | null = null
+
     if (supplier_id) {
-      const { data: existingInvoice } = await supabase
+      const { data } = await supabase
         .from('invoices')
-        .select('id')
+        .select('id, status, file_path')
         .eq('supplier_id', supplier_id)
         .eq('invoice_number', invoice_number)
-        .single()
+        .maybeSingle()
 
-      if (existingInvoice) {
-        return NextResponse.json(
-          { error: 'Invoice with this number already exists for this supplier' },
-          { status: 409 }
-        )
+      if (data) {
+        existingInvoice = data
+        if (data.status === 'confirmed') {
+          return NextResponse.json(
+            { error: 'Invoice with this number already exists for this supplier' },
+            { status: 409 }
+          )
+        }
       }
     }
 
@@ -116,39 +125,117 @@ export async function POST(request: NextRequest) {
 
     const file_url = urlData.publicUrl
 
-    // Create invoice record
-    const { data: newInvoice, error: dbError } = await supabase
-      .from('invoices')
-      .insert({
-        supplier_id: supplier_id || null,
-        invoice_number,
-        invoice_date,
-        total_amount: 0, // Will be updated after parsing
-        file_url,
-        file_path: uniqueFileName,
-        file_name: file.name,
-        file_type: file.type,
-        file_size: file.size,
-        status: 'uploaded',
-        created_by: (authResult as any).userId
-      })
-      .select(`
-        id,
-        invoice_number,
-        invoice_date,
-        total_amount,
-        status,
-        file_name,
-        file_type,
-        file_size,
-        file_url,
-        created_at,
-        suppliers (
+    // When an invoice already exists (non-confirmed), replace it in-place; otherwise insert.
+    let newInvoice: any
+    let dbError: any
+
+    if (existingInvoice) {
+      // Remove any previous file so we do not leave stale blobs around
+      if (existingInvoice.file_path) {
+        await supabase.storage.from('invoices').remove([existingInvoice.file_path])
+      }
+
+      // Clear matches and items so the new upload starts clean
+      const { error: deleteMatchesError } = await supabase
+        .from('order_invoice_matches')
+        .delete()
+        .eq('invoice_id', existingInvoice.id)
+
+      if (deleteMatchesError) {
+        console.error('Error clearing invoice matches before replacement:', deleteMatchesError)
+      }
+
+      // Reset invoice content so it can be re-parsed cleanly
+      const { error: deleteItemsError } = await supabase
+        .from('invoice_items')
+        .delete()
+        .eq('invoice_id', existingInvoice.id)
+
+      if (deleteItemsError) {
+        console.error('Error clearing invoice items before replacement:', deleteItemsError)
+      }
+
+      const { data, error } = await supabase
+        .from('invoices')
+        .update({
+          invoice_number,
+          supplier_id: supplier_id || null,
+          invoice_date,
+          total_amount: 0,
+          file_url,
+          file_path: uniqueFileName,
+          file_name: file.name,
+          file_type: file.type,
+          file_size: file.size,
+          status: 'uploaded',
+          raw_text: null,
+          clean_text: null,
+          text_analysis: {},
+          parsed_data: null,
+          parsing_confidence: null,
+          parsing_error: null,
+          processed_at: null,
+          processed_by: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existingInvoice.id)
+        .select(`
           id,
-          name
-        )
-      `)
-      .single()
+          invoice_number,
+          invoice_date,
+          total_amount,
+          status,
+          file_name,
+          file_type,
+          file_size,
+          file_url,
+          created_at,
+          suppliers (
+            id,
+            name
+          )
+        `)
+        .single()
+
+      newInvoice = data
+      dbError = error
+    } else {
+      const { data, error } = await supabase
+        .from('invoices')
+        .insert({
+          supplier_id: supplier_id || null,
+          invoice_number,
+          invoice_date,
+          total_amount: 0, // Will be updated after parsing
+          file_url,
+          file_path: uniqueFileName,
+          file_name: file.name,
+          file_type: file.type,
+          file_size: file.size,
+          status: 'uploaded',
+          created_by: (authResult as any).userId
+        })
+        .select(`
+          id,
+          invoice_number,
+          invoice_date,
+          total_amount,
+          status,
+          file_name,
+          file_type,
+          file_size,
+          file_url,
+          created_at,
+          suppliers (
+            id,
+            name
+          )
+        `)
+        .single()
+
+      newInvoice = data
+      dbError = error
+    }
 
     if (dbError) {
       // If database insert fails, clean up uploaded file
@@ -162,7 +249,12 @@ export async function POST(request: NextRequest) {
 
       console.error('Error creating invoice record:', dbError)
       return NextResponse.json(
-        { error: 'Failed to create invoice record', details: dbError.message },
+        {
+          error: 'Failed to create invoice record',
+          details: dbError.message,
+          code: dbError.code,
+          hint: dbError.hint
+        },
         { status: 500 }
       )
     }

@@ -18,7 +18,9 @@ import {
   CloudDownload,
   Building2,
   ClipboardList,
-  Settings
+  Settings,
+  MoreVertical,
+  CheckCircle as CheckCircleIcon
 } from 'lucide-react'
 import InventoryEditModal from './InventoryEditModal'
 import InventoryCreateModal from './InventoryCreateModal'
@@ -74,6 +76,7 @@ const InventoryManagement = () => {
   const [restockModalOpen, setRestockModalOpen] = useState(false)
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null)
   const [calculatorDefaults, setCalculatorDefaults] = useState<{ packSize?: number; packPrice?: number }>({ packSize: 1, packPrice: 0 })
+  const [openInventoryActionMenuId, setOpenInventoryActionMenuId] = useState<string | null>(null)
   
   const queryClient = useQueryClient()
 
@@ -688,8 +691,8 @@ const InventoryManagement = () => {
                           <td className="px-4 py-4 text-sm text-gray-500 sm:px-6 sm:whitespace-nowrap">
                             {item.supplier_name || 'No supplier'}
                           </td>
-                          <td className="px-4 py-4 text-sm font-medium sm:px-6 sm:whitespace-nowrap">
-                            <div className="flex flex-wrap items-center gap-2">
+                          <td className="px-4 py-4 text-sm font-medium sm:px-6 sm:whitespace-nowrap relative">
+                            <div className="hidden md:flex flex-wrap items-center gap-2">
                               <Button 
                                 variant="ghost" 
                                 size="sm" 
@@ -726,6 +729,52 @@ const InventoryManagement = () => {
                                 >
                                   Archive
                                 </Button>
+                              )}
+                            </div>
+
+                            <div className="md:hidden relative">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setOpenInventoryActionMenuId(prev => prev === item.id ? null : item.id)}
+                                className="text-gray-700"
+                              >
+                                <MoreVertical className="w-4 h-4" />
+                              </Button>
+                              {openInventoryActionMenuId === item.id && (
+                                <div className="absolute right-0 mt-2 w-44 rounded-md border border-gray-200 bg-white shadow-lg z-20">
+                                  <div className="py-1">
+                                    <button
+                                      className="w-full text-left px-3 py-2 text-sm text-primary-600 hover:bg-gray-50 flex items-center gap-2"
+                                      onClick={() => { setOpenInventoryActionMenuId(null); handleEditItem(item) }}
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      className="w-full text-left px-3 py-2 text-sm text-green-600 hover:bg-gray-50 flex items-center gap-2"
+                                      onClick={() => { setOpenInventoryActionMenuId(null); handleRestockItem(item) }}
+                                    >
+                                      Restock
+                                    </button>
+                                    {item.deleted_at ? (
+                                      <button
+                                        className="w-full text-left px-3 py-2 text-sm text-emerald-600 hover:bg-gray-50 flex items-center gap-2"
+                                        onClick={() => { setOpenInventoryActionMenuId(null); handleRestoreItem(item) }}
+                                        disabled={restoreItemMutation.isPending}
+                                      >
+                                        Restore
+                                      </button>
+                                    ) : (
+                                      <button
+                                        className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-gray-50 flex items-center gap-2"
+                                        onClick={() => { setOpenInventoryActionMenuId(null); handleArchiveItem(item) }}
+                                        disabled={archiveItemMutation.isPending}
+                                      >
+                                        Archive
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
                               )}
                             </div>
                           </td>

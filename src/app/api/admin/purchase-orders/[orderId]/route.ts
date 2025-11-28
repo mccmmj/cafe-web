@@ -213,6 +213,10 @@ export async function PATCH(
       updateData.actual_delivery_date = new Date().toISOString()
     }
 
+    if (targetStatus === 'confirmed' && !body.confirmed_at) {
+      updateData.confirmed_at = new Date().toISOString()
+    }
+
     const shouldUpdateSentMetadata =
       targetStatus === 'sent' ||
       body.sent_at !== undefined ||
