@@ -205,6 +205,7 @@ export async function PUT(request: NextRequest) {
       unit_type, 
       is_ingredient, 
       item_type,
+      square_item_id,
       auto_decrement,
       supplier_id, 
       location, 
@@ -246,6 +247,10 @@ export async function PUT(request: NextRequest) {
     if (unit_cost !== undefined) updateData.unit_cost = unit_cost
     if (pack_size !== undefined) updateData.pack_size = pack_size
     if (unit_type !== undefined) updateData.unit_type = unit_type
+    if (square_item_id !== undefined) {
+      const trimmed = typeof square_item_id === 'string' ? square_item_id.trim() : ''
+      updateData.square_item_id = trimmed || null
+    }
     if (is_ingredient !== undefined) updateData.is_ingredient = is_ingredient
     if (item_type !== undefined) updateData.item_type = item_type
     if (auto_decrement !== undefined) updateData.auto_decrement = auto_decrement

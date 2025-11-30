@@ -649,6 +649,9 @@ const InventoryManagement = () => {
                                 </div>
                               </div>
                               <p className="text-xs text-gray-500">{item.location}</p>
+                              <p className="text-xs text-gray-500">
+                                Square ID: {item.square_item_id ? item.square_item_id : 'None linked'}
+                              </p>
                             </div>
                           </td>
                           <td className="px-4 py-4 text-sm text-gray-900 sm:px-6 sm:whitespace-nowrap">
