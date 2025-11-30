@@ -49,6 +49,9 @@ export default function InventoryEditModal({ item, suppliers, isOpen, onClose }:
   const [formData, setFormData] = useState<Partial<InventoryItem>>({})
   const [packPrice, setPackPrice] = useState<string>('0')
   const [costHistory, setCostHistory] = useState<any[]>([])
+  const [squareResults, setSquareResults] = useState<any[]>([])
+  const [squareSearchLoading, setSquareSearchLoading] = useState(false)
+  const [squareSearchError, setSquareSearchError] = useState<string | null>(null)
   const queryClient = useQueryClient()
 
   useEffect(() => {
@@ -69,7 +72,8 @@ export default function InventoryEditModal({ item, suppliers, isOpen, onClose }:
         notes: item.notes || '',
         is_ingredient: item.is_ingredient,
         item_type: item.item_type || (item.is_ingredient ? 'ingredient' : 'prepackaged'),
-        auto_decrement: item.auto_decrement ?? false
+        auto_decrement: item.auto_decrement ?? false,
+        square_item_id: item.square_item_id || ''
       })
       setPackPrice(initialPackPrice.toString())
       loadCostHistory(item.id)
@@ -149,6 +153,48 @@ export default function InventoryEditModal({ item, suppliers, isOpen, onClose }:
 
   if (!isOpen || !item) return null
 
+  const handleSquareIdChange = (value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      square_item_id: value.trim()
+    }))
+  }
+
+  const handleSquareLookup = async () => {
+    const keyword = (formData.item_name || '').trim() || (formData.square_item_id || '').trim() || item.item_name.trim()
+    if (keyword.length < 2) {
+      toast.error('Enter at least 2 characters in the Item Name or Square ID field first')
+      return
+    }
+
+    setSquareSearchLoading(true)
+    setSquareSearchError(null)
+    try {
+      const response = await fetch(`/api/admin/inventory/square-search?q=${encodeURIComponent(keyword)}`)
+      const data = await response.json()
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to search Square catalog')
+      }
+      setSquareResults(data.results || [])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Square catalog search failed'
+      setSquareSearchError(message)
+      setSquareResults([])
+    } finally {
+      setSquareSearchLoading(false)
+    }
+  }
+
+  const handleSelectSquareResult = (result: any) => {
+    setFormData(prev => ({
+      ...prev,
+      square_item_id: result.variationId,
+      item_name: prev.item_name || result.itemName
+    }))
+    setSquareResults([])
+    toast.success('Linked Square catalog item')
+  }
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
@@ -212,6 +258,61 @@ export default function InventoryEditModal({ item, suppliers, isOpen, onClose }:
             </div>
           </div>
 
+          {/* Square item association */}
+          <div>
+            <div className="mb-1 flex items-center justify-between">
+              <label className="block text-sm font-medium text-gray-700">
+                Square Item ID
+              </label>
+              <button
+                type="button"
+                onClick={handleSquareLookup}
+                className="text-sm font-medium text-indigo-600 hover:text-indigo-800 disabled:opacity-50"
+                disabled={squareSearchLoading}
+              >
+                {squareSearchLoading ? 'Searching…' : 'Lookup from Square'}
+              </button>
+            </div>
+            <input
+              type="text"
+              value={formData.square_item_id || item.square_item_id || ''}
+              onChange={(e) => handleSquareIdChange(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              placeholder="Optional – link to Square catalog item"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Use lookup to search your Square catalog by item name or variation.
+            </p>
+            {squareSearchError && (
+              <p className="mt-1 text-sm text-red-600">{squareSearchError}</p>
+            )}
+            {squareResults.length > 0 && (
+              <div className="mt-3 rounded-lg border border-indigo-100 bg-indigo-50/70 text-sm text-gray-900">
+                {squareResults.map((result: any) => (
+                  <button
+                    key={result.variationId}
+                    type="button"
+                    onClick={() => handleSelectSquareResult(result)}
+                    className="flex w-full items-center justify-between border-b border-indigo-100 px-4 py-2 text-left last:border-b-0 hover:bg-indigo-100"
+                  >
+                    <div>
+                      <p className="font-medium">{result.itemName}</p>
+                      <p className="text-xs text-gray-600">
+                        Variation: {result.variationName}
+                        {result.sku ? ` • SKU ${result.sku}` : ''}
+                      </p>
+                    </div>
+                    {typeof result.price === 'number' && (
+                      <span className="text-xs font-semibold text-gray-800">
+                        ${result.price.toFixed(2)}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Cost & Units */}
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -222,14 +323,20 @@ export default function InventoryEditModal({ item, suppliers, isOpen, onClose }:
                 type="number"
                 min="1"
                 step="1"
-                value={formData.pack_size ?? 1}
+                value={formData.pack_size ?? ''}
                 onChange={(e) => {
-                  const newSize = Math.max(1, parseInt(e.target.value, 10) || 1)
+                  const parsed = parseInt(e.target.value, 10)
+                  if (Number.isNaN(parsed)) {
+                    setFormData(prev => ({ ...prev, pack_size: undefined }))
+                    return
+                  }
+                  const newSize = Math.max(1, parsed)
                   const packPriceNum = Number(packPrice) || 0
+                  const newUnit = newSize > 0 ? packPriceNum / newSize : (formData.unit_cost || 0)
                   setFormData(prev => ({
                     ...prev,
                     pack_size: newSize,
-                    unit_cost: newSize > 0 ? packPriceNum / newSize : prev.unit_cost
+                    unit_cost: Number.isFinite(newUnit) ? Number(newUnit.toFixed(2)) : prev.unit_cost
                   }))
                 }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
