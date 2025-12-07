@@ -20,6 +20,14 @@ let cachedTaxInfo: TaxInfo | null = null
 let lastFetchTime = 0
 const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
 
+interface CatalogTaxSummary {
+  tax_data?: {
+    enabled?: boolean
+    name?: string
+    percentage?: string
+  }
+}
+
 /**
  * Fetches tax configuration from Square API
  */
@@ -34,7 +42,7 @@ async function fetchTaxConfiguration(): Promise<TaxInfo> {
     const data = await response.json()
     
     // Extract tax rate from catalog taxes
-    const catalogTaxes = data.taxConfig?.catalogTaxes || []
+    const catalogTaxes: CatalogTaxSummary[] = data.taxConfig?.catalogTaxes || []
     
     if (catalogTaxes.length === 0) {
       return {
@@ -46,7 +54,7 @@ async function fetchTaxConfiguration(): Promise<TaxInfo> {
     }
     
     // Filter for enabled taxes and use the first one
-    const enabledTaxes = catalogTaxes.filter((t: any) => t.tax_data?.enabled === true)
+    const enabledTaxes = catalogTaxes.filter((tax): tax is CatalogTaxSummary & { tax_data: Required<CatalogTaxSummary['tax_data']> } => tax.tax_data?.enabled === true)
     const tax = enabledTaxes.length > 0 ? enabledTaxes[0] : catalogTaxes[0]
     
     if (!tax?.tax_data) {

@@ -2,16 +2,33 @@
 
 import { useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
+import Image from 'next/image'
 import { CheckCircle, Clock, MapPin, Phone, Mail, Calendar, CreditCard, Receipt, ArrowRight } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { toast } from 'react-hot-toast'
+import type { CartItem, CartSummary } from '@/types/cart'
+import type { CustomerInfoForm } from './CustomerInfo'
+
+export interface OrderPayload {
+  id: string
+  customerInfo: CustomerInfoForm
+  items: CartItem[]
+  subtotal: number
+  tax: number
+  total: number
+  orderType: CustomerInfoForm['orderType']
+  paymentMethod: CustomerInfoForm['paymentMethod']
+  status: 'pending' | 'confirmed'
+  createdAt: string
+  estimatedTime: string
+}
 
 interface OrderConfirmationProps {
   onPrevious: () => void
-  onConfirm: (order: any) => void
-  customerInfo: any
-  cart: any
+  onConfirm: (order: OrderPayload) => void
+  customerInfo: CustomerInfoForm
+  cart?: CartSummary
 }
 
 export default function OrderConfirmation({ onPrevious, onConfirm, customerInfo, cart }: OrderConfirmationProps) {
@@ -28,7 +45,7 @@ export default function OrderConfirmation({ onPrevious, onConfirm, customerInfo,
     
     try {
       // Generate order data
-      const orderData = {
+      const orderData: OrderPayload = {
         id: `ORD-${Date.now()}`,
         customerInfo,
         items: cart?.items || [],
@@ -39,8 +56,8 @@ export default function OrderConfirmation({ onPrevious, onConfirm, customerInfo,
         paymentMethod: customerInfo.paymentMethod,
         status: 'pending',
         createdAt: new Date().toISOString(),
-        estimatedTime: customerInfo.orderType === 'pickup' 
-          ? new Date(customerInfo.pickupTime).toISOString()
+      estimatedTime: customerInfo.orderType === 'pickup' && customerInfo.pickupTime
+        ? new Date(customerInfo.pickupTime).toISOString()
           : new Date(Date.now() + 15 * 60 * 1000).toISOString(), // 15 minutes from now for dine-in
       }
 
@@ -50,6 +67,7 @@ export default function OrderConfirmation({ onPrevious, onConfirm, customerInfo,
       onConfirm(orderData)
       toast.success('Order placed successfully!')
     } catch (error) {
+      console.error('Order confirmation failed', error)
       toast.error('Failed to place order. Please try again.')
     } finally {
       setIsSubmitting(false)
@@ -67,7 +85,7 @@ export default function OrderConfirmation({ onPrevious, onConfirm, customerInfo,
     })
   }
 
-  const estimatedReadyTime = customerInfo.orderType === 'pickup' 
+  const estimatedReadyTime = customerInfo.orderType === 'pickup' && customerInfo.pickupTime
     ? formatPickupTime(customerInfo.pickupTime)
     : 'In 15-20 minutes'
 
@@ -120,7 +138,7 @@ export default function OrderConfirmation({ onPrevious, onConfirm, customerInfo,
                 <span className="font-medium capitalize">{customerInfo.paymentMethod}</span>
               </div>
               
-              {customerInfo.orderType === 'pickup' && (
+              {customerInfo.orderType === 'pickup' && customerInfo.pickupTime && (
                 <div className="flex items-center space-x-2 md:col-span-2">
                   <Calendar className="w-4 h-4 text-gray-400" />
                   <span className="text-gray-600">Pickup Time:</span>
@@ -159,17 +177,20 @@ export default function OrderConfirmation({ onPrevious, onConfirm, customerInfo,
             </h3>
             
             <div className="space-y-4">
-              {cart?.items?.map((item: any) => (
-                <div key={item.id} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
+              {cart?.items?.map((item) => {
+                const itemTotal = item.totalPrice ?? ((item.price || 0) * (item.quantity || 1))
+                return (
+                  <div key={item.id} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
                   <div className="w-12 h-12 bg-gray-200 rounded-lg flex-shrink-0">
                     {item.imageUrl ? (
-                      <img 
-                        src={item.imageUrl} 
+                      <Image
+                        src={item.imageUrl}
                         alt={item.name}
+                        width={48}
+                        height={48}
                         className="w-full h-full object-cover rounded-lg"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement
-                          target.style.display = 'none'
+                        onError={(event) => {
+                          event.currentTarget.style.display = 'none'
                         }}
                       />
                     ) : (
@@ -200,11 +221,11 @@ export default function OrderConfirmation({ onPrevious, onConfirm, customerInfo,
 
                   <div className="text-right">
                     <div className="font-medium text-gray-900">
-                      ${item.totalPrice.toFixed(2)}
+                      ${itemTotal.toFixed(2)}
                     </div>
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
           </Card>
         </div>

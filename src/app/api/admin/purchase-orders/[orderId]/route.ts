@@ -4,6 +4,98 @@ import type { AdminAuthSuccess } from '@/lib/admin/middleware'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { canonicalStatus, canTransition, insertStatusHistory, isValidStatus } from '../status-utils'
 
+interface SupplierDetails {
+  name?: string | null
+  contact_person?: string | null
+  email?: string | null
+  phone?: string | null
+}
+
+interface OrderStatusEntry {
+  previous_status: string | null
+  new_status: string | null
+  changed_by: string | null
+  changed_at: string
+  note?: string | null
+}
+
+interface PurchaseOrderItemRow {
+  id: string
+  inventory_item_id: string
+  quantity_ordered: number
+  quantity_received: number
+  unit_cost?: number | null
+  unit_type?: string | null
+  pack_size?: number | null
+  ordered_pack_qty?: number | null
+  inventory_items?: {
+    item_name?: string | null
+    unit_type?: string | null
+    pack_size?: number | null
+    square_item_id?: string | null
+  } | null
+}
+
+interface PurchaseOrderRow {
+  id: string
+  order_number: string
+  sent_by?: string | null
+  suppliers?: SupplierDetails | null
+  purchase_order_items?: PurchaseOrderItemRow[]
+  purchase_order_status_history?: OrderStatusEntry[]
+  [key: string]: unknown
+}
+
+interface PurchaseOrderPatchBody {
+  status?: string
+  expected_delivery_date?: string | null
+  actual_delivery_date?: string | null
+  notes?: string | null
+  status_note?: string | null
+  sent_at?: string | null
+  sent_via?: string | null
+  sent_notes?: string | null
+  confirmed_at?: string | null
+}
+
+type PurchaseOrderUpdatePayload = Partial<{
+  status: string
+  expected_delivery_date: string | null
+  actual_delivery_date: string | null
+  notes: string | null
+  sent_at: string | null
+  sent_via: string | null
+  sent_notes: string | null
+  sent_by: string | null
+  confirmed_at: string | null
+}>
+
+interface PurchaseOrderPutItemInput {
+  inventory_item_id: string
+  quantity_ordered: number
+  quantity_received?: number
+  unit_cost?: number
+}
+
+interface SanitizedOrderItem extends PurchaseOrderPutItemInput {
+  quantity_received: number
+  unit_cost: number
+}
+
+type PurchaseOrderFullUpdatePayload = Partial<{
+  supplier_id: string
+  order_number: string
+  expected_delivery_date: string | null
+  notes: string | null
+  total_amount: number
+  actual_delivery_date: string | null
+  status: string
+  sent_at: string | null
+  sent_via: string | null
+  sent_notes: string | null
+  sent_by: string | null
+}>
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ orderId: string }> }
@@ -72,36 +164,38 @@ export async function GET(
     }
 
     // Transform data
-    const history = (order.purchase_order_status_history || [])
-      .map((entry: any) => ({
+    const typedOrder = order as PurchaseOrderRow
+
+    const history = (typedOrder.purchase_order_status_history || [])
+      .map((entry: OrderStatusEntry) => ({
         previous_status: entry.previous_status,
         new_status: entry.new_status,
         changed_by: entry.changed_by,
         changed_at: entry.changed_at,
         note: entry.note
       }))
-      .sort((a: any, b: any) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime())
+      .sort((a, b) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime())
 
     let sentByProfile: { full_name?: string | null; email?: string | null } | null = null
 
-    if (order.sent_by) {
+    if (typedOrder.sent_by) {
       const serviceSupabase = createServiceClient()
       const { data: profile } = await serviceSupabase
         .from('profiles')
         .select('full_name, email')
-        .eq('id', order.sent_by)
+        .eq('id', typedOrder.sent_by)
         .maybeSingle()
 
       sentByProfile = profile || null
     }
 
     const transformedOrder = {
-      ...order,
-      supplier_name: order.suppliers?.name || 'Unknown Supplier',
-      supplier_contact: order.suppliers?.contact_person,
-      supplier_email: order.suppliers?.email,
-      supplier_phone: order.suppliers?.phone,
-      items: order.purchase_order_items?.map((item: any) => ({
+      ...typedOrder,
+      supplier_name: typedOrder.suppliers?.name || 'Unknown Supplier',
+      supplier_contact: typedOrder.suppliers?.contact_person,
+      supplier_email: typedOrder.suppliers?.email,
+      supplier_phone: typedOrder.suppliers?.phone,
+      items: typedOrder.purchase_order_items?.map((item: PurchaseOrderItemRow) => ({
         ...item,
         inventory_item_name: item.inventory_items?.item_name || 'Unknown Item',
         unit_type: item.inventory_items?.unit_type || item.unit_type || 'each',
@@ -150,7 +244,7 @@ export async function PATCH(
       )
     }
 
-    const body = await request.json()
+    const body: PurchaseOrderPatchBody = await request.json()
     
     console.log('Updating purchase order:', orderId, body)
 
@@ -181,7 +275,7 @@ export async function PATCH(
     let targetStatus: string | undefined
 
     // Build update object with only provided fields
-    const updateData: any = {}
+    const updateData: PurchaseOrderUpdatePayload = {}
     if (body.status !== undefined) updateData.status = body.status
     if (body.expected_delivery_date !== undefined) updateData.expected_delivery_date = body.expected_delivery_date
     if (body.actual_delivery_date !== undefined) updateData.actual_delivery_date = body.actual_delivery_date
@@ -217,16 +311,27 @@ export async function PATCH(
       updateData.confirmed_at = new Date().toISOString()
     }
 
-    const shouldUpdateSentMetadata =
-      targetStatus === 'sent' ||
-      body.sent_at !== undefined ||
-      body.sent_via !== undefined ||
-      body.sent_notes !== undefined
+    const hasPatchSentAt = Object.prototype.hasOwnProperty.call(body, 'sent_at')
+    const hasPatchSentVia = Object.prototype.hasOwnProperty.call(body, 'sent_via')
+    const hasPatchSentNotes = Object.prototype.hasOwnProperty.call(body, 'sent_notes')
+    let patchSentAt: string | null | undefined
+    if (hasPatchSentAt) {
+      patchSentAt = body.sent_at ? new Date(body.sent_at).toISOString() : null
+    } else if (targetStatus === 'sent') {
+      patchSentAt = new Date().toISOString()
+    }
 
-    if (shouldUpdateSentMetadata) {
-      updateData.sent_at = body.sent_at ? new Date(body.sent_at).toISOString() : new Date().toISOString()
-      updateData.sent_via = body.sent_via || null
-      updateData.sent_notes = body.sent_notes || null
+    const patchTouchesSent = patchSentAt !== undefined || hasPatchSentVia || hasPatchSentNotes
+    if (patchTouchesSent) {
+      if (patchSentAt !== undefined) {
+        updateData.sent_at = patchSentAt
+      }
+      if (hasPatchSentVia) {
+        updateData.sent_via = body.sent_via || null
+      }
+      if (hasPatchSentNotes) {
+        updateData.sent_notes = body.sent_notes || null
+      }
       updateData.sent_by = admin.userId
     }
 
@@ -264,6 +369,7 @@ export async function PATCH(
           id,
           inventory_item_id,
           quantity_ordered,
+          quantity_received,
           ordered_pack_qty,
           pack_size,
           inventory_items!purchase_order_items_inventory_item_id_fkey (
@@ -277,13 +383,13 @@ export async function PATCH(
         console.error('Failed to fetch order items:', itemsError)
       } else if (orderItems && orderItems.length > 0) {
         // Update inventory levels for each item
-        for (const item of orderItems) {
-          const itemPackSize = (item as any).pack_size ?? (item as any).inventory_items?.pack_size ?? 1
+        for (const item of orderItems as PurchaseOrderItemRow[]) {
+          const itemPackSize = item.pack_size ?? item.inventory_items?.pack_size ?? 1
           const unitQuantity = (item.quantity_ordered ?? ((item.ordered_pack_qty || 0) * itemPackSize)) || 0
 
           // Determine target inventory item to increment (prefer single-unit item with same Square ID)
           let targetInventoryId = item.inventory_item_id
-          const squareId = (item as any).inventory_items?.square_item_id || null
+          const squareId = item.inventory_items?.square_item_id || null
           if (squareId) {
             const { data: baseItem } = await supabase
               .from('inventory_items')
@@ -384,14 +490,30 @@ export async function PUT(
       )
     }
 
-    const body = await request.json()
+    const body = await request.json() as {
+      supplier_id: string
+      order_number: string
+      expected_delivery_date?: string | null
+      notes?: string | null
+      items: PurchaseOrderPutItemInput[]
+      status?: string
+      sent_at?: string | null
+      sent_via?: string | null
+      sent_notes?: string | null
+      actual_delivery_date?: string | null
+      status_note?: string | null
+    }
     const {
       supplier_id,
       order_number,
       expected_delivery_date,
       notes,
       items,
-      status
+      status,
+      sent_at,
+      sent_via,
+      sent_notes,
+      actual_delivery_date
     } = body
 
     if (!supplier_id?.trim()) {
@@ -415,7 +537,7 @@ export async function PUT(
       )
     }
 
-    const sanitizedItems = items.map((item: any) => ({
+    const sanitizedItems: SanitizedOrderItem[] = items.map(item => ({
       inventory_item_id: item.inventory_item_id,
       quantity_ordered: Number(item.quantity_ordered) || 0,
       quantity_received: Number(item.quantity_received || 0) || 0,
@@ -476,7 +598,7 @@ export async function PUT(
 
     const subtotal = sanitizedItems.reduce((sum, item) => sum + item.quantity_ordered * item.unit_cost, 0)
 
-    const updatePayload: Record<string, any> = {
+    const updatePayload: PurchaseOrderFullUpdatePayload = {
       supplier_id,
       order_number: order_number.trim(),
       expected_delivery_date: expected_delivery_date || null,
@@ -484,12 +606,33 @@ export async function PUT(
       total_amount: subtotal
     }
 
+    if (Object.prototype.hasOwnProperty.call(body, 'actual_delivery_date')) {
+      updatePayload.actual_delivery_date = actual_delivery_date || null
+    }
+
     updatePayload.status = targetStatus
 
-    if (targetStatus === 'sent' || body.sent_at || body.sent_via || body.sent_notes) {
-      updatePayload.sent_at = body.sent_at ? new Date(body.sent_at).toISOString() : new Date().toISOString()
-      updatePayload.sent_via = body.sent_via || null
-      updatePayload.sent_notes = body.sent_notes || null
+    const hasSentAtProp = Object.prototype.hasOwnProperty.call(body, 'sent_at')
+    const hasSentViaProp = Object.prototype.hasOwnProperty.call(body, 'sent_via')
+    const hasSentNotesProp = Object.prototype.hasOwnProperty.call(body, 'sent_notes')
+    let normalizedSentAt: string | null | undefined
+    if (hasSentAtProp) {
+      normalizedSentAt = sent_at ? new Date(sent_at).toISOString() : null
+    } else if (targetStatus === 'sent') {
+      normalizedSentAt = new Date().toISOString()
+    }
+
+    const touchedSentMetadata = normalizedSentAt !== undefined || hasSentViaProp || hasSentNotesProp
+    if (touchedSentMetadata) {
+      if (normalizedSentAt !== undefined) {
+        updatePayload.sent_at = normalizedSentAt
+      }
+      if (hasSentViaProp) {
+        updatePayload.sent_via = sent_via || null
+      }
+      if (hasSentNotesProp) {
+        updatePayload.sent_notes = sent_notes || null
+      }
       updatePayload.sent_by = admin.userId
     }
 

@@ -1,18 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdminAuth } from '@/lib/admin/middleware'
+import { requireAdminAuth, isAdminAuthSuccess } from '@/lib/admin/middleware'
 import { createClient } from '@/lib/supabase/server'
+import type { PostgrestError } from '@supabase/supabase-js'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const ALLOWED_FILE_TYPES = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'image/webp']
 const ALLOWED_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg', '.webp']
 
+interface UploadedInvoiceRecord {
+  id: string
+  invoice_number: string
+  invoice_date: string
+  total_amount: number
+  status: string
+  file_name: string | null
+  file_type: string | null
+  file_size: number | null
+  file_url: string | null
+  created_at: string
+  suppliers: {
+    id: string
+    name: string | null
+  } | null
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Verify admin authentication
     const authResult = await requireAdminAuth(request)
-    if (authResult instanceof NextResponse) {
+    if (!isAdminAuthSuccess(authResult)) {
       return authResult
     }
+    const adminAuth = authResult
 
     const formData = await request.formData()
     const file = formData.get('file') as File
@@ -102,7 +121,7 @@ export async function POST(request: NextRequest) {
     const fileBuffer = new Uint8Array(buffer)
 
     // Upload file to Supabase Storage
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabase.storage
       .from('invoices')
       .upload(uniqueFileName, fileBuffer, {
         contentType: file.type,
@@ -126,8 +145,8 @@ export async function POST(request: NextRequest) {
     const file_url = urlData.publicUrl
 
     // When an invoice already exists (non-confirmed), replace it in-place; otherwise insert.
-    let newInvoice: any
-    let dbError: any
+    let newInvoice: UploadedInvoiceRecord | null = null
+    let dbError: PostgrestError | null = null
 
     if (existingInvoice) {
       // Remove any previous file so we do not leave stale blobs around
@@ -197,7 +216,7 @@ export async function POST(request: NextRequest) {
         `)
         .single()
 
-      newInvoice = data
+      newInvoice = data as UploadedInvoiceRecord | null
       dbError = error
     } else {
       const { data, error } = await supabase
@@ -213,7 +232,7 @@ export async function POST(request: NextRequest) {
           file_type: file.type,
           file_size: file.size,
           status: 'uploaded',
-          created_by: (authResult as any).userId
+          created_by: adminAuth.userId
         })
         .select(`
           id,
@@ -233,7 +252,7 @@ export async function POST(request: NextRequest) {
         `)
         .single()
 
-      newInvoice = data
+      newInvoice = data as UploadedInvoiceRecord | null
       dbError = error
     }
 
@@ -259,6 +278,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    if (!newInvoice) {
+      throw new Error('Invoice record not returned after upload')
+    }
+
     console.log('✅ Successfully uploaded invoice file and created record:', newInvoice.invoice_number)
 
     return NextResponse.json({
@@ -277,7 +300,7 @@ export async function POST(request: NextRequest) {
 }
 
 // Handle preflight CORS requests
-export async function OPTIONS(request: NextRequest) {
+export async function OPTIONS() {
   return new NextResponse(null, {
     status: 200,
     headers: {

@@ -3,24 +3,24 @@
 import { useState, useEffect, useCallback } from 'react'
 
 // Async state management hook
-export interface UseAsyncState<T> {
+export interface UseAsyncState<T, Args extends unknown[]> {
   data: T | null
   loading: boolean
   error: string | null
-  execute: (...args: any[]) => Promise<T | undefined>
+  execute: (...args: Args) => Promise<T | undefined>
   reset: () => void
 }
 
-export function useAsync<T = any>(
-  asyncFunction: (...args: any[]) => Promise<T>,
+export function useAsync<T = unknown, Args extends unknown[] = unknown[]>(
+  asyncFunction: (...args: Args) => Promise<T>,
   immediate: boolean = true
-): UseAsyncState<T> {
+): UseAsyncState<T, Args> {
   const [data, setData] = useState<T | null>(null)
   const [loading, setLoading] = useState<boolean>(immediate)
   const [error, setError] = useState<string | null>(null)
 
   const execute = useCallback(
-    async (...args: any[]): Promise<T | undefined> => {
+    async (...args: Args): Promise<T | undefined> => {
       setLoading(true)
       setError(null)
 
@@ -47,7 +47,7 @@ export function useAsync<T = any>(
 
   useEffect(() => {
     if (immediate) {
-      execute()
+      execute(...([] as unknown as Args))
     }
   }, [execute, immediate])
 
@@ -55,16 +55,16 @@ export function useAsync<T = any>(
 }
 
 // Hook for API calls with automatic retry
-export function useAsyncWithRetry<T = any>(
-  asyncFunction: (...args: any[]) => Promise<T>,
+export function useAsyncWithRetry<T = unknown, Args extends unknown[] = unknown[]>(
+  asyncFunction: (...args: Args) => Promise<T>,
   maxRetries: number = 3,
   retryDelay: number = 1000,
   immediate: boolean = true
-): UseAsyncState<T> & { retryCount: number; retryManual: () => void } {
+): UseAsyncState<T, Args> & { retryCount: number; retryManual: () => void } {
   const [retryCount, setRetryCount] = useState(0)
   
   const asyncWithRetry = useCallback(
-    async (...args: any[]): Promise<T> => {
+    async (...args: Args): Promise<T> => {
       let lastError: Error
       
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -88,12 +88,13 @@ export function useAsyncWithRetry<T = any>(
     [asyncFunction, maxRetries, retryDelay]
   )
 
-  const asyncState = useAsync(asyncWithRetry, immediate)
+  const asyncState = useAsync<T, Args>(asyncWithRetry, immediate)
+  const { execute } = asyncState
   
   const retryManual = useCallback(() => {
     setRetryCount(0)
-    asyncState.execute()
-  }, [asyncState.execute])
+    execute(...([] as unknown as Args))
+  }, [execute])
 
   return {
     ...asyncState,

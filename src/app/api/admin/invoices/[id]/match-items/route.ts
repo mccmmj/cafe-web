@@ -1,10 +1,74 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminAuth } from '@/lib/admin/middleware'
 import { createClient } from '@/lib/supabase/server'
-import { findItemMatches } from '@/lib/matching/item-matcher'
+import { findItemMatches, type InventoryItem as MatchingInventoryItem, type InvoiceItem as MatchingInvoiceItem, type ItemMatch } from '@/lib/matching/item-matcher'
 
 interface RouteContext {
   params: Promise<{ id: string }>
+}
+
+interface InvoiceSupplierRow {
+  id: string
+  name: string | null
+}
+
+interface InvoiceItemRow {
+  id: string
+  item_description: string
+  supplier_item_code: string | null
+  quantity: number
+  unit_price: number | null
+  package_size: string | null
+  unit_type: string | null
+  matched_item_id: string | null
+  match_confidence: number | null
+  match_method?: string | null
+}
+
+interface InvoiceWithItems {
+  id: string
+  suppliers: InvoiceSupplierRow[] | null
+  invoice_items: InvoiceItemRow[]
+}
+
+interface InvoiceItemWithInventory extends InvoiceItemRow {
+  inventory_items: Array<{
+    id: string
+    item_name: string
+    current_stock: number | null
+    unit_cost: number | null
+  }> | null
+}
+
+interface InvoiceWithItemMatches {
+  id: string
+  suppliers: InvoiceSupplierRow[] | null
+  invoice_items: InvoiceItemWithInventory[]
+}
+
+type InventoryMatchRow = {
+  id: string
+  item_name: string
+  current_stock: number | null
+  unit_cost: number | null
+  unit_type: string | null
+  pack_size: number | null
+  suppliers: Array<{ name?: string | null }> | null
+  square_item_id: string | null
+}
+
+interface InvoiceItemMatchResult {
+  invoice_item_id: string
+  item_description: string
+  supplier_item_code: string | null
+  quantity: number
+  unit_price: number | null
+  package_size: string | null
+  unit_type: string | null
+  current_match_id: string | null
+  current_confidence: number | null
+  suggested_matches: ItemMatch[]
+  best_match: ItemMatch | null
 }
 
 export async function POST(request: NextRequest, context: RouteContext) {
@@ -60,6 +124,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
       )
     }
 
+    const typedInvoice = invoice as InvoiceWithItems
+
     // Get all inventory items for matching
     const { data: inventoryItems, error: inventoryError } = await supabase
       .from('inventory_items')
@@ -85,44 +151,44 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     // Transform inventory items for matching
-  const formattedInventoryItems = (inventoryItems || []).map(item => ({
-    id: item.id,
-    item_name: item.item_name,
-    current_stock: item.current_stock,
-    unit_cost: item.unit_cost,
-    unit_type: item.unit_type,
-    pack_size: item.pack_size,
-    supplier_name: (item.suppliers as any)?.name,
-    square_item_id: item.square_item_id
-  }))
+    const inventoryRows = (inventoryItems ?? []) as InventoryMatchRow[]
+    const formattedInventoryItems: MatchingInventoryItem[] = inventoryRows.map(item => ({
+      id: item.id,
+      item_name: item.item_name,
+      current_stock: item.current_stock ?? 0,
+      unit_cost: item.unit_cost ?? 0,
+      unit_type: item.unit_type || 'unit',
+      pack_size: item.pack_size ?? undefined,
+      supplier_name: item.suppliers?.[0]?.name ?? undefined,
+      square_item_id: item.square_item_id ?? undefined
+    }))
 
     // Find matches for each invoice item
-    const itemMatches: any = {}
-    const matchingResults = []
+    const matchingResults: InvoiceItemMatchResult[] = []
 
-    for (const invoiceItem of invoice.invoice_items) {
+    for (const invoiceItem of typedInvoice.invoice_items) {
       console.log(`🔍 Finding matches for: ${invoiceItem.item_description}`)
 
+      const matchInput: MatchingInvoiceItem = {
+        id: invoiceItem.id,
+        item_description: invoiceItem.item_description,
+        supplier_item_code: invoiceItem.supplier_item_code ?? undefined,
+        quantity: invoiceItem.quantity,
+        unit_price: invoiceItem.unit_price ?? 0,
+        package_size: invoiceItem.package_size ?? undefined,
+        unit_type: invoiceItem.unit_type ?? undefined
+      }
+
       const matches = await findItemMatches(
-        {
-          id: invoiceItem.id,
-          item_description: invoiceItem.item_description,
-          supplier_item_code: invoiceItem.supplier_item_code,
-          quantity: invoiceItem.quantity,
-          unit_price: invoiceItem.unit_price,
-          package_size: invoiceItem.package_size,
-          unit_type: invoiceItem.unit_type
-        },
+        matchInput,
         formattedInventoryItems,
         {
-          supplier_name: (invoice.suppliers as any)?.name,
+          supplier_name: typedInvoice.suppliers?.[0]?.name ?? undefined,
           fuzzy_threshold: 0.6,
           max_suggestions: 5
         }
       )
 
-      itemMatches[invoiceItem.id] = matches
-      
       matchingResults.push({
         invoice_item_id: invoiceItem.id,
         item_description: invoiceItem.item_description,
@@ -159,13 +225,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     // Calculate overall matching statistics
-    const totalItems = invoice.invoice_items.length
+    const totalItems = typedInvoice.invoice_items.length
     const itemsWithMatches = matchingResults.filter(r => r.suggested_matches.length > 0).length
     const itemsWithHighConfidence = matchingResults.filter(r => 
       r.suggested_matches.length > 0 && r.suggested_matches[0].confidence >= 0.8
     ).length
     const autoMatchedItems = matchingResults.filter(r => 
-      r.current_match_id && r.current_confidence >= 0.8
+      r.current_match_id && typeof r.current_confidence === 'number' && r.current_confidence >= 0.8
     ).length
 
     const statistics = {
@@ -183,7 +249,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       success: true,
       data: {
         invoice_id: id,
-        supplier_name: (invoice.suppliers as any)?.name,
+        supplier_name: typedInvoice.suppliers?.[0]?.name ?? null,
         matching_results: matchingResults,
         statistics
       },
@@ -219,12 +285,15 @@ export async function GET(request: NextRequest, context: RouteContext) {
       .from('invoices')
       .select(`
         id,
-        suppliers (name),
+        suppliers (id, name),
         invoice_items (
           id,
           item_description,
+          supplier_item_code,
           quantity,
           unit_price,
+          package_size,
+          unit_type,
           matched_item_id,
           match_confidence,
           match_method,
@@ -246,26 +315,32 @@ export async function GET(request: NextRequest, context: RouteContext) {
       )
     }
 
-    const matchingResults = invoice.invoice_items?.map(item => ({
-      invoice_item_id: item.id,
-      item_description: item.item_description,
-      quantity: item.quantity,
-      unit_price: item.unit_price,
-      matched_item: item.inventory_items ? {
-        id: (item.inventory_items as any)?.id,
-        item_name: (item.inventory_items as any)?.item_name,
-        current_stock: (item.inventory_items as any)?.current_stock,
-        unit_cost: (item.inventory_items as any)?.unit_cost
-      } : null,
-      match_confidence: item.match_confidence,
-      match_method: item.match_method
-    })) || []
+    const typedInvoice = invoice as InvoiceWithItemMatches
+
+    const matchingResults = typedInvoice.invoice_items?.map(item => {
+      const matchedInventoryItem = item.inventory_items?.[0]
+
+      return {
+        invoice_item_id: item.id,
+        item_description: item.item_description,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        matched_item: matchedInventoryItem ? {
+          id: matchedInventoryItem.id,
+          item_name: matchedInventoryItem.item_name,
+          current_stock: matchedInventoryItem.current_stock,
+          unit_cost: matchedInventoryItem.unit_cost
+        } : null,
+        match_confidence: item.match_confidence,
+        match_method: item.match_method
+      }
+    }) || []
 
     return NextResponse.json({
       success: true,
       data: {
         invoice_id: id,
-        supplier_name: (invoice.suppliers as any)?.name,
+        supplier_name: typedInvoice.suppliers?.[0]?.name ?? null,
         matching_results: matchingResults
       }
     })

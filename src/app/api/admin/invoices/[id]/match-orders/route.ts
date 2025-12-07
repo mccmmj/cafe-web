@@ -154,9 +154,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
       unit_price: item.unit_price
     }))
 
+    type SupplierInfo = { name?: string } | null
+    const supplierName = (invoice.suppliers as SupplierInfo)?.name || ''
+
     // Find order matches
-    let orderMatches = await findOrderMatches(
-      (invoice.suppliers as any)?.name || '',
+    const orderMatches = await findOrderMatches(
+      supplierName,
       invoice.invoice_date,
       invoice.total_amount,
       invoiceItems,
@@ -172,18 +175,22 @@ export async function POST(request: NextRequest, context: RouteContext) {
         linkedMatch = orderMatches[linkedIndex]
         orderMatches.splice(linkedIndex, 1)
       } else if (existingMatchRecord?.purchase_orders) {
-        const formattedOrder = mapPurchaseOrder(existingMatchRecord.purchase_orders as any)
-        linkedMatch = {
-          purchase_order_id: formattedOrder.id,
-          purchase_order: formattedOrder,
-          confidence: existingMatchRecord.match_confidence || 0.9,
-          match_reasons: existingMatchRecord.variance_notes
-            ? [existingMatchRecord.variance_notes]
-            : ['Previously linked to this purchase order'],
-          quantity_variance: existingMatchRecord.quantity_variance ?? 0,
-          amount_variance: existingMatchRecord.amount_variance ?? Math.abs(invoice.total_amount - formattedOrder.total_amount),
-          matched_items: formattedOrder.items.length,
-          total_items: formattedOrder.items.length
+        const linkedPurchaseOrders = existingMatchRecord.purchase_orders as PurchaseOrderRow[]
+        const linkedPurchaseOrder = linkedPurchaseOrders[0]
+        if (linkedPurchaseOrder) {
+          const formattedOrder = mapPurchaseOrder(linkedPurchaseOrder)
+          linkedMatch = {
+            purchase_order_id: formattedOrder.id,
+            purchase_order: formattedOrder,
+            confidence: existingMatchRecord.match_confidence || 0.9,
+            match_reasons: existingMatchRecord.variance_notes
+              ? [existingMatchRecord.variance_notes]
+              : ['Previously linked to this purchase order'],
+            quantity_variance: existingMatchRecord.quantity_variance ?? 0,
+            amount_variance: existingMatchRecord.amount_variance ?? Math.abs(invoice.total_amount - formattedOrder.total_amount),
+            matched_items: formattedOrder.items.length,
+            total_items: formattedOrder.items.length
+          }
         }
       }
     }
@@ -246,7 +253,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         invoice_id: id,
         invoice_date: invoice.invoice_date,
         invoice_total: invoice.total_amount,
-        supplier_name: (invoice.suppliers as any)?.name,
+      supplier_name: supplierName,
         linked_match: linkedMatch,
         order_matches: orderMatches,
         auto_matches: autoMatches,
@@ -267,24 +274,48 @@ export async function POST(request: NextRequest, context: RouteContext) {
   }
 }
 
-function mapPurchaseOrder(order: any) {
+type PurchaseOrderRow = {
+  id: string
+  order_number: string
+  supplier_id: string
+  order_date: string
+  expected_delivery_date: string | null
+  status: string
+  total_amount: number
+  suppliers: Array<{ id: string; name: string }> | null
+  purchase_order_items: Array<{
+    id: string
+    inventory_item_id: string | null
+    quantity_ordered: number
+    unit_cost: number
+    total_cost: number | null
+    inventory_items: Array<{ id: string; item_name: string }> | null
+  }>
+}
+
+function mapPurchaseOrder(order: PurchaseOrderRow) {
   return {
     id: order.id,
     order_number: order.order_number,
     supplier_id: order.supplier_id,
-    supplier_name: (order.suppliers as any)?.name || '',
+    supplier_name: order.suppliers?.[0]?.name || '',
     order_date: order.order_date,
-    expected_delivery_date: order.expected_delivery_date,
+    expected_delivery_date: order.expected_delivery_date ?? undefined,
     status: order.status,
     total_amount: order.total_amount,
-    items: (order.purchase_order_items || []).map((item: any) => ({
-      id: item.id,
-      inventory_item_id: item.inventory_item_id,
-      item_name: (item.inventory_items as any)?.item_name || 'Unknown Item',
-      quantity_ordered: item.quantity_ordered,
-      unit_cost: item.unit_cost,
-      total_cost: item.total_cost
-    }))
+    items: (order.purchase_order_items || []).map((item) => {
+      const inventoryItemId = item.inventory_item_id ?? ''
+      const totalCost = item.total_cost ?? item.unit_cost * item.quantity_ordered
+
+      return {
+        id: item.id,
+        inventory_item_id: inventoryItemId,
+        item_name: item.inventory_items?.[0]?.item_name || 'Unknown Item',
+        quantity_ordered: item.quantity_ordered,
+        unit_cost: item.unit_cost,
+        total_cost: totalCost
+      }
+    })
   }
 }
 

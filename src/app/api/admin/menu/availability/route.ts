@@ -20,6 +20,21 @@ interface BulkAvailabilityRequest {
   isAvailable: boolean
 }
 
+interface CatalogObject {
+  id: string
+  type: string
+  item_data?: {
+    available_for_pickup?: boolean
+    available_online?: boolean
+    [key: string]: unknown
+  }
+  [key: string]: unknown
+}
+
+interface CatalogObjectResponse {
+  object?: CatalogObject
+}
+
 export async function PATCH(request: NextRequest) {
   try {
     // Verify admin authentication
@@ -40,20 +55,20 @@ export async function PATCH(request: NextRequest) {
     console.log(`Admin bulk updating availability for ${itemIds.length} items to ${isAvailable}`)
 
     // Fetch current items to preserve their structure
-    const fetchPromises = itemIds.map(async (itemId: any) => {
+    const fetchPromises = itemIds.map(async (itemId) => {
       const response = await fetch(`${SQUARE_BASE_URL}/v2/catalog/object/${itemId}`, {
         method: 'GET',
         headers: getHeaders()
       })
       
       if (response.ok) {
-        const result = await response.json()
-        return result.object
+        const result = await response.json() as CatalogObjectResponse
+        return result.object ?? null
       }
       return null
     })
 
-    const currentItems = (await Promise.all(fetchPromises)).filter(Boolean)
+    const currentItems = (await Promise.all(fetchPromises)).filter((item): item is CatalogObject => Boolean(item))
 
     if (currentItems.length === 0) {
       return NextResponse.json(
@@ -63,7 +78,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Update availability for all items
-    const updatedItems = currentItems.map((item: any) => ({
+    const updatedItems = currentItems.map((item) => ({
       ...item,
       item_data: {
         ...item.item_data,

@@ -4,8 +4,6 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { CreditCard, Lock, Loader2 } from 'lucide-react'
 import { useSquarePayments } from '@/providers/SquareProvider'
 import Button from '@/components/ui/Button'
-import Input from '@/components/ui/Input'
-import { toast } from 'react-hot-toast'
 import type { SquareCard, SquareCardEvent, SquareTokenDetails } from '@/types/square'
 
 interface BillingAddress {
@@ -35,7 +33,7 @@ interface PaymentSuccessDetails extends SquareTokenDetails {
   billingAddress: BillingAddress
 }
 
-interface PaymentSuccessPayload {
+export interface PaymentSuccessPayload {
   token: string
   details: PaymentSuccessDetails
 }

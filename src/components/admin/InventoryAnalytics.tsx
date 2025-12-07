@@ -15,7 +15,6 @@ import {
   Building2,
   RefreshCw,
   Download,
-  Filter,
   Eye,
   Activity,
   ShoppingCart,

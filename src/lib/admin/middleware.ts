@@ -93,8 +93,6 @@ export async function requireAdminAuth(request: NextRequest): Promise<AdminAuthR
     }
     
     // Check for suspicious activity (optional additional validation)
-    const now = new Date()
-
     return { 
       user, 
       profile,

@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
+interface OrderUpdatePayload {
+  status: string
+  updated_at: string
+  admin_notes?: string
+}
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
@@ -157,7 +163,7 @@ export async function PATCH(request: NextRequest) {
     }
     
     // Update order status
-    const updates: any = { 
+    const updates: OrderUpdatePayload = { 
       status,
       updated_at: new Date().toISOString()
     }

@@ -8,7 +8,6 @@ import { isStarbucksCategory } from '@/lib/constants/menu'
 import CategoryCreateModal from './CategoryCreateModal'
 import CategoryEditModal from './CategoryEditModal'
 import CategoryDeleteModal from './CategoryDeleteModal'
-import toast from 'react-hot-toast'
 
 interface Category {
   id: string
@@ -16,6 +15,21 @@ interface Category {
   ordinal: number
   parentCategory?: string
   itemCount: number
+}
+
+interface CategoryCreatePayload {
+  name: string
+  ordinal: number
+  parentCategory?: string
+}
+
+interface CategoryUpdatePayload {
+  categoryId: string
+  updateData: {
+    name?: string
+    ordinal?: number
+    parentCategory?: string | null
+  }
 }
 
 const CategoryManagement = () => {
@@ -27,7 +41,7 @@ const CategoryManagement = () => {
 
   // Create category mutation
   const createCategoryMutation = useMutation({
-    mutationFn: async (categoryData: any) => {
+    mutationFn: async (categoryData: CategoryCreatePayload) => {
       const response = await fetch('/api/admin/menu/categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -49,7 +63,7 @@ const CategoryManagement = () => {
 
   // Update category mutation
   const updateCategoryMutation = useMutation({
-    mutationFn: async ({ categoryId, updateData }: { categoryId: string; updateData: any }) => {
+    mutationFn: async ({ categoryId, updateData }: CategoryUpdatePayload) => {
       const response = await fetch('/api/admin/menu/categories', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -252,7 +266,7 @@ const CategoryManagement = () => {
       <CategoryEditModal
         isOpen={!!editingCategory}
         onClose={() => setEditingCategory(null)}
-        onUpdateCategory={async (categoryId: string, updateData: any) => {
+        onUpdateCategory={async (categoryId: string, updateData: CategoryUpdatePayload['updateData']) => {
           await updateCategoryMutation.mutateAsync({ categoryId, updateData })
         }}
         category={editingCategory}

@@ -9,6 +9,16 @@ const headers = {
   'Content-Type': 'application/json'
 }
 
+interface SquareLocationResponse {
+  locations?: SquareLocationSummary[]
+}
+
+interface SquareLocationSummary {
+  id: string
+  name: string
+  status?: string
+}
+
 export async function testSquareConnection() {
   try {
     const response = await fetch(`${SQUARE_BASE_URL}/v2/locations`, {
@@ -21,10 +31,10 @@ export async function testSquareConnection() {
       throw new Error(`Square API error: ${response.status} ${errorData}`)
     }
 
-    const data = await response.json()
+    const data = await response.json() as SquareLocationResponse
     return {
       success: true,
-      data: data.locations?.map((location: any) => ({
+      data: data.locations?.map((location) => ({
         id: location.id,
         name: location.name,
         status: location.status

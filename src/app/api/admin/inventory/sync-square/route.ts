@@ -33,9 +33,41 @@ interface InventoryItemInput {
   unit_cost: number
   unit_type: 'each' | 'lb' | 'oz' | 'gallon' | 'liter' | 'ml'
   is_ingredient: boolean
-  supplier_id?: string
+  supplier_id?: string | null
   location: string
   notes: string
+}
+
+type SquareCategory = {
+  id: string
+  type: 'CATEGORY'
+  category_data?: {
+    name?: string
+  }
+}
+
+type SquareItem = {
+  id: string
+  type: 'ITEM'
+  item_data?: {
+    name?: string
+    category_id?: string
+  }
+}
+
+type SquareCatalog = {
+  objects?: (SquareItem | SquareCategory)[]
+}
+
+type SupplierRow = {
+  id: string
+  name: string
+}
+
+type InventoryInsertResult = {
+  id: string
+  item_name: string
+  current_stock: number
 }
 
 async function validateAdminAccess(adminEmail: string) {
@@ -60,7 +92,7 @@ function getSquareHeaders() {
   }
 }
 
-async function fetchSquareCatalog() {
+async function fetchSquareCatalog(): Promise<SquareCatalog> {
   const response = await fetch(`${SQUARE_BASE_URL}/v2/catalog/search`, {
     method: 'POST',
     headers: getSquareHeaders(),
@@ -87,7 +119,7 @@ async function getSupplierMappings() {
     throw new Error(`Failed to fetch suppliers: ${error.message}`)
   }
 
-  return suppliers
+  return (suppliers ?? []) as SupplierRow[]
 }
 
 async function getExistingInventoryItems() {
@@ -100,11 +132,11 @@ async function getExistingInventoryItems() {
     return new Set()
   }
 
-  return new Set(items.map(item => item.square_item_id))
+  return new Set((items ?? []).map(item => item.square_item_id))
 }
 
 // Intelligent supplier mapping based on category and item name patterns
-function mapItemToSupplier(item: any, category: any, suppliers: any[]) {
+function mapItemToSupplier(item: SquareItem, category: SquareCategory | undefined, suppliers: SupplierRow[]) {
   const itemName = item.item_data?.name?.toLowerCase() || ''
   const categoryName = category?.category_data?.name?.toLowerCase() || ''
   
@@ -186,7 +218,7 @@ function mapItemToSupplier(item: any, category: any, suppliers: any[]) {
 }
 
 // Generate intelligent defaults for inventory fields
-function generateInventoryDefaults(item: any, category: any) {
+function generateInventoryDefaults(item: SquareItem) {
   const itemName = item.item_data?.name?.toLowerCase() || ''
   
   // Default stock levels based on item type
@@ -290,19 +322,23 @@ function generateInventoryDefaults(item: any, category: any) {
   }
 }
 
-function processSquareCatalog(catalogData: any, suppliers: any[], existingSquareIds: Set<string>) {
+function processSquareCatalog(
+  catalogData: SquareCatalog,
+  suppliers: SupplierRow[],
+  existingSquareIds: Set<string>
+) {
   if (!catalogData.objects || catalogData.objects.length === 0) {
     return { newItems: [], stats: { total: 0, new: 0, existing: 0, categories: 0 } }
   }
 
   const categories = catalogData.objects
-    .filter((obj: any) => obj.type === 'CATEGORY')
-    .reduce((acc: any, cat: any) => {
+    .filter((obj): obj is SquareCategory => obj.type === 'CATEGORY')
+    .reduce((acc: Record<string, SquareCategory>, cat) => {
       acc[cat.id] = cat
       return acc
     }, {})
 
-  const items = catalogData.objects.filter((obj: any) => obj.type === 'ITEM')
+  const items = catalogData.objects.filter((obj): obj is SquareItem => obj.type === 'ITEM')
   const newItems: InventoryItemInput[] = []
   const stats = {
     total: items.length,
@@ -311,14 +347,14 @@ function processSquareCatalog(catalogData: any, suppliers: any[], existingSquare
     categories: Object.keys(categories).length
   }
 
-  items.forEach((item: any) => {
+  items.forEach((item) => {
     if (existingSquareIds.has(item.id)) {
       stats.existing++
       return
     }
 
-    const category = categories[item.item_data?.category_id]
-    const defaults = generateInventoryDefaults(item, category)
+    const category = item.item_data?.category_id ? categories[item.item_data.category_id] : undefined
+    const defaults = generateInventoryDefaults(item)
     const supplierId = mapItemToSupplier(item, category, suppliers)
     
     const inventoryItem: InventoryItemInput = {
@@ -379,7 +415,8 @@ async function syncInventoryItems(items: InventoryItemInput[], dryRun: boolean) 
     }
   }
 
-  return { inserted: data, movements: stockMovements }
+  const insertedItems = (data ?? []) as InventoryInsertResult[]
+  return { inserted: insertedItems, movements: stockMovements }
 }
 
 export async function POST(request: NextRequest) {

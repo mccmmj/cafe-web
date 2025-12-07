@@ -22,6 +22,13 @@ interface DashboardStats {
   cancelledOrders: number
 }
 
+interface RecentOrder {
+  id: string
+  customer_email?: string | null
+  total_amount?: number | null
+  status: string
+}
+
 export function AdminDashboardOverview() {
   const router = useRouter()
   const [stats, setStats] = useState<DashboardStats>({
@@ -33,7 +40,7 @@ export function AdminDashboardOverview() {
     cancelledOrders: 0
   })
   const [loading, setLoading] = useState(true)
-  const [recentOrders, setRecentOrders] = useState([])
+  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([])
 
   // Helper function to format price from cents to dollars
   const formatPrice = (cents: number) => {
@@ -57,7 +64,7 @@ export function AdminDashboardOverview() {
       const ordersResponse = await fetch('/api/admin/orders?limit=5')
       if (ordersResponse.ok) {
         const ordersData = await ordersResponse.json()
-        setRecentOrders(ordersData.orders || [])
+        setRecentOrders((ordersData.orders || []) as RecentOrder[])
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
@@ -183,7 +190,7 @@ export function AdminDashboardOverview() {
             </div>
           ) : (
             <div className="space-y-4">
-              {recentOrders.slice(0, 5).map((order: any) => (
+              {recentOrders.slice(0, 5).map((order) => (
                 <div key={order.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                   <div>
                     <p className="font-medium text-gray-900">Order #{order.id.slice(-8)}</p>

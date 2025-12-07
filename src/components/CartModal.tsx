@@ -21,7 +21,6 @@ interface CartModalProps {
   onClose: () => void
   cart: Record<string, { itemId: string; variationId?: string; quantity: number }>
   categories: MenuCategory[]
-  selectedVariations: Record<string, string>
   onUpdateQuantity: (cartKey: string, quantity: number) => void
   onRemoveItem: (cartKey: string) => void
   onClearCart: () => void
@@ -32,13 +31,12 @@ export default function CartModal({
   onClose,
   cart,
   categories,
-  selectedVariations,
   onUpdateQuantity,
   onRemoveItem,
   onClearCart
 }: CartModalProps) {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
-  const { taxInfo, loading: taxLoading, error: taxError } = useTaxInfo()
+  const { taxInfo } = useTaxInfo()
   
   if (!isOpen) return null
 

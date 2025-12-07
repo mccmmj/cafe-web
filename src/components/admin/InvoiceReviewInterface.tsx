@@ -1,15 +1,11 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { 
   CheckCircle, 
   AlertCircle, 
-  Clock, 
   Package, 
-  DollarSign, 
-  User,
   FileText,
-  ArrowRight,
   RefreshCw,
   Save,
   X,
@@ -94,6 +90,25 @@ interface Category {
   ordinal: number
 }
 
+interface CostHistoryEntry {
+  id: string
+  inventory_item_id: string
+  previous_unit_cost: number | null
+  new_unit_cost: number
+  changed_at: string
+  source?: string | null
+}
+
+interface NewInventoryItemForm {
+  name: string
+  unit_cost: number
+  unit_type: string
+  location: string
+  minimum_threshold: number
+  reorder_point: number
+  category_id: string
+}
+
 interface ItemAction {
   type: 'match' | 'create' | 'skip'
   inventory_item_id?: string
@@ -119,7 +134,7 @@ export function InvoiceReviewInterface({ invoice, onClose, onConfirm }: InvoiceR
   const [linkingOrderId, setLinkingOrderId] = useState<string | null>(null)
   const [allInventoryItems, setAllInventoryItems] = useState<InventoryItem[]>([])
   const [categories, setCategories] = useState<Category[]>([])
-  const [costHistory, setCostHistory] = useState<Record<string, any[]>>({})
+  const [costHistory, setCostHistory] = useState<Record<string, CostHistoryEntry[]>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [textPreview, setTextPreview] = useState<string>('')
@@ -134,14 +149,7 @@ export function InvoiceReviewInterface({ invoice, onClose, onConfirm }: InvoiceR
   const [showDropdowns, setShowDropdowns] = useState<Record<string, boolean>>({})
   const [searchTerms, setSearchTerms] = useState<Record<string, string>>({})
   const [showCreateForms, setShowCreateForms] = useState<Record<string, boolean>>({})
-  const [newItemForms, setNewItemForms] = useState<Record<string, any>>({})
-
-  useEffect(() => {
-    loadMatches()
-    loadAllInventoryItems()
-    loadCategories()
-    loadTextPreview()
-  }, [invoice.id])
+  const [newItemForms, setNewItemForms] = useState<Record<string, NewInventoryItemForm>>({})
 
   useEffect(() => {
     if (!highlightRange || !textPreviewRef.current) return
@@ -151,7 +159,7 @@ export function InvoiceReviewInterface({ invoice, onClose, onConfirm }: InvoiceR
     }
   }, [highlightRange])
 
-  const getAutoMatchInventoryId = (result: MatchingResult): string | null => {
+  const getAutoMatchInventoryId = useCallback((result: MatchingResult): string | null => {
     const bestMatch = result.best_match
     if (!bestMatch || bestMatch.confidence < AUTO_MATCH_CONFIDENCE_THRESHOLD) {
       return null
@@ -167,9 +175,9 @@ export function InvoiceReviewInterface({ invoice, onClose, onConfirm }: InvoiceR
     }
 
     return bestMatch.inventory_item_id
-  }
+  }, [])
 
-  const loadMatches = async () => {
+  const loadMatches = useCallback(async () => {
     try {
       setLoading(true)
       
@@ -225,9 +233,9 @@ export function InvoiceReviewInterface({ invoice, onClose, onConfirm }: InvoiceR
     } finally {
       setLoading(false)
     }
-  }
+  }, [getAutoMatchInventoryId, invoice.id])
 
-  const loadAllInventoryItems = async () => {
+  const loadAllInventoryItems = useCallback(async () => {
     try {
       const response = await fetch('/api/admin/inventory')
       const result = await response.json()
@@ -238,7 +246,7 @@ export function InvoiceReviewInterface({ invoice, onClose, onConfirm }: InvoiceR
     } catch (error) {
       console.error('Error loading inventory items:', error)
     }
-  }
+  }, [])
 
   const loadCostHistory = async (itemId: string) => {
     if (!itemId || costHistory[itemId]) return
@@ -246,14 +254,15 @@ export function InvoiceReviewInterface({ invoice, onClose, onConfirm }: InvoiceR
       const res = await fetch(`/api/admin/inventory/cost-history?id=${itemId}&limit=5`)
       const json = await res.json()
       if (json.success) {
-        setCostHistory(prev => ({ ...prev, [itemId]: json.history }))
+        const history = (json.history || []) as CostHistoryEntry[]
+        setCostHistory(prev => ({ ...prev, [itemId]: history }))
       }
     } catch (error) {
       console.error('Error loading cost history:', error)
     }
   }
 
-  const loadCategories = async () => {
+  const loadCategories = useCallback(async () => {
     try {
       const response = await fetch('/api/admin/menu/categories')
       const result = await response.json()
@@ -264,9 +273,9 @@ export function InvoiceReviewInterface({ invoice, onClose, onConfirm }: InvoiceR
     } catch (error) {
       console.error('Error loading categories:', error)
     }
-  }
+  }, [])
 
-  const loadTextPreview = async () => {
+  const loadTextPreview = useCallback(async () => {
     try {
       setTextPreviewLoading(true)
       setTextPreviewError(null)
@@ -284,7 +293,14 @@ export function InvoiceReviewInterface({ invoice, onClose, onConfirm }: InvoiceR
     } finally {
       setTextPreviewLoading(false)
     }
-  }
+  }, [invoice.id])
+
+  useEffect(() => {
+    loadMatches()
+    loadAllInventoryItems()
+    loadCategories()
+    loadTextPreview()
+  }, [loadMatches, loadAllInventoryItems, loadCategories, loadTextPreview])
 
   const escapeHtml = (text: string) =>
     text
@@ -416,11 +432,25 @@ export function InvoiceReviewInterface({ invoice, onClose, onConfirm }: InvoiceR
     }
   }
 
-  const updateNewItemForm = (invoiceItemId: string, field: string, value: any) => {
+  const updateNewItemForm = <K extends keyof NewInventoryItemForm>(
+    invoiceItemId: string,
+    field: K,
+    value: NewInventoryItemForm[K]
+  ) => {
+    const fallbackForm: NewInventoryItemForm = {
+      name: '',
+      unit_cost: 0,
+      unit_type: 'each',
+      location: 'Storage',
+      minimum_threshold: 0,
+      reorder_point: 0,
+      category_id: ''
+    }
+
     setNewItemForms(prev => ({
       ...prev,
       [invoiceItemId]: {
-        ...prev[invoiceItemId],
+        ...(prev[invoiceItemId] ?? fallbackForm),
         [field]: value
       }
     }))
@@ -830,7 +860,7 @@ export function InvoiceReviewInterface({ invoice, onClose, onConfirm }: InvoiceR
                       )}
                       {itemActions[matchResult.invoice_item_id].type === 'create' && itemActions[matchResult.invoice_item_id].new_item_data && (
                         <div className="text-sm text-blue-700 mt-1">
-                          → "{itemActions[matchResult.invoice_item_id].new_item_data!.name}" - ${itemActions[matchResult.invoice_item_id].new_item_data!.unit_cost}/each
+                          → &quot;{itemActions[matchResult.invoice_item_id].new_item_data!.name}&quot; - ${itemActions[matchResult.invoice_item_id].new_item_data!.unit_cost}/each
                         </div>
                       )}
                     </div>

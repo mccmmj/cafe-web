@@ -1,6 +1,3 @@
-import { customersApi } from './client'
-import { randomUUID } from 'crypto'
-
 interface CustomerCard {
   id: string
   cardBrand: string
@@ -21,7 +18,9 @@ interface CreateCustomerCardRequest {
   }
 }
 
-export async function createSquareCustomer(email: string, fullName?: string): Promise<string> {
+export async function createSquareCustomer(_email: string, _fullName?: string): Promise<string> {
+  void _email
+  void _fullName
   try {
     // Temporarily disable customer creation until API method is verified
     throw new Error('Customer creation temporarily disabled')
@@ -42,7 +41,8 @@ export async function createSquareCustomer(email: string, fullName?: string): Pr
   }
 }
 
-export async function getSquareCustomer(customerId: string) {
+export async function getSquareCustomer(_customerId: string) {
+  void _customerId
   try {
     // Temporarily disable until API method is verified
     throw new Error('Customer retrieval temporarily disabled')
@@ -54,30 +54,38 @@ export async function getSquareCustomer(customerId: string) {
   }
 }
 
-export async function searchSquareCustomerByEmail(email: string): Promise<string | null> {
+export async function searchSquareCustomerByEmail(_email: string): Promise<string | null> {
+  void _email
   // Temporarily disabled - return null for now
   return null
 }
 
 export async function saveCustomerCard(
-  customerId: string, 
-  cardRequest: CreateCustomerCardRequest
+  _customerId: string, 
+  _cardRequest: CreateCustomerCardRequest
 ): Promise<string> {
+  void _customerId
+  void _cardRequest
   // Temporarily disabled - throw error for now
   throw new Error('Card saving temporarily disabled - Square Customer API integration pending')
 }
 
-export async function getCustomerCards(customerId: string): Promise<CustomerCard[]> {
+export async function getCustomerCards(_customerId: string): Promise<CustomerCard[]> {
+  void _customerId
   // Temporarily disabled - return empty array for now
   return []
 }
 
-export async function deleteCustomerCard(customerId: string, cardId: string): Promise<void> {
+export async function deleteCustomerCard(_customerId: string, _cardId: string): Promise<void> {
+  void _customerId
+  void _cardId
   // Temporarily disabled - throw error for now
   throw new Error('Card deletion temporarily disabled')
 }
 
-export async function findOrCreateCustomer(email: string, fullName?: string): Promise<string> {
+export async function findOrCreateCustomer(_email: string, _fullName?: string): Promise<string> {
+  void _email
+  void _fullName
   // Temporarily disabled - throw error for now
   throw new Error('Customer management temporarily disabled')
 }

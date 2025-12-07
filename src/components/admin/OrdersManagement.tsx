@@ -1,12 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { 
-  Filter,
   Search,
   Download,
   Eye,
-  Edit,
   CheckCircle,
   Clock,
   XCircle,
@@ -18,6 +16,11 @@ import { Button } from '@/components/ui'
 import { toast } from 'react-hot-toast'
 import { OrderDetailsModal } from './OrderDetailsModal'
 
+interface OrderItemSummary {
+  item_name?: string
+  quantity?: number
+}
+
 interface Order {
   id: string
   created_at: string
@@ -25,7 +28,7 @@ interface Order {
   total_amount: number
   customer_email: string
   payment_status: string
-  order_items: any[]
+  order_items: OrderItemSummary[]
   profiles?: {
     full_name: string
     email: string
@@ -85,11 +88,7 @@ export function OrdersManagement() {
   const [showOrderModal, setShowOrderModal] = useState(false)
   const [updating, setUpdating] = useState<string | null>(null)
 
-  useEffect(() => {
-    fetchOrders()
-  }, [filters, pagination.offset])
-
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     try {
       setLoading(true)
       const params = new URLSearchParams({
@@ -123,7 +122,11 @@ export function OrdersManagement() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [filters, pagination.limit, pagination.offset])
+
+  useEffect(() => {
+    fetchOrders()
+  }, [fetchOrders])
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     try {

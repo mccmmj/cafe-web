@@ -8,6 +8,7 @@ import Input from '@/components/ui/Input'
 import { Card } from '@/components/ui/Card'
 import { useCartState } from '@/hooks/useCartData'
 import { useOptimisticCart } from '@/hooks/useOptimisticCart'
+import Image from 'next/image'
 
 interface MenuSelectionProps {
   onContinue: () => void
@@ -124,9 +125,7 @@ export default function MenuSelection({ onContinue, canContinue }: MenuSelection
   const [selectedCategory, setSelectedCategory] = useState('All')
   const [showFilters, setShowFilters] = useState(false)
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'rating' | 'prepTime'>('name')
-  const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null)
-  
-  const { cart, itemCount } = useCartState()
+  const { itemCount } = useCartState()
   const { addToCart } = useOptimisticCart()
 
   const filteredItems = mockMenuItems
@@ -158,10 +157,6 @@ export default function MenuSelection({ onContinue, canContinue }: MenuSelection
       itemDetails: item
     })
   }, [addToCart])
-
-  const handleItemClick = useCallback((item: MenuItem) => {
-    setSelectedItem(item)
-  }, [])
 
   return (
     <div className="space-y-6">
@@ -239,21 +234,21 @@ export default function MenuSelection({ onContinue, canContinue }: MenuSelection
           >
             <Card 
               variant="default" 
-              className={`h-full cursor-pointer transition-all hover:shadow-lg ${
+              className={`h-full transition-all hover:shadow-lg ${
                 !item.isAvailable ? 'opacity-60' : ''
               }`}
-              onClick={() => handleItemClick(item)}
             >
-              <div className="relative">
-                <div className="h-48 bg-gray-200 rounded-t-lg relative overflow-hidden">
-                  {item.imageUrl ? (
-                    <img 
-                      src={item.imageUrl} 
+            <div className="relative">
+              <div className="h-48 bg-gray-200 rounded-t-lg relative overflow-hidden">
+                {item.imageUrl ? (
+                    <Image
+                      src={item.imageUrl}
                       alt={item.name}
+                      width={400}
+                      height={260}
                       className="w-full h-full object-cover"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement
-                        target.style.display = 'none'
+                      onError={(event) => {
+                        event.currentTarget.style.display = 'none'
                       }}
                     />
                   ) : (

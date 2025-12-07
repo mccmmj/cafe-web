@@ -51,6 +51,93 @@ interface SquareCatalogWebhookEvent {
   }
 }
 
+interface CatalogCategoryData {
+  name?: string
+  description?: string
+  ordinal?: number
+  parent_category?: {
+    id: string
+  }
+}
+
+interface CatalogItemVariation {
+  id: string
+  item_variation_data?: {
+    name?: string
+    price_money?: { amount?: number }
+  }
+}
+
+interface CatalogItemData {
+  name?: string
+  description?: string
+  categories?: { id: string }[]
+  category_id?: string
+  variations?: CatalogItemVariation[]
+  image_ids?: string[]
+  is_deleted?: boolean
+  is_archived?: boolean
+  modifier_list_info?: {
+    modifier_list_id: string
+    name?: string
+  }[]
+}
+
+interface CatalogObject {
+  id: string
+  type: string
+  item_data?: CatalogItemData
+  category_data?: CatalogCategoryData
+  is_deleted?: boolean
+  present_at_all_locations?: boolean
+}
+
+interface CatalogResponse {
+  objects?: CatalogObject[]
+}
+
+interface SupplierRecord {
+  id: string
+  name?: string | null
+}
+
+interface ExistingInventoryItem {
+  id: string
+  square_item_id: string | null
+  item_name: string
+  updated_at?: string
+  notes?: string | null
+}
+
+interface InventoryDefaults {
+  current_stock: number
+  minimum_threshold: number
+  reorder_point: number
+  unit_type: string
+  is_ingredient: boolean
+  location: string
+}
+
+interface SyncResult {
+  newItems: number
+  updatedItems: number
+  categories: number
+}
+
+interface CatalogSearchRequest {
+  object_types: string[]
+  include_related_objects: boolean
+  begin_time?: string
+}
+
+const isItemObject = (obj: CatalogObject): obj is CatalogObject & { item_data: CatalogItemData } =>
+  obj.type === 'ITEM' && !!obj.item_data
+
+const isCategoryObject = (
+  obj: CatalogObject
+): obj is CatalogObject & { category_data: CatalogCategoryData } =>
+  obj.type === 'CATEGORY' && !!obj.category_data
+
 // Verify Square webhook signature
 function verifySquareSignature(body: string, signature: string, secret: string): boolean {
   if (!secret || !signature) {
@@ -108,15 +195,15 @@ async function getLastCatalogSync() {
 
     return lastSync?.processed_at ? new Date(lastSync.processed_at) : null
   } catch (error) {
-    console.warn('Warning: Could not fetch last catalog sync time')
+    console.warn('Warning: Could not fetch last catalog sync time', error)
     return null
   }
 }
 
-async function fetchCatalogChanges(sinceTimestamp?: Date) {
+async function fetchCatalogChanges(sinceTimestamp?: Date): Promise<CatalogResponse> {
   try {
     const { SQUARE_BASE_URL } = getSquareApiConfig()
-    const query: any = {
+    const query: CatalogSearchRequest = {
       object_types: ['ITEM', 'CATEGORY'],
       include_related_objects: true
     }
@@ -144,40 +231,45 @@ async function fetchCatalogChanges(sinceTimestamp?: Date) {
   }
 }
 
-async function syncCatalogChanges(catalogData: any) {
+async function syncCatalogChanges(catalogData: CatalogResponse): Promise<SyncResult> {
   if (!catalogData.objects || catalogData.objects.length === 0) {
     return { newItems: 0, updatedItems: 0, categories: 0 }
   }
 
-  const categories = catalogData.objects.filter((obj: any) => obj.type === 'CATEGORY')
-  const items = catalogData.objects.filter((obj: any) => obj.type === 'ITEM')
+  const categories = catalogData.objects.filter(isCategoryObject)
+  const items = catalogData.objects.filter(isItemObject)
   
   let newItems = 0
   let updatedItems = 0
 
   // Get existing inventory items
   const supabase = getSupabaseClient()
-  const { data: existingItems, error } = await supabase
+  const { data: existingItemsRaw, error } = await supabase
     .from('inventory_items')
-    .select('id, square_item_id, item_name, updated_at')
+    .select('id, square_item_id, item_name, updated_at, notes')
 
   if (error) {
     throw new Error(`Failed to fetch existing inventory: ${error.message}`)
   }
 
+  const existingItems = (existingItemsRaw || []) as ExistingInventoryItem[]
+
   const existingItemMap = new Map()
   existingItems.forEach(item => {
-    existingItemMap.set(item.square_item_id, item)
+    if (item.square_item_id) {
+      existingItemMap.set(item.square_item_id, item)
+    }
   })
 
   // Get supplier mappings
-  const { data: suppliers, error: supplierError } = await supabase
+  const { data: suppliersRaw, error: supplierError } = await supabase
     .from('suppliers')
     .select('id, name')
 
   if (supplierError) {
     throw new Error(`Failed to fetch suppliers: ${supplierError.message}`)
   }
+  const suppliers = (suppliersRaw || []) as SupplierRecord[]
 
   // Process catalog items
   for (const item of items) {
@@ -185,7 +277,7 @@ async function syncCatalogChanges(catalogData: any) {
     
     if (existingItem) {
       // Update existing item (only item name and description from Square)
-      const updates: any = {}
+      const updates: Partial<Pick<ExistingInventoryItem, 'item_name' | 'notes'>> = {}
       
       if (item.item_data?.name && item.item_data.name !== existingItem.item_name) {
         updates.item_name = item.item_data.name
@@ -205,7 +297,7 @@ async function syncCatalogChanges(catalogData: any) {
       }
     } else {
       // Create new inventory item with intelligent defaults
-      const categoryObj = categories.find((cat: any) => cat.id === item.item_data?.category_id)
+      const categoryObj = categories.find((cat) => cat.id === item.item_data?.category_id)
       const supplierId = mapItemToSupplier(item, categoryObj, suppliers)
       const defaults = generateInventoryDefaults(item, categoryObj)
 
@@ -238,7 +330,11 @@ async function syncCatalogChanges(catalogData: any) {
 }
 
 // Helper functions (reused from other sync tools)
-function mapItemToSupplier(item: any, category: any, suppliers: any[]) {
+function mapItemToSupplier(
+  item: CatalogObject & { item_data: CatalogItemData },
+  category: (CatalogObject & { category_data: CatalogCategoryData }) | undefined,
+  suppliers: SupplierRecord[]
+) {
   const itemName = item.item_data?.name?.toLowerCase() || ''
   const categoryName = category?.category_data?.name?.toLowerCase() || ''
   
@@ -260,8 +356,12 @@ function mapItemToSupplier(item: any, category: any, suppliers: any[]) {
   return suppliers.length > 0 ? suppliers[0].id : null
 }
 
-function generateInventoryDefaults(item: any, category: any) {
+function generateInventoryDefaults(
+  item: CatalogObject & { item_data: CatalogItemData },
+  category: (CatalogObject & { category_data: CatalogCategoryData }) | undefined
+): InventoryDefaults {
   const itemName = item.item_data?.name?.toLowerCase() || ''
+  const categoryName = category?.category_data?.name?.toLowerCase() || ''
   
   let defaultStock = 10
   let minThreshold = 3
@@ -271,19 +371,19 @@ function generateInventoryDefaults(item: any, category: any) {
   let isIngredient = true
 
   // Apply intelligent defaults based on item patterns
-  if (itemName.includes('coffee') || itemName.includes('bean')) {
+  if (itemName.includes('coffee') || itemName.includes('bean') || categoryName.includes('coffee')) {
     defaultStock = 25
     minThreshold = 5
     reorderPoint = 10
     unitType = 'lb'
     location = 'Coffee Storage'
-  } else if (itemName.includes('milk')) {
+  } else if (itemName.includes('milk') || categoryName.includes('dairy')) {
     defaultStock = 20
     minThreshold = 5
     reorderPoint = 10
     unitType = 'gallon'
     location = 'Refrigerator'
-  } else if (itemName.includes('muffin') || itemName.includes('cookie')) {
+  } else if (itemName.includes('muffin') || itemName.includes('cookie') || categoryName.includes('bakery')) {
     defaultStock = 24
     minThreshold = 6
     reorderPoint = 12
@@ -307,7 +407,7 @@ function generateInventoryDefaults(item: any, category: any) {
   }
 }
 
-async function logWebhookEvent(event: SquareCatalogWebhookEvent, syncResult: any) {
+async function logWebhookEvent(event: SquareCatalogWebhookEvent, syncResult: SyncResult) {
   try {
     // Log webhook processing for audit trail
     const supabase = getSupabaseClient()

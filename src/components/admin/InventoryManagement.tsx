@@ -19,11 +19,11 @@ import {
   Building2,
   ClipboardList,
   Settings,
-  MoreVertical,
-  CheckCircle as CheckCircleIcon
+  MoreVertical
 } from 'lucide-react'
 import InventoryEditModal from './InventoryEditModal'
 import InventoryCreateModal from './InventoryCreateModal'
+import InventoryAdjustModal from './InventoryAdjustModal'
 import RestockModal from './RestockModal'
 import SuppliersManagement, { type Supplier } from './SuppliersManagement'
 import PurchaseOrdersManagement from './PurchaseOrdersManagement'
@@ -39,6 +39,7 @@ interface InventoryItem {
   unit_cost: number
   unit_type: string
   pack_size?: number
+  pack_price?: number
   is_ingredient: boolean
   item_type?: 'ingredient' | 'prepackaged' | 'prepared' | 'supply'
   auto_decrement?: boolean
@@ -74,8 +75,8 @@ const InventoryManagement = () => {
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [restockModalOpen, setRestockModalOpen] = useState(false)
+  const [adjustModalOpen, setAdjustModalOpen] = useState(false)
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null)
-  const [calculatorDefaults, setCalculatorDefaults] = useState<{ packSize?: number; packPrice?: number }>({ packSize: 1, packPrice: 0 })
   const [openInventoryActionMenuId, setOpenInventoryActionMenuId] = useState<string | null>(null)
   
   const queryClient = useQueryClient()
@@ -208,6 +209,11 @@ const InventoryManagement = () => {
     setRestockModalOpen(true)
   }
 
+  const handleAdjustItem = (item: InventoryItem) => {
+    setSelectedItem(item)
+    setAdjustModalOpen(true)
+  }
+
   const archiveItemMutation = useMutation({
     mutationFn: async (itemId: string) => {
       const response = await fetch(`/api/admin/inventory?id=${itemId}`, { method: 'DELETE' })
@@ -264,6 +270,7 @@ const InventoryManagement = () => {
     setCreateModalOpen(false)
     setEditModalOpen(false)
     setRestockModalOpen(false)
+    setAdjustModalOpen(false)
     setSelectedItem(null)
   }
 
@@ -670,7 +677,7 @@ const InventoryManagement = () => {
                           <td className="px-4 py-4 text-sm text-gray-900 sm:px-6 sm:whitespace-nowrap">
                             {(() => {
                               const packSize = item.pack_size || 1
-                              const rawPackPrice = (item as any).pack_price as number | undefined
+                              const rawPackPrice = item.pack_price
                               let packPrice: number
                               if (packSize > 1) {
                                 if (rawPackPrice !== undefined && rawPackPrice > 0) {
@@ -694,74 +701,43 @@ const InventoryManagement = () => {
                           <td className="px-4 py-4 text-sm text-gray-500 sm:px-6 sm:whitespace-nowrap">
                             {item.supplier_name || 'No supplier'}
                           </td>
-                          <td className="px-4 py-4 text-sm font-medium sm:px-6 sm:whitespace-nowrap relative">
-                            <div className="hidden md:flex flex-wrap items-center gap-2">
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="text-primary-600"
-                                onClick={() => handleEditItem(item)}
-                              >
-                                Edit
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="text-green-600"
-                                onClick={() => handleRestockItem(item)}
-                              >
-                                Restock
-                              </Button>
-                              {item.deleted_at ? (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-emerald-600"
-                                  onClick={() => handleRestoreItem(item)}
-                                  disabled={restoreItemMutation.isPending}
-                                >
-                                  Restore
-                                </Button>
-                              ) : (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-red-600"
-                                  onClick={() => handleArchiveItem(item)}
-                                  disabled={archiveItemMutation.isPending}
-                                >
-                                  Archive
-                                </Button>
-                              )}
-                            </div>
-
-                            <div className="md:hidden relative">
+                          <td className="px-4 py-4 text-sm font-medium sm:px-6 sm:whitespace-nowrap">
+                            <div className="relative inline-flex">
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => setOpenInventoryActionMenuId(prev => prev === item.id ? null : item.id)}
                                 className="text-gray-700"
+                                onClick={() => setOpenInventoryActionMenuId(prev => prev === item.id ? null : item.id)}
+                                aria-haspopup="menu"
+                                aria-expanded={openInventoryActionMenuId === item.id}
+                                aria-label={`Actions for ${item.item_name}`}
                               >
                                 <MoreVertical className="w-4 h-4" />
                               </Button>
                               {openInventoryActionMenuId === item.id && (
-                                <div className="absolute right-0 mt-2 w-44 rounded-md border border-gray-200 bg-white shadow-lg z-20">
-                                  <div className="py-1">
+                                <div className="absolute right-0 top-full z-20 mt-2 w-48 rounded-md border border-gray-200 bg-white shadow-lg">
+                                  <div className="py-1 text-left text-sm">
                                     <button
-                                      className="w-full text-left px-3 py-2 text-sm text-primary-600 hover:bg-gray-50 flex items-center gap-2"
+                                      className="w-full px-3 py-2 text-primary-600 hover:bg-gray-50 flex items-center gap-2"
                                       onClick={() => { setOpenInventoryActionMenuId(null); handleEditItem(item) }}
                                     >
-                                      Edit
+                                      Edit Details
                                     </button>
                                     <button
-                                      className="w-full text-left px-3 py-2 text-sm text-green-600 hover:bg-gray-50 flex items-center gap-2"
+                                      className="w-full px-3 py-2 text-green-600 hover:bg-gray-50 flex items-center gap-2"
                                       onClick={() => { setOpenInventoryActionMenuId(null); handleRestockItem(item) }}
                                     >
                                       Restock
                                     </button>
+                                    <button
+                                      className="w-full px-3 py-2 text-amber-600 hover:bg-gray-50 flex items-center gap-2"
+                                      onClick={() => { setOpenInventoryActionMenuId(null); handleAdjustItem(item) }}
+                                    >
+                                      Adjust Stock
+                                    </button>
                                     {item.deleted_at ? (
                                       <button
-                                        className="w-full text-left px-3 py-2 text-sm text-emerald-600 hover:bg-gray-50 flex items-center gap-2"
+                                        className="w-full px-3 py-2 text-emerald-600 hover:bg-gray-50 flex items-center gap-2"
                                         onClick={() => { setOpenInventoryActionMenuId(null); handleRestoreItem(item) }}
                                         disabled={restoreItemMutation.isPending}
                                       >
@@ -769,7 +745,7 @@ const InventoryManagement = () => {
                                       </button>
                                     ) : (
                                       <button
-                                        className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-gray-50 flex items-center gap-2"
+                                        className="w-full px-3 py-2 text-red-600 hover:bg-gray-50 flex items-center gap-2"
                                         onClick={() => { setOpenInventoryActionMenuId(null); handleArchiveItem(item) }}
                                         disabled={archiveItemMutation.isPending}
                                       >
@@ -833,6 +809,12 @@ const InventoryManagement = () => {
       <RestockModal
         item={selectedItem}
         isOpen={restockModalOpen}
+        onClose={closeModals}
+      />
+
+      <InventoryAdjustModal
+        item={selectedItem}
+        isOpen={adjustModalOpen}
         onClose={closeModals}
       />
     </div>

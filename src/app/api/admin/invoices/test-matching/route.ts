@@ -2,6 +2,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminAuth } from '@/lib/admin/middleware'
 import { testMatchingEngine } from '@/lib/matching/item-matcher'
 
+interface MatchingTestState {
+  fuzzy_matching: boolean
+  package_conversion: boolean
+  string_similarity: boolean
+}
+
+interface MatchingTestResults {
+  tests: MatchingTestState
+  details: Record<string, string>
+  overall_success: boolean
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Verify admin authentication
@@ -12,13 +24,13 @@ export async function POST(request: NextRequest) {
 
     console.log('🧪 Starting matching engine tests...')
 
-    const tests = {
+    const tests: MatchingTestState = {
       fuzzy_matching: false,
       package_conversion: false,
       string_similarity: false
     }
 
-    const results: any = {
+    const results: MatchingTestResults = {
       tests,
       details: {},
       overall_success: false
@@ -30,8 +42,9 @@ export async function POST(request: NextRequest) {
       const matchingTest = await testMatchingEngine()
       tests.fuzzy_matching = matchingTest
       results.details.fuzzy_matching = matchingTest ? 'Fuzzy matching test successful' : 'Fuzzy matching test failed'
-    } catch (error: any) {
-      results.details.fuzzy_matching = `Matching engine test error: ${error.message}`
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      results.details.fuzzy_matching = `Matching engine test error: ${message}`
     }
 
     // Test 2: Package conversion
@@ -47,7 +60,7 @@ export async function POST(request: NextRequest) {
       }
       
       let conversionTest = true
-      for (const [packageType, expectedMultiplier] of Object.entries(testPackageConversion)) {
+      for (const [, expectedMultiplier] of Object.entries(testPackageConversion)) {
         // This would normally test the actual conversion logic
         if (expectedMultiplier <= 0) {
           conversionTest = false
@@ -57,8 +70,9 @@ export async function POST(request: NextRequest) {
       
       tests.package_conversion = conversionTest
       results.details.package_conversion = conversionTest ? 'Package conversion test successful' : 'Package conversion test failed'
-    } catch (error: any) {
-      results.details.package_conversion = `Package conversion test error: ${error.message}`
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      results.details.package_conversion = `Package conversion test error: ${message}`
     }
 
     // Test 3: String similarity libraries
@@ -66,7 +80,6 @@ export async function POST(request: NextRequest) {
       console.log('Testing string similarity libraries...')
       
       // Test that libraries can be loaded
-      // @ts-expect-error string-similarity has no type definitions
       const { default: stringSimilarity } = await import('string-similarity')
       const { default: Fuse } = await import('fuse.js')
       
@@ -79,8 +92,9 @@ export async function POST(request: NextRequest) {
       
       tests.string_similarity = librariesWorking
       results.details.string_similarity = librariesWorking ? 'String similarity libraries working correctly' : 'String similarity libraries failed'
-    } catch (error: any) {
-      results.details.string_similarity = `String similarity test error: ${error.message}`
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      results.details.string_similarity = `String similarity test error: ${message}`
     }
 
     results.overall_success = tests.fuzzy_matching && tests.package_conversion && tests.string_similarity

@@ -83,7 +83,7 @@ export function validateUUID(uuid: string): boolean {
 /**
  * Sanitize and validate JSON input
  */
-export function validateJSON(input: string, maxSize = 10000): any {
+export function validateJSON(input: string, maxSize = 10000): unknown {
   if (typeof input !== 'string') {
     throw new Error('JSON input must be a string')
   }
@@ -94,7 +94,7 @@ export function validateJSON(input: string, maxSize = 10000): any {
   
   try {
     return JSON.parse(input)
-  } catch (error) {
+  } catch {
     throw new Error('Invalid JSON format')
   }
 }
@@ -102,32 +102,40 @@ export function validateJSON(input: string, maxSize = 10000): any {
 /**
  * Validate order item structure
  */
-export function validateOrderItem(item: any): boolean {
+export function validateOrderItem(item: unknown): boolean {
   if (!item || typeof item !== 'object') return false
-  
+  const candidate = item as Record<string, unknown>
+ 
+  const quantity = typeof candidate.quantity === 'number' ? candidate.quantity : NaN
+  const price = typeof candidate.price === 'number' ? candidate.price : NaN
+
   return (
-    typeof item.id === 'string' &&
-    typeof item.name === 'string' &&
-    typeof item.quantity === 'number' &&
-    typeof item.price === 'number' &&
-    item.quantity > 0 &&
-    item.quantity <= 100 && // Reasonable max quantity
-    validateAmount(item.price)
+    typeof candidate.id === 'string' &&
+    typeof candidate.name === 'string' &&
+    Number.isFinite(quantity) &&
+    Number.isFinite(price) &&
+    quantity > 0 &&
+    quantity <= 100 &&
+    validateAmount(price)
   )
 }
 
 /**
  * Validate customer information
  */
-export function validateCustomerInfo(customer: any): boolean {
+export function validateCustomerInfo(customer: unknown): boolean {
   if (!customer || typeof customer !== 'object') return false
+  const person = customer as Record<string, unknown>
   
+  const phone = typeof person.phone === 'string' ? person.phone : undefined
+
   return (
-    validateEmail(customer.email) &&
-    typeof customer.name === 'string' &&
-    customer.name.length >= 1 &&
-    customer.name.length <= 100 &&
-    (!customer.phone || validatePhone(customer.phone))
+    typeof person.email === 'string' &&
+    validateEmail(person.email) &&
+    typeof person.name === 'string' &&
+    person.name.length >= 1 &&
+    person.name.length <= 100 &&
+    (!phone || validatePhone(phone))
   )
 }
 
@@ -144,9 +152,10 @@ export class ValidationError extends Error {
 /**
  * Validate request body against schema
  */
-export function validateRequestBody(body: any, schema: Record<string, (value: any) => boolean>): void {
+export function validateRequestBody(body: unknown, schema: Record<string, (value: unknown) => boolean>): void {
   for (const [field, validator] of Object.entries(schema)) {
-    if (!validator(body[field])) {
+    const value = (body && typeof body === 'object' && field in body) ? (body as Record<string, unknown>)[field] : undefined
+    if (!validator(value)) {
       throw new ValidationError(`Invalid ${field}`, field)
     }
   }

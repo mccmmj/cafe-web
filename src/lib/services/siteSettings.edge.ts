@@ -10,7 +10,6 @@ type CacheEntry = {
 const CACHE_TTL_MS = 5 * 1000
 
 declare global {
-  // eslint-disable-next-line no-var
   var __siteStatusCacheEdge: CacheEntry | undefined
 }
 

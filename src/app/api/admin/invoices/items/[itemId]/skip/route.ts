@@ -45,11 +45,11 @@ export async function PUT(
       }
     })
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error skipping item:', error)
     return NextResponse.json({
       success: false,
-      error: `Server error: ${error.message}`
+      error: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}`
     }, { status: 500 })
   }
 }

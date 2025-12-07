@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdminAuth } from '@/lib/admin/middleware'
+import { requireAdminAuth, isAdminAuthSuccess } from '@/lib/admin/middleware'
 import { createClient } from '@/lib/supabase/server'
 import { parseInvoiceWithAI } from '@/lib/ai/openai-service'
 import { processInvoiceFile, validateInvoiceText } from '@/lib/document/pdf-processor'
@@ -9,13 +9,25 @@ interface RouteContext {
   params: Promise<{ id: string }>
 }
 
+interface SupplierInfoRow {
+  id: string
+  name: string | null
+}
+
+interface SupplierTemplateRow {
+  id: string
+  format_config: Record<string, unknown> | null
+  parsing_rules: Record<string, unknown> | null
+}
+
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
     // Verify admin authentication
     const authResult = await requireAdminAuth(request)
-    if (authResult instanceof NextResponse) {
+    if (!isAdminAuthSuccess(authResult)) {
       return authResult
     }
+    const adminAuth = authResult
 
     const { id } = await context.params
     if (!process.env.OPENAI_API_KEY) {
@@ -76,7 +88,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       .from('invoices')
       .update({
         status: 'parsing',
-        processed_by: (authResult as any).userId,
+        processed_by: adminAuth.userId,
         processed_at: new Date().toISOString()
       })
       .eq('id', id)
@@ -161,18 +173,20 @@ export async function POST(request: NextRequest, context: RouteContext) {
       // Step 3: Get supplier-specific template rules if available
       const { data: template } = await supabase
         .from('supplier_invoice_templates')
-        .select('format_config, parsing_rules')
+        .select('id, format_config, parsing_rules')
         .eq('supplier_id', invoice.supplier_id)
         .eq('is_active', true)
         .single()
+      const activeTemplate = template as SupplierTemplateRow | null
 
       // Step 4: Parse with AI
       console.log('🤖 Starting AI parsing with OpenAI...')
       
+      const supplierInfo = (invoice.suppliers as SupplierInfoRow[] | null)?.[0]
       const aiResult = await parseInvoiceWithAI({
         text: documentResult.text,
-        supplier_name: (invoice.suppliers as any)?.name,
-        template_rules: template?.parsing_rules || {}
+        supplier_name: supplierInfo?.name ?? undefined,
+        template_rules: activeTemplate?.parsing_rules ?? {}
       })
 
       if (!aiResult.success || !aiResult.data) {
@@ -249,7 +263,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
             status: 'confirmed', // Mark as confirmed since we have the invoice
             total_amount: orderTotal,
             notes: `Auto-created from invoice ${invoice.invoice_number}`,
-            created_by: (authResult as any).userId
+            created_by: adminAuth.userId
           })
           .select('id, order_number')
           .single()
@@ -336,10 +350,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
       }
 
       // Step 9: Update supplier template success rate if template was used
-      if (template) {
+      if (activeTemplate) {
         try {
           await supabase.rpc('increment_template_usage', {
-            template_id: (template as any).id,
+            template_id: activeTemplate.id,
             success: true
           })
         } catch (err) {
@@ -385,7 +399,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         message: 'Invoice parsed successfully'
       })
 
-    } catch (processingError: any) {
+    } catch (processingError) {
       console.error('Parsing process error:', processingError)
 
       // Update invoice with error status
@@ -393,13 +407,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
         .from('invoices')
         .update({
           status: 'error',
-          parsing_error: `Processing error: ${processingError.message}`
+          parsing_error: `Processing error: ${processingError instanceof Error ? processingError.message : 'Unknown error'}`
         })
         .eq('id', id)
 
       return NextResponse.json({
         error: 'Invoice parsing failed',
-        details: processingError.message
+        details: processingError instanceof Error ? processingError.message : 'Unknown error'
       }, { status: 500 })
     }
 

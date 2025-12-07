@@ -27,6 +27,7 @@ export default function GlobalCartModal() {
       await updateCartItem.mutateAsync({ itemId, updates: { quantity: newQuantity } })
       toast.success('Cart updated')
     } catch (error) {
+      console.error('Failed to update cart item quantity:', error)
       toast.error('Failed to update cart')
     }
   }
@@ -36,6 +37,7 @@ export default function GlobalCartModal() {
       await removeFromCart.mutateAsync(itemId)
       toast.success('Item removed from cart')
     } catch (error) {
+      console.error('Failed to remove item from cart:', error)
       toast.error('Failed to remove item')
     }
   }
@@ -45,6 +47,7 @@ export default function GlobalCartModal() {
       await clearCart.mutateAsync()
       toast.success('Cart cleared')
     } catch (error) {
+      console.error('Failed to clear cart:', error)
       toast.error('Failed to clear cart')
     }
   }

@@ -3,6 +3,18 @@ import { requireAdminAuth } from '@/lib/admin/middleware'
 import { testAIService } from '@/lib/ai/openai-service'
 import { testDocumentProcessor } from '@/lib/document/pdf-processor'
 
+interface ServiceTestState {
+  openai_configured: boolean
+  ai_service: boolean
+  document_processor: boolean
+}
+
+interface ServiceTestResults {
+  tests: ServiceTestState
+  details: Record<string, string>
+  overall_success: boolean
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Verify admin authentication
@@ -13,13 +25,13 @@ export async function POST(request: NextRequest) {
 
     console.log('🧪 Starting AI service tests...')
 
-    const tests = {
+    const tests: ServiceTestState = {
       openai_configured: !!process.env.OPENAI_API_KEY,
       ai_service: false,
       document_processor: false
     }
 
-    const results: any = {
+    const results: ServiceTestResults = {
       tests,
       details: {},
       overall_success: false
@@ -41,8 +53,9 @@ export async function POST(request: NextRequest) {
       const aiTest = await testAIService()
       tests.ai_service = aiTest
       results.details.ai_service = aiTest ? 'AI parsing test successful' : 'AI parsing test failed'
-    } catch (error: any) {
-      results.details.ai_service = `AI test error: ${error.message}`
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      results.details.ai_service = `AI test error: ${message}`
     }
 
     // Test 3: Test Document Processor
@@ -51,8 +64,9 @@ export async function POST(request: NextRequest) {
       const docTest = await testDocumentProcessor()
       tests.document_processor = docTest
       results.details.document_processor = docTest ? 'Document processing test successful' : 'Document processing test failed'
-    } catch (error: any) {
-      results.details.document_processor = `Document processor test error: ${error.message}`
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      results.details.document_processor = `Document processor test error: ${message}`
     }
 
     results.overall_success = tests.openai_configured && tests.ai_service && tests.document_processor

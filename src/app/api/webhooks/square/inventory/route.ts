@@ -45,6 +45,23 @@ interface SquareInventoryWebhookEvent {
   }
 }
 
+interface InventoryItemRecord {
+  id: string
+  item_name: string
+  current_stock: number | null
+  minimum_threshold: number
+  reorder_point: number
+  square_item_id?: string | null
+}
+
+interface InventoryUpdateResult {
+  processed: number
+  updated: number
+  notFound: number
+  alertsCreated: number
+  totalQuantityChange: number
+}
+
 // Verify Square webhook signature
 function verifySquareSignature(body: string, signature: string, secret: string): boolean {
   if (!secret || !signature) {
@@ -79,9 +96,9 @@ async function getInventoryItemBySquareId(catalogObjectId: string) {
   const supabase = getSupabaseClient()
   const { data: item, error } = await supabase
     .from('inventory_items')
-    .select('id, square_item_id, item_name, current_stock')
+    .select('id, square_item_id, item_name, current_stock, minimum_threshold, reorder_point')
     .eq('square_item_id', catalogObjectId)
-    .maybeSingle()
+    .maybeSingle<InventoryItemRecord>()
 
   if (error) {
     console.warn(`Warning: Error looking up item ${catalogObjectId}:`, error.message)
@@ -91,7 +108,7 @@ async function getInventoryItemBySquareId(catalogObjectId: string) {
   return item
 }
 
-async function updateInventoryStock(inventoryItem: any, newQuantity: number, movementType: string, reference: string) {
+async function updateInventoryStock(inventoryItem: InventoryItemRecord, newQuantity: number, movementType: string, reference: string) {
   const previousStock = inventoryItem.current_stock || 0
   const quantityChange = newQuantity - previousStock
 
@@ -143,7 +160,7 @@ async function updateInventoryStock(inventoryItem: any, newQuantity: number, mov
   }
 }
 
-async function checkLowStockAlert(inventoryItem: any, newQuantity: number) {
+async function checkLowStockAlert(inventoryItem: InventoryItemRecord, newQuantity: number) {
   const { minimum_threshold, reorder_point } = inventoryItem
   
   let alertLevel = null
@@ -189,9 +206,9 @@ async function checkLowStockAlert(inventoryItem: any, newQuantity: number) {
   return { alertCreated: false }
 }
 
-async function processInventoryUpdates(inventoryCounts: InventoryCount[], eventId: string) {
+async function processInventoryUpdates(inventoryCounts: InventoryCount[], eventId: string): Promise<InventoryUpdateResult> {
   const { squareLocationId } = getSquareConfig()
-  const results = {
+  const results: InventoryUpdateResult = {
     processed: 0,
     updated: 0,
     notFound: 0,
@@ -253,7 +270,7 @@ async function processInventoryUpdates(inventoryCounts: InventoryCount[], eventI
   return results
 }
 
-async function logWebhookEvent(event: SquareInventoryWebhookEvent, processResult: any) {
+async function logWebhookEvent(event: SquareInventoryWebhookEvent, processResult: InventoryUpdateResult) {
   try {
     const supabase = getSupabaseClient()
     const { error } = await supabase

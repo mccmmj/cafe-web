@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo } from 'react'
-import type { MenuCategory, MenuItem } from '@/types/menu'
-import { useCartState, useAddToCart, useUpdateCartItem, useRemoveCartItem, useClearCart } from '@/hooks/useCartData'
+import { useState, useEffect } from 'react'
+import type { MenuCategory } from '@/types/menu'
+import { useCartState, useAddToCart, useUpdateCartItem, useRemoveCartItem } from '@/hooks/useCartData'
 import {
   MenuLoadingState,
   MenuErrorState,
@@ -10,7 +10,7 @@ import {
   MenuCategory as MenuCategoryComponent,
   MenuSearch
 } from './index'
-import MasonryGrid from './MasonryGrid'
+import type { SearchResult } from './index'
 import Button from '@/components/ui/Button'
 
 interface MenuContainerProps {
@@ -23,7 +23,7 @@ const MenuContainer = ({ className = '', showHeader = true }: MenuContainerProps
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({})
-  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [isSearchActive, setIsSearchActive] = useState(false)
 
   // Global cart state
@@ -31,7 +31,6 @@ const MenuContainer = ({ className = '', showHeader = true }: MenuContainerProps
   const addToCartMutation = useAddToCart()
   const updateCartItemMutation = useUpdateCartItem()
   const removeFromCartMutation = useRemoveCartItem()
-  const clearCartMutation = useClearCart()
 
   // Note: selectedVariations state moved to MenuCategory level
 
@@ -149,7 +148,7 @@ const MenuContainer = ({ className = '', showHeader = true }: MenuContainerProps
     return cart?.itemCount || 0
   }
 
-  const handleSearchResults = (results: any[]) => {
+  const handleSearchResults = (results: SearchResult[]) => {
     setSearchResults(results)
     setIsSearchActive(results.length > 0)
   }
@@ -184,7 +183,6 @@ const MenuContainer = ({ className = '', showHeader = true }: MenuContainerProps
   }
 
   const currentQuantities = getCurrentQuantities()
-  const totalItems = getTotalCartItems()
   
 
   return (

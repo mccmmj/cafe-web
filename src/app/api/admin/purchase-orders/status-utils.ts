@@ -1,3 +1,5 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+
 const RAW_STATUSES = [
   'draft',
   'pending_approval',
@@ -42,7 +44,7 @@ export function canTransition(fromStatus: string, toStatus: string): boolean {
 }
 
 export async function insertStatusHistory(
-  supabase: any,
+  supabase: SupabaseClient,
   purchaseOrderId: string,
   previousStatus: string | null,
   newStatus: string,

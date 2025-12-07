@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { config } from '@/lib/square/client'
 
 export async function GET() {
   try {

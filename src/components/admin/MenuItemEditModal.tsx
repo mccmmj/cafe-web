@@ -1,10 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Save, DollarSign, Coffee, AlertTriangle } from 'lucide-react'
+import { X, Save, DollarSign, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui'
-import { Input } from '@/components/ui'
-import { formatPrice } from '@/lib/utils'
 import { isStarbucksCategory } from '@/lib/constants/menu'
 
 interface MenuItem {
@@ -288,7 +286,7 @@ const MenuItemEditModal = ({ item, onClose, onSave, isLoading, categories = [] }
               <h3 className="text-base font-medium text-gray-900">Size Variations & Pricing</h3>
               
               <div className="space-y-3">
-                {formData.variations.map((variation, index) => (
+                {formData.variations.map((variation) => (
                   <div key={variation.id} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
                     <div className="flex-1">
                       <label className="block text-xs font-medium text-gray-600 mb-1">

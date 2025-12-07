@@ -3,9 +3,35 @@ import path from 'path'
 import { fork } from 'child_process'
 import { InvoiceTextAnalysis } from '@/types/invoice'
 
+type Pdf2JsonModule = typeof import('pdf2json')
+type Pdf2JsonParser = Pdf2JsonModule['default']
+type PdfjsLib = typeof import('pdfjs-dist/legacy/build/pdf.mjs')
+
+interface Pdf2JsonTextRun {
+  T?: string
+}
+
+interface Pdf2JsonTextBlock {
+  R?: Pdf2JsonTextRun[]
+}
+
+interface Pdf2JsonPage {
+  Texts?: Pdf2JsonTextBlock[]
+}
+
+interface Pdf2JsonData {
+  Pages?: Pdf2JsonPage[]
+}
+
+const getErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) return error.message
+  if (typeof error === 'string') return error
+  return 'Unknown error'
+}
+
 // Dynamic imports for document processing libraries
-let PDFParser: any = null
-let pdfjsLib: any = null
+let PDFParser: Pdf2JsonParser | null = null
+let pdfjsLib: PdfjsLib | null = null
 
 const TESSERACT_DATA_DIR = path.join(process.cwd(), 'tesseract-data')
 const TESSERACT_LANG_URL = 'https://github.com/tesseract-ocr/tessdata_fast/raw/main'
@@ -41,9 +67,10 @@ async function getPdfParser() {
       const pdf2jsonModule = await import('pdf2json')
       PDFParser = pdf2jsonModule.default
       console.log('✅ pdf2json library loaded successfully')
-    } catch (error: any) {
-      console.error('Failed to load pdf2json:', error)
-      throw new Error(`PDF parsing library not available: ${error.message}`)
+    } catch (error) {
+      const message = getErrorMessage(error)
+      console.error('Failed to load pdf2json:', message)
+      throw new Error(`PDF parsing library not available: ${message}`)
     }
   }
   return PDFParser
@@ -57,9 +84,10 @@ async function getPdfJs() {
         pdfjsLib.GlobalWorkerOptions.workerSrc = ''
       }
       console.log('✅ pdfjs-dist fallback library loaded successfully')
-    } catch (error: any) {
-      console.error('Failed to load pdfjs-dist:', error)
-      throw new Error(`PDF fallback parser not available: ${error.message}`)
+    } catch (error) {
+      const message = getErrorMessage(error)
+      console.error('Failed to load pdfjs-dist:', message)
+      throw new Error(`PDF fallback parser not available: ${message}`)
     }
   }
   return pdfjsLib
@@ -222,11 +250,12 @@ export async function extractTextFromImage(buffer: Buffer, mimeType: string): Pr
         confidence
       }
     }
-  } catch (error: any) {
-    console.error('OCR setup error:', error)
+  } catch (error: unknown) {
+    const message = getErrorMessage(error)
+    console.error('OCR setup error:', message)
     return {
       success: false,
-      errors: [`OCR extraction failed: ${error.message}`]
+      errors: [`OCR extraction failed: ${message}`]
     }
   }
 }
@@ -242,23 +271,17 @@ async function extractWithPdf2Json(buffer: Buffer): Promise<DocumentProcessingRe
   return new Promise((resolve, reject) => {
     let extractedText = ''
 
-    pdfParser.on('pdfParser_dataReady', (pdfData: any) => {
+    pdfParser.on('pdfParser_dataReady', (pdfData: Pdf2JsonData) => {
       try {
-        if (pdfData.Pages && pdfData.Pages.length > 0) {
-          for (const page of pdfData.Pages) {
-            if (page.Texts && page.Texts.length > 0) {
-              for (const textBlock of page.Texts) {
-                if (textBlock.R && textBlock.R.length > 0) {
-                  for (const textRun of textBlock.R) {
-                    if (textRun.T) {
-                      extractedText += decodeURIComponent(textRun.T) + ' '
-                    }
-                  }
-                }
+        for (const page of pdfData.Pages ?? []) {
+          for (const textBlock of page.Texts ?? []) {
+            for (const textRun of textBlock.R ?? []) {
+              if (textRun.T) {
+                extractedText += decodeURIComponent(textRun.T) + ' '
               }
-              extractedText += '\n'
             }
           }
+          extractedText += '\n'
         }
 
         const cleanedText = extractedText.trim()
@@ -282,8 +305,8 @@ async function extractWithPdf2Json(buffer: Buffer): Promise<DocumentProcessingRe
       }
     })
 
-    pdfParser.on('pdfParser_dataError', (error: any) => {
-      reject(new Error(error.parserError || error.message || 'Unknown pdf2json error'))
+    pdfParser.on('pdfParser_dataError', (error: unknown) => {
+      reject(new Error(getErrorMessage(error) || 'Unknown pdf2json error'))
     })
 
     pdfParser.parseBuffer(buffer)
@@ -305,7 +328,7 @@ async function extractWithPdfJs(buffer: Buffer): Promise<DocumentProcessingResul
       const page = await doc.getPage(pageNumber)
       const textContent = await page.getTextContent()
       const pageText = textContent.items
-        .map((item: any) => (item.str ? item.str : ''))
+        .map((item) => ('str' in item ? item.str : ''))
         .join(' ')
 
       extractedText += pageText + '\n'
@@ -335,17 +358,19 @@ async function extractWithPdfJs(buffer: Buffer): Promise<DocumentProcessingResul
 export async function extractTextFromPDF(buffer: Buffer): Promise<DocumentProcessingResult> {
   try {
     return await extractWithPdf2Json(buffer)
-  } catch (primaryError: any) {
-    console.warn('⚠️ pdf2json extraction failed, trying pdfjs-dist fallback:', primaryError.message)
+  } catch (primaryError: unknown) {
+    const primaryMessage = getErrorMessage(primaryError)
+    console.warn('⚠️ pdf2json extraction failed, trying pdfjs-dist fallback:', primaryMessage)
     try {
       return await extractWithPdfJs(buffer)
-    } catch (fallbackError: any) {
-      console.error('❌ PDF fallback extraction failed:', fallbackError)
+    } catch (fallbackError: unknown) {
+      const fallbackMessage = getErrorMessage(fallbackError)
+      console.error('❌ PDF fallback extraction failed:', fallbackMessage)
       return {
         success: false,
         errors: [
-          `PDF extraction failed: ${primaryError.message}`,
-          `Fallback error: ${fallbackError.message}`
+          `PDF extraction failed: ${primaryMessage}`,
+          `Fallback error: ${fallbackMessage}`
         ]
       }
     }
@@ -475,11 +500,12 @@ export async function processInvoiceFile(fileUrl: string, fileType: string, file
       analysis
     }
 
-  } catch (error: any) {
-    console.error('File processing error:', error)
+  } catch (error: unknown) {
+    const message = getErrorMessage(error)
+    console.error('File processing error:', message)
     return {
       success: false,
-      errors: [`File processing failed: ${error.message}`]
+      errors: [`File processing failed: ${message}`]
     }
   }
 }

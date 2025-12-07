@@ -90,11 +90,11 @@ export async function POST(
       }
     })
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error creating and matching item:', error)
     return NextResponse.json({
       success: false,
-      error: `Server error: ${error.message}`
+      error: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}`
     }, { status: 500 })
   }
 }

@@ -1,11 +1,24 @@
 import { NextResponse } from 'next/server'
 import { searchAllCatalogItems } from '@/lib/square/fetch-client'
 
+interface CatalogCategoryData {
+  name?: string
+  parent_category?: { id: string }
+}
+
+interface CatalogObjectSummary {
+  id: string
+  type: string
+  category_data?: CatalogCategoryData
+  is_deleted?: boolean
+  present_at_all_locations?: boolean
+}
+
 export async function GET() {
   try {
     console.log('🔍 Debug: Fetching Square catalog for category analysis...')
     
-    const catalogData = await searchAllCatalogItems()
+    const catalogData = await searchAllCatalogItems() as { objects?: CatalogObjectSummary[] }
     
     if (!catalogData.objects) {
       return NextResponse.json({ 
@@ -15,16 +28,16 @@ export async function GET() {
     }
 
     // Analyze catalog objects by type
-    const objectsByType = catalogData.objects.reduce((acc: any, obj: any) => {
+    const objectsByType = catalogData.objects.reduce<Record<string, number>>((acc, obj) => {
       acc[obj.type] = (acc[obj.type] || 0) + 1
       return acc
     }, {})
 
     // Get all categories
-    const rawCategories = catalogData.objects.filter((obj: any) => obj.type === 'CATEGORY')
+    const rawCategories = catalogData.objects.filter((obj): obj is CatalogObjectSummary & { category_data?: CatalogCategoryData } => obj.type === 'CATEGORY')
     
     // Analyze category structure
-    const categoryAnalysis = rawCategories.map((cat: any) => ({
+    const categoryAnalysis = rawCategories.map(cat => ({
       id: cat.id,
       name: cat.category_data?.name || 'Unnamed',
       hasParent: !!cat.category_data?.parent_category,
@@ -34,8 +47,8 @@ export async function GET() {
     }))
 
     // Group by parent-child relationships
-    const topLevel = categoryAnalysis.filter((cat: any) => !cat.hasParent)
-    const childCategories = categoryAnalysis.filter((cat: any) => cat.hasParent)
+    const topLevel = categoryAnalysis.filter(cat => !cat.hasParent)
+    const childCategories = categoryAnalysis.filter(cat => cat.hasParent)
 
     return NextResponse.json({
       success: true,

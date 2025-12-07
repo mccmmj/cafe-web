@@ -1,7 +1,16 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-export async function GET(request: NextRequest) {
+interface InvoiceRow {
+  id: string
+  invoice_number: string
+  status: string
+  suppliers: {
+    name?: string | null
+  } | null
+}
+
+export async function GET() {
   try {
     const supabase = await createClient()
 
@@ -23,27 +32,29 @@ export async function GET(request: NextRequest) {
     }
 
     // Count statuses
-    const statusCounts = invoices.reduce((acc: any, inv) => {
+    const typedInvoices = (invoices || []) as InvoiceRow[]
+    const statusCounts = typedInvoices.reduce<Record<string, number>>((acc, inv) => {
       acc[inv.status] = (acc[inv.status] || 0) + 1
       return acc
     }, {})
 
     return NextResponse.json({
       success: true,
-      invoices: invoices.map(inv => ({
+      invoices: typedInvoices.map(inv => ({
         id: inv.id,
         invoice_number: inv.invoice_number,
         status: inv.status,
-        supplier: (inv.suppliers as any)?.name
+        supplier: inv.suppliers?.name || null
       })),
       statusCounts,
-      totalInvoices: invoices.length
+      totalInvoices: typedInvoices.length
     })
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Debug endpoint error:', error)
+    const message = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json({
-      error: error.message
+      error: message
     }, { status: 500 })
   }
 }

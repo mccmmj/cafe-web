@@ -2,6 +2,55 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminAuth } from '@/lib/admin/middleware'
 import { searchAllCatalogItems, upsertCatalogItem, listCatalogObjects, upsertCatalogCategory } from '@/lib/square/fetch-client'
 
+interface CatalogVariation {
+  id: string
+  item_variation_data: {
+    name: string
+    price_money?: {
+      amount?: number
+      currency?: string
+    }
+    ordinal?: number
+    [key: string]: unknown
+  }
+}
+
+interface CatalogItemData {
+  name: string
+  description?: string
+  categories?: { id: string }[]
+  category_id?: string
+  available_for_pickup?: boolean
+  available_online?: boolean
+  variations?: CatalogVariation[]
+  image_url?: string
+  ordinal?: number
+  [key: string]: unknown
+}
+
+interface CatalogCategoryData {
+  name?: string
+  item_ids?: string[]
+}
+
+interface CatalogObject {
+  id: string
+  type: string
+  version?: number
+  updated_at?: string
+  item_data?: CatalogItemData
+  category_data?: CatalogCategoryData
+}
+
+interface CatalogResponse {
+  objects?: CatalogObject[]
+}
+
+interface VariationInput {
+  name: string
+  price: number
+}
+
 export async function GET(request: NextRequest) {
   try {
     // Verify admin authentication
@@ -13,7 +62,7 @@ export async function GET(request: NextRequest) {
     console.log('Admin fetching menu items for management...')
     
     // Fetch all catalog items from Square
-    const catalogResult = await searchAllCatalogItems()
+    const catalogResult = await searchAllCatalogItems() as CatalogResponse
     
     if (!catalogResult.objects) {
       return NextResponse.json(
@@ -23,57 +72,60 @@ export async function GET(request: NextRequest) {
     }
 
     // Separate items and categories
-    const allItems = catalogResult.objects.filter((obj: any) => obj.type === 'ITEM')
-    const allCategories = catalogResult.objects.filter((obj: any) => obj.type === 'CATEGORY')
+    const allItems = catalogResult.objects.filter(obj => obj.type === 'ITEM' && obj.item_data) as CatalogObject[]
+    const allCategories = catalogResult.objects.filter(obj => obj.type === 'CATEGORY')
     
     // Create category lookup map
-    const categoryMap = new Map()
-    allCategories.forEach((category: any) => {
-      categoryMap.set(category.id, category.category_data.name)
+    const categoryMap = new Map<string, string>()
+    allCategories.forEach(category => {
+      if (category.id && category.category_data?.name) {
+        categoryMap.set(category.id, category.category_data.name)
+      }
     })
 
     console.log('📂 Found categories:', Array.from(categoryMap.entries()))
 
     // Process items for admin management view
-    const items = allItems.map((item: any) => {
+    const items = allItems.map(item => {
+      const itemData = item.item_data as CatalogItemData
       // Get category name from category lookup
-      const categoryId = item.item_data.categories?.[0]?.id || item.item_data.category_id
+      const categoryId = itemData.categories?.[0]?.id || itemData.category_id
       const categoryName = categoryId ? categoryMap.get(categoryId) || 'Uncategorized' : 'Uncategorized'
       
       // Debug category mapping for new items
       if (categoryName === 'Uncategorized') {
         console.log('🔍 Debug item with no category:', {
-          itemName: item.item_data.name,
+          itemName: itemData.name,
           categoryId,
-          categoriesArray: item.item_data.categories,
-          categoryIdField: item.item_data.category_id,
+          categoriesArray: itemData.categories,
+          categoryIdField: itemData.category_id,
           availableCategories: Array.from(categoryMap.keys())
         })
       }
       
       return {
         id: item.id,
-        name: item.item_data.name,
-        description: item.item_data.description || '',
+        name: itemData.name,
+        description: itemData.description || '',
         categoryId: categoryId,
         categoryName: categoryName,
-        isAvailable: item.item_data.available_for_pickup !== false && item.item_data.available_online !== false,
-        variations: item.item_data.variations?.map((variation: any) => ({
+        isAvailable: itemData.available_for_pickup !== false && itemData.available_online !== false,
+        variations: itemData.variations?.map((variation: CatalogVariation) => ({
           id: variation.id,
           name: variation.item_variation_data.name,
           price: variation.item_variation_data.price_money?.amount || 0,
           currency: variation.item_variation_data.price_money?.currency || 'USD',
           isDefault: variation.item_variation_data.ordinal === 0
         })) || [],
-        imageUrl: item.item_data.image_url,
-        ordinal: item.item_data.ordinal || 0,
+        imageUrl: itemData.image_url,
+        ordinal: itemData.ordinal || 0,
         lastUpdated: item.updated_at,
         version: item.version
       }
     })
 
     // Sort items by category and name
-    items.sort((a: any, b: any) => {
+    items.sort((a, b) => {
       if (a.categoryName !== b.categoryName) {
         return a.categoryName.localeCompare(b.categoryName)
       }
@@ -130,7 +182,7 @@ export async function POST(request: NextRequest) {
         categories: [{ id: categoryId }],
         available_for_pickup: isAvailable,
         available_online: isAvailable,
-        variations: variations.map((variation: any, index: number) => ({
+        variations: variations.map((variation: VariationInput, index: number) => ({
           type: 'ITEM_VARIATION',
           id: `#variation-${Date.now()}-${index}`,
           item_variation_data: {
@@ -160,8 +212,8 @@ export async function POST(request: NextRequest) {
     // Now update the category to include this item
     try {
       // Fetch the current category
-      const categoriesResult = await listCatalogObjects(['CATEGORY'])
-      const targetCategory = categoriesResult.objects?.find((cat: any) => cat.id === categoryId)
+      const categoriesResult = await listCatalogObjects(['CATEGORY']) as CatalogResponse
+      const targetCategory = categoriesResult.objects?.find(cat => cat.id === categoryId)
       
       if (targetCategory) {
         console.log('📂 Updating category to include new item...')
@@ -172,7 +224,7 @@ export async function POST(request: NextRequest) {
           category_data: {
             ...targetCategory.category_data,
             // Add the item to the category's items list if it exists
-            item_ids: [...(targetCategory.category_data.item_ids || []), createdItemId]
+            item_ids: [...(targetCategory.category_data?.item_ids ?? []), createdItemId]
           }
         }
         

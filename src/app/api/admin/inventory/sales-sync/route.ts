@@ -84,10 +84,21 @@ async function createSyncRun(
   return data
 }
 
+type SyncRunUpdate = {
+  status?: 'success' | 'error' | 'pending'
+  square_cursor?: string | null
+  last_synced_at?: string | null
+  orders_processed?: number
+  auto_decrements?: number
+  manual_pending?: number
+  finished_at?: string
+  error_message?: string
+}
+
 async function updateSyncRun(
   supabase: SupabaseClient,
   runId: string,
-  updates: Record<string, any>
+  updates: SyncRunUpdate
 ) {
   const { error } = await supabase
     .from('inventory_sales_sync_runs')
@@ -136,16 +147,62 @@ function mapImpactType(item?: InventoryRow | null): { impactType: ImpactType; re
   return { impactType: 'ignored', reason: 'Item not eligible for automatic decrement' }
 }
 
+type SquareOrderMoney = {
+  amount?: number
+  currency?: string
+}
+
+type SquareOrderTender = {
+  amount_money?: SquareOrderMoney
+  type?: string
+}
+
+type SquareOrderLineItem = {
+  catalog_object_id?: string | null
+  variation_id?: string | null
+  uid?: string | null
+  name?: string
+  quantity?: string
+  unit_price?: {
+    measurement_unit?: {
+      type?: string
+    }
+  }
+  base_price_money?: SquareOrderMoney
+  gross_sales_money?: SquareOrderMoney
+  total_tax_money?: SquareOrderMoney
+}
+
+type SquareOrder = {
+  id: string
+  location_id?: string
+  order_number?: string
+  tenders?: SquareOrderTender[]
+  customer_id?: string | null
+  customer_details?: { nickname?: string } | null
+  created_at?: string
+  line_items?: SquareOrderLineItem[]
+}
+
+type SquareOrdersResponse = {
+  orders: SquareOrder[]
+  cursor?: string | null
+}
+
 async function fetchSquareOrders(
   since?: string | null
-): Promise<{ orders: any[]; cursor?: string | null }> {
+): Promise<SquareOrdersResponse> {
   const { token, baseUrl, locationId, version } = getSquareConfig()
-  const orders: any[] = []
+  const orders: SquareOrder[] = []
   let cursor: string | undefined
   let nextCursor: string | null | undefined
 
   do {
-    const body: Record<string, any> = {
+    const body: {
+      location_ids: string[]
+      query: Record<string, unknown>
+      cursor?: string
+    } = {
       location_ids: [locationId],
       query: {
         sort: { sort_field: 'CREATED_AT', sort_order: 'ASC' }
@@ -183,7 +240,7 @@ async function fetchSquareOrders(
 
     const payload = await response.json()
     if (Array.isArray(payload.orders)) {
-      orders.push(...payload.orders)
+      orders.push(...(payload.orders as SquareOrder[]))
     }
 
     cursor = payload.cursor
@@ -195,7 +252,7 @@ async function fetchSquareOrders(
 
 async function insertSalesTransaction(
   supabase: SupabaseClient,
-  order: any,
+  order: SquareOrder,
   syncRunId: string,
   dryRun: boolean
 ) {
@@ -268,7 +325,7 @@ async function insertTransactionItems(
     impact_type: ImpactType
     impact_reason?: string
     unit?: string
-    metadata?: Record<string, any>
+    metadata?: Record<string, unknown>
   }>,
   dryRun: boolean
 ) {

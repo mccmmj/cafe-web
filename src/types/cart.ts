@@ -7,17 +7,20 @@ export interface CartItem {
   description?: string
   price: number
   quantity: number
-  categoryId: string
-  categoryName: string
+  categoryId?: string
+  categoryName?: string
   image?: string
+  imageUrl?: string
   variation?: {
     id: string
     name: string
     price: number
   }
-  customizations?: CartCustomization[]
+  customizations?: CartCustomization[] | Record<string, string>
   notes?: string
-  addedAt: string
+  specialInstructions?: string
+  totalPrice?: number
+  addedAt?: string
 }
 
 export interface CartCustomization {
@@ -32,8 +35,8 @@ export interface CartSummary {
   itemCount: number
   subtotal: number
   tax: number
-  taxRate: number
-  discount: number
+  taxRate?: number
+  discount?: number
   discountCode?: string
   total: number
   estimatedTime?: number // in minutes

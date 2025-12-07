@@ -1,4 +1,5 @@
 // Menu-related constants
+import type { MenuCategory, MenuItem } from '@/types/menu'
 
 // Menu Category Types
 export const MENU_CATEGORIES = {
@@ -153,7 +154,9 @@ export const ITEM_SORTING = {
 
 // Helper function to check if a category should show Starbucks branding
 export const isStarbucksCategory = (categoryName: string): boolean => {
-  return BRAND_SETTINGS.STARBUCKS_CATEGORIES.includes(categoryName as any)
+  return BRAND_SETTINGS.STARBUCKS_CATEGORIES.includes(
+    categoryName as typeof BRAND_SETTINGS.STARBUCKS_CATEGORIES[number]
+  )
 }
 
 // Helper function to get item group and priority
@@ -233,7 +236,7 @@ export const getCategoryPriority = (categoryName: string): number => {
 }
 
 // Helper function to sort menu categories
-export const sortMenuCategories = (categories: any[]): any[] => {
+export const sortMenuCategories = (categories: MenuCategory[]): MenuCategory[] => {
   return [...categories].sort((a, b) => {
     const aPriority = getCategoryPriority(a.name)
     const bPriority = getCategoryPriority(b.name)
@@ -254,7 +257,7 @@ export const sortMenuCategories = (categories: any[]): any[] => {
 }
 
 // Helper function to sort menu items
-export const sortMenuItems = (items: any[]): any[] => {
+export const sortMenuItems = (items: MenuItem[]): MenuItem[] => {
   return [...items].sort((a, b) => {
     const aGroup = getItemGroup(a.name)
     const bGroup = getItemGroup(b.name)

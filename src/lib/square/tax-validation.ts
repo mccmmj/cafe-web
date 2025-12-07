@@ -1,5 +1,18 @@
 import { listCatalogTaxes } from './fetch-client'
 
+interface CatalogTaxObject {
+  id: string
+  tax_data?: {
+    name?: string
+    percentage?: string
+    enabled?: boolean
+  }
+}
+
+interface CatalogTaxResponse {
+  objects?: CatalogTaxObject[]
+}
+
 export interface TaxConfiguration {
   taxId: string
   name: string
@@ -20,7 +33,7 @@ export class TaxConfigurationError extends Error {
  */
 export async function validateTaxConfiguration(): Promise<TaxConfiguration> {
   try {
-    const taxesResult = await listCatalogTaxes()
+    const taxesResult = await listCatalogTaxes() as CatalogTaxResponse
     
     if (!taxesResult.objects || taxesResult.objects.length === 0) {
       throw new TaxConfigurationError(
@@ -30,8 +43,8 @@ export async function validateTaxConfiguration(): Promise<TaxConfiguration> {
     }
     
     // Filter for enabled taxes only
-    const enabledTaxes = taxesResult.objects.filter((taxObj: any) => 
-      taxObj.tax_data && taxObj.tax_data.enabled === true
+    const enabledTaxes = taxesResult.objects.filter((taxObj): taxObj is CatalogTaxObject & { tax_data: Required<CatalogTaxObject['tax_data']> } => 
+      taxObj.tax_data?.enabled === true
     )
     
     if (enabledTaxes.length === 0) {

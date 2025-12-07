@@ -42,6 +42,21 @@ interface PushToSquareRequest {
   pushType?: 'stock_only' | 'full_sync' // stock_only = inventory counts, full_sync = item details too
 }
 
+type InventoryItemToPush = {
+  id: string
+  square_item_id: string
+  item_name: string
+  current_stock: number | null
+  unit_cost: number | null
+  notes: string | null
+}
+
+type SquareInventoryCount = {
+  catalog_object_id: string
+  location_id: string
+  quantity: string
+}
+
 async function validateAdminAccess(adminEmail: string) {
   const supabase = getSupabaseClient()
   const { data: profile, error } = await supabase
@@ -67,7 +82,7 @@ function getSquareHeaders() {
   }
 }
 
-async function getInventoryItemsToPush(itemIds?: string[]) {
+async function getInventoryItemsToPush(itemIds?: string[]): Promise<InventoryItemToPush[]> {
   const supabase = getSupabaseClient()
   let query = supabase
     .from('inventory_items')
@@ -84,10 +99,10 @@ async function getInventoryItemsToPush(itemIds?: string[]) {
     throw new Error(`Failed to fetch inventory items: ${error.message}`)
   }
 
-  return items
+  return (items ?? []) as InventoryItemToPush[]
 }
 
-async function pushInventoryCountsToSquare(items: any[], dryRun: boolean) {
+async function pushInventoryCountsToSquare(items: InventoryItemToPush[], dryRun: boolean) {
   const { squareLocationId } = getSquareConfig()
   const { SQUARE_BASE_URL } = getSquareApiConfig()
   const results = {
@@ -100,7 +115,15 @@ async function pushInventoryCountsToSquare(items: any[], dryRun: boolean) {
   console.log(`📤 Pushing inventory counts for ${items.length} items...`)
 
   // Square Inventory API allows batch updates
-  const inventoryChanges = []
+  const inventoryChanges: Array<{
+    type: 'PHYSICAL_COUNT'
+    physical_count: {
+      catalog_object_id: string | null
+      location_id: string
+      quantity: string
+      occurred_at: string
+    }
+  }> = []
 
   for (const item of items) {
     results.processed++
@@ -118,16 +141,17 @@ async function pushInventoryCountsToSquare(items: any[], dryRun: boolean) {
       })
 
       if (!response.ok) {
-        const errorData = await response.text()
+        const errorBody = await response.text()
+        console.error(`Square API error ${response.status} while fetching counts:`, errorBody)
         results.errors++
         results.errorDetails.push(`${item.item_name}: Square API error ${response.status}`)
         continue
       }
 
       const squareData = await response.json()
-      const squareCounts = squareData.counts || []
+      const squareCounts = (squareData.counts || []) as SquareInventoryCount[]
       const currentSquareCount = squareCounts.find(
-        (count: any) => count.catalog_object_id === item.square_item_id && count.location_id === squareLocationId
+        (count) => count.catalog_object_id === item.square_item_id && count.location_id === squareLocationId
       )
 
       const squareQuantity = currentSquareCount ? parseInt(currentSquareCount.quantity, 10) : 0
@@ -166,11 +190,11 @@ async function pushInventoryCountsToSquare(items: any[], dryRun: boolean) {
       })
 
       if (!response.ok) {
-        const errorData = await response.text()
-        throw new Error(`Square Inventory API error: ${response.status} ${errorData}`)
+        const errorBody = await response.text()
+        throw new Error(`Square Inventory API error: ${response.status} ${errorBody}`)
       }
 
-      const result = await response.json()
+      await response.json()
       results.updated = inventoryChanges.length
 
       console.log(`✅ Successfully pushed ${results.updated} inventory changes to Square`)
@@ -201,7 +225,7 @@ async function pushInventoryCountsToSquare(items: any[], dryRun: boolean) {
   return results
 }
 
-async function syncItemDetailsToSquare(items: any[], dryRun: boolean) {
+async function syncItemDetailsToSquare(items: InventoryItemToPush[]) {
   // This would update item names, descriptions, etc. in Square
   // For now, we typically let Square be the source of truth for item details
   // This could be implemented if there's a need to push local changes back to Square
@@ -249,7 +273,7 @@ export async function POST(request: NextRequest) {
     } else {
       // Full sync (item details + inventory)
       const stockResults = await pushInventoryCountsToSquare(items, dryRun)
-      const detailResults = await syncItemDetailsToSquare(items, dryRun)
+      const detailResults = await syncItemDetailsToSquare(items)
       
       results = {
         stock: stockResults,

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Factor } from '@supabase/supabase-js'
 import { ShieldCheck, ShieldAlert, Loader2, RefreshCcw, Copy, Trash2 } from 'lucide-react'
@@ -19,7 +19,6 @@ type AssuranceInfo = {
 }
 
 export default function TwoFactorSettings() {
-  const supabase = createClient()
   const [loading, setLoading] = useState(true)
   const [factors, setFactors] = useState<Factor[]>([])
   const [assurance, setAssurance] = useState<AssuranceInfo | null>(null)
@@ -34,11 +33,9 @@ export default function TwoFactorSettings() {
     [factors]
   )
 
-  useEffect(() => {
-    void refreshState()
-  }, [])
+  const supabase = useMemo(() => createClient(), [])
 
-  const refreshState = async () => {
+  const refreshState = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
@@ -68,7 +65,11 @@ export default function TwoFactorSettings() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [supabase])
+
+  useEffect(() => {
+    void refreshState()
+  }, [refreshState])
 
   const beginEnrollment = async () => {
     setWorking(true)

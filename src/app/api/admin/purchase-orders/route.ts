@@ -4,6 +4,73 @@ import type { AdminAuthSuccess } from '@/lib/admin/middleware'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { canonicalStatus, insertStatusHistory } from './status-utils'
 
+interface SupplierProfileInfo {
+  full_name?: string | null
+  email?: string | null
+}
+
+interface PurchaseOrderItemRow {
+  id: string
+  inventory_item_id: string
+  quantity_ordered: number
+  quantity_received: number
+  unit_cost?: number | null
+  unit_type?: string | null
+  pack_size?: number | null
+  ordered_pack_qty?: number | null
+  inventory_items?: {
+    item_name?: string | null
+    unit_type?: string | null
+    pack_size?: number | null
+  } | null
+}
+
+interface StatusHistoryEntry {
+  previous_status: string | null
+  new_status: string | null
+  changed_by: string | null
+  changed_at: string
+  note?: string | null
+}
+
+interface PurchaseOrderRow {
+  id: string
+  status?: string | null
+  sent_by?: string | null
+  suppliers?: {
+    name?: string | null
+    contact_person?: string | null
+    email?: string | null
+    phone?: string | null
+  } | null
+  purchase_order_items?: PurchaseOrderItemRow[]
+  purchase_order_status_history?: StatusHistoryEntry[]
+  [key: string]: unknown
+}
+
+interface PurchaseOrderItemInput {
+  inventory_item_id: string
+  quantity_ordered: number
+  unit_cost?: number
+  ordered_pack_qty?: number | null
+  pack_size?: number | null
+  order_unit?: string | null
+}
+
+interface NormalizedOrderItem extends PurchaseOrderItemInput {
+  order_unit: string
+  pack_size: number
+  ordered_pack_qty: number | null
+  quantity_ordered: number
+  total_cost: number
+}
+
+interface ProfileRow {
+  id: string
+  full_name?: string | null
+  email?: string | null
+}
+
 export async function GET(request: NextRequest) {
   try {
     // Verify admin authentication
@@ -84,15 +151,17 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    const orderRows = (orders || []) as PurchaseOrderRow[]
+
     const sentByIds = Array.from(
       new Set(
-        (orders || [])
-          .map((order: any) => order.sent_by)
-          .filter((value: any): value is string => Boolean(value))
+        orderRows
+          .map(order => order.sent_by)
+          .filter((value): value is string => Boolean(value))
       )
     )
 
-    let sentByProfiles: Record<string, { full_name?: string | null; email?: string | null }> = {}
+    let sentByProfiles: Record<string, SupplierProfileInfo> = {}
     if (sentByIds.length > 0) {
       const serviceSupabase = createServiceClient()
       const { data: profiles } = await serviceSupabase
@@ -100,7 +169,7 @@ export async function GET(request: NextRequest) {
         .select('id, full_name, email')
         .in('id', sentByIds)
 
-      sentByProfiles = (profiles || []).reduce((acc: Record<string, any>, profile: any) => {
+      sentByProfiles = (profiles || []).reduce((acc: Record<string, SupplierProfileInfo>, profile: ProfileRow) => {
         acc[profile.id] = {
           full_name: profile.full_name,
           email: profile.email
@@ -110,16 +179,16 @@ export async function GET(request: NextRequest) {
     }
 
     // Transform data to match expected format
-    const transformedOrders = orders?.map(order => {
+    const transformedOrders = orderRows.map(order => {
       const history = (order.purchase_order_status_history || [])
-        .map((entry: any) => ({
+        .map((entry: StatusHistoryEntry) => ({
           previous_status: entry.previous_status,
           new_status: entry.new_status,
           changed_by: entry.changed_by,
           changed_at: entry.changed_at,
           note: entry.note
         }))
-        .sort((a: any, b: any) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime())
+        .sort((a, b) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime())
 
       return {
         ...order,
@@ -127,7 +196,7 @@ export async function GET(request: NextRequest) {
         supplier_contact: order.suppliers?.contact_person,
         supplier_email: order.suppliers?.email,
         supplier_phone: order.suppliers?.phone,
-        items: order.purchase_order_items?.map((item: any) => ({
+        items: order.purchase_order_items?.map((item: PurchaseOrderItemRow) => ({
           ...item,
           inventory_item_name: item.inventory_items?.item_name || 'Unknown Item',
           unit_type: item.inventory_items?.unit_type || item.unit_type || 'each',
@@ -136,7 +205,7 @@ export async function GET(request: NextRequest) {
         status_history: history,
         sent_by_profile: order.sent_by ? sentByProfiles[order.sent_by] || null : null
       }
-    }) || []
+    })
 
     return NextResponse.json({
       success: true,
@@ -172,7 +241,9 @@ export async function POST(request: NextRequest) {
       order_number,
       expected_delivery_date,
       notes,
-      items
+      items,
+      sent_at,
+      actual_delivery_date
     } = body
 
     if (!supplier_id?.trim()) {
@@ -196,8 +267,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const itemInputs: PurchaseOrderItemInput[] = Array.isArray(items) ? items : []
+
     // Validate items
-    for (const item of items) {
+    for (const item of itemInputs) {
       if (!item.inventory_item_id || !item.quantity_ordered || item.quantity_ordered <= 0) {
         return NextResponse.json(
           { error: 'All items must have valid inventory item and quantity' },
@@ -221,20 +294,21 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient()
 
     // Fetch pack sizes from inventory for missing values
-    const inventoryIds = Array.from(new Set(items.map((item: any) => item.inventory_item_id).filter(Boolean)))
+    const inventoryIds = Array.from(new Set(itemInputs.map(item => item.inventory_item_id).filter(Boolean)))
     const inventoryPackMap: Record<string, number> = {}
     if (inventoryIds.length > 0) {
       const { data: invRows } = await supabase
         .from('inventory_items')
         .select('id, pack_size')
         .in('id', inventoryIds)
-      ;(invRows || []).forEach((row: any) => {
+      const typedRows = (invRows || []) as Array<{ id: string; pack_size: number | null }>
+      typedRows.forEach(row => {
         inventoryPackMap[row.id] = Number(row.pack_size) || 1
       })
     }
 
     // Normalize items to unit quantities
-    const normalizedItems = items.map((item: any) => {
+    const normalizedItems: NormalizedOrderItem[] = itemInputs.map(item => {
       const packSize = item.pack_size ?? inventoryPackMap[item.inventory_item_id] ?? 1
       const sourceQty = Number(item.quantity_ordered) || 0
       const derivedOrderUnit = item.order_unit || (packSize > 1 ? 'pack' : 'each')
@@ -257,9 +331,11 @@ export async function POST(request: NextRequest) {
     })
 
     // Calculate total amount using unit quantities
-    const totalAmount = normalizedItems.reduce((sum: number, item: any) => sum + (item.total_cost || 0), 0)
+    const totalAmount = normalizedItems.reduce((sum, item) => sum + (item.total_cost || 0), 0)
 
     // Start transaction by creating the purchase order
+    const normalizedSentAt = sent_at ? new Date(sent_at).toISOString() : null
+
     const { data: newOrder, error: orderError } = await supabase
       .from('purchase_orders')
       .insert({
@@ -268,6 +344,9 @@ export async function POST(request: NextRequest) {
         status: 'draft',
         order_date: new Date().toISOString(),
         expected_delivery_date: expected_delivery_date || null,
+        actual_delivery_date: actual_delivery_date || null,
+        sent_at: normalizedSentAt,
+        sent_by: normalizedSentAt ? admin.userId : null,
         total_amount: totalAmount,
         notes: notes?.trim() || null
       })
@@ -283,7 +362,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Insert purchase order items
-    const orderItems = normalizedItems.map((item: any) => ({
+    const orderItems = normalizedItems.map(item => ({
       purchase_order_id: newOrder.id,
       inventory_item_id: item.inventory_item_id,
       quantity_ordered: item.quantity_ordered,

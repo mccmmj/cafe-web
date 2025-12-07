@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 
 // Test the Square API directly without using our helper function
 const SQUARE_BASE_URL = process.env.SQUARE_ENVIRONMENT === 'production' 
@@ -19,7 +19,7 @@ function getHeaders() {
   }
 }
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     console.log('Debug: Testing Square tax API directly...')
     

@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Bell, Check, X, Coffee, ShoppingCart, AlertCircle } from 'lucide-react'
+import { Bell, Check, X, Coffee, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 
 interface Notification {
@@ -12,7 +12,7 @@ interface Notification {
   type: 'info' | 'success' | 'warning' | 'error' | 'order_status'
   read: boolean
   action_url?: string
-  data?: any
+  data?: Record<string, unknown>
   created_at: string
 }
 
@@ -39,21 +39,7 @@ const NotificationDropdown = ({ user }: NotificationDropdownProps) => {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // Fetch notifications when dropdown opens
-  useEffect(() => {
-    if (isOpen && user) {
-      fetchNotifications()
-    }
-  }, [isOpen, user])
-
-  // Fetch initial unread count
-  useEffect(() => {
-    if (user) {
-      fetchUnreadCount()
-    }
-  }, [user])
-
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
     if (!user) return
 
     setLoading(true)
@@ -70,9 +56,9 @@ const NotificationDropdown = ({ user }: NotificationDropdownProps) => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user])
 
-  const fetchUnreadCount = async () => {
+  const fetchUnreadCount = useCallback(async () => {
     if (!user) return
 
     try {
@@ -85,7 +71,21 @@ const NotificationDropdown = ({ user }: NotificationDropdownProps) => {
     } catch (error) {
       console.error('Error fetching unread count:', error)
     }
-  }
+  }, [user])
+
+  // Fetch notifications when dropdown opens
+  useEffect(() => {
+    if (isOpen && user) {
+      fetchNotifications()
+    }
+  }, [fetchNotifications, isOpen, user])
+
+  // Fetch initial unread count
+  useEffect(() => {
+    if (user) {
+      fetchUnreadCount()
+    }
+  }, [fetchUnreadCount, user])
 
   const markAsRead = async (notificationId: string) => {
     try {
@@ -211,7 +211,7 @@ const NotificationDropdown = ({ user }: NotificationDropdownProps) => {
                 <div className="p-6 text-center">
                   <Bell className="h-12 w-12 text-gray-300 mx-auto mb-3" />
                   <p className="text-gray-600 font-medium">No notifications</p>
-                  <p className="text-sm text-gray-500">You're all caught up!</p>
+                  <p className="text-sm text-gray-500">You&rsquo;re all caught up!</p>
                 </div>
               ) : (
                 <div className="divide-y divide-gray-100">

@@ -15,7 +15,7 @@ interface NewItemVariation {
   price: number
 }
 
-interface NewItemData {
+export interface NewItemData {
   name: string
   description: string
   categoryId: string
@@ -203,7 +203,7 @@ const MenuItemCreateModal = ({
               </div>
               
               <div className="space-y-3">
-                {formData.variations.map((variation, index) => (
+                {formData.variations.map((variation) => (
                   <div key={variation.id} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
                     <div className="flex-1">
                       <label className="block text-xs font-medium text-gray-600 mb-1">

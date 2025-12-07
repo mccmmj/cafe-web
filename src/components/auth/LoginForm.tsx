@@ -6,11 +6,13 @@ import { Eye, EyeOff, Mail, Lock } from 'lucide-react'
 import { Button, Input } from '@/components/ui'
 import { z } from 'zod'
 import { toast } from 'react-hot-toast'
-import type { Factor } from '@supabase/supabase-js'
-import { AuthError, type Session } from '@supabase/supabase-js'
+import type { Factor, Session } from '@supabase/supabase-js'
+import { AuthError } from '@supabase/supabase-js'
+
+type AuthenticatedUser = Session['user'] | null
 
 interface LoginFormProps {
-  onSuccess?: (user: any) => void
+  onSuccess?: (user: AuthenticatedUser) => void
   onSwitchToSignup?: () => void
 }
 
@@ -34,7 +36,6 @@ export default function LoginForm({ onSuccess, onSwitchToSignup }: LoginFormProp
   const supabase = createClient()
 
   const handleSubmit = async (e: React.FormEvent) => {
-    alert('handleSubmit hit')
     e.preventDefault()
     setLoading(true)
     setErrors({})
@@ -184,10 +185,10 @@ export default function LoginForm({ onSuccess, onSwitchToSignup }: LoginFormProp
     return data?.totp ?? []
   }
 
-  const extractVerifiedTotpFactors = (user: any): Factor[] => {
+  const extractVerifiedTotpFactors = (user?: { factors?: Factor[] | null } | null): Factor[] => {
     const rawFactors = Array.isArray(user?.factors) ? user.factors : []
     return rawFactors.filter(
-      (factor: any) => factor?.factor_type === 'totp' && factor?.status === 'verified'
+      (factor) => factor?.factor_type === 'totp' && factor?.status === 'verified'
     )
   }
 

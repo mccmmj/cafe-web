@@ -19,7 +19,7 @@ export const useErrorHandling = () => {
   const queryClient = useQueryClient()
 
   // Handle and classify errors
-  const handleError = useCallback((error: any, context?: string) => {
+  const handleError = useCallback((error: unknown, context?: string) => {
     const appError = classifyError(error)
     logError(appError, context)
     showErrorToast(appError)
@@ -27,7 +27,7 @@ export const useErrorHandling = () => {
   }, [])
 
   // Handle errors with retry option
-  const handleRetryableError = useCallback((error: any, onRetry: () => void, context?: string) => {
+  const handleRetryableError = useCallback((error: unknown, onRetry: () => void, context?: string) => {
     const appError = classifyError(error)
     logError(appError, context)
     showRetryableErrorToast(appError, onRetry)
@@ -76,7 +76,7 @@ export const useErrorHandling = () => {
 }
 
 // Enhanced mutation hook with error handling
-export const useMutationWithErrorHandling = <TData, TError, TVariables, TContext>(
+export const useMutationWithErrorHandling = <TData, TVariables, TContext>(
   mutationFn: (variables: TVariables) => Promise<TData>,
   options?: {
     onSuccess?: (data: TData, variables: TVariables, context: TContext) => void
@@ -88,7 +88,6 @@ export const useMutationWithErrorHandling = <TData, TError, TVariables, TContext
   }
 ) => {
   const { handleError, handleRetryableError } = useErrorHandling()
-  const queryClient = useQueryClient()
 
   const retryConfig = { ...defaultRetryConfig, ...options?.retryConfig }
   const showToast = options?.showErrorToast ?? true
@@ -102,11 +101,11 @@ export const useMutationWithErrorHandling = <TData, TError, TVariables, TContext
           const data = await mutationFn(variables)
           
           if (options?.onSuccess) {
-            options.onSuccess(data, variables, undefined as any)
+            options.onSuccess(data, variables, undefined as unknown as TContext)
           }
           
           if (options?.onSettled) {
-            options.onSettled(data, null, variables, undefined as any)
+            options.onSettled(data, null, variables, undefined as unknown as TContext)
           }
           
           return data
@@ -126,13 +125,13 @@ export const useMutationWithErrorHandling = <TData, TError, TVariables, TContext
               }
             }
             
-            if (options?.onError) {
-              options.onError(lastError, variables, undefined)
-            }
-            
-            if (options?.onSettled) {
-              options.onSettled(undefined, lastError, variables, undefined)
-            }
+          if (options?.onError) {
+            options.onError(lastError, variables, undefined as unknown as TContext)
+          }
+          
+          if (options?.onSettled) {
+            options.onSettled(undefined, lastError, variables, undefined as unknown as TContext)
+          }
             
             throw lastError
           }
@@ -225,10 +224,15 @@ export const useRetryableOperation = <T>(
 }
 
 // Hook for handling form errors
+type ValidationIssue = {
+  path?: Array<string | number>
+  message: string
+}
+
 export const useFormErrorHandling = () => {
   const { handleError } = useErrorHandling()
 
-  const handleFormError = useCallback((error: any, formName?: string) => {
+  const handleFormError = useCallback((error: unknown, formName?: string) => {
     const appError = classifyError(error)
     
     // Handle validation errors specifically
@@ -237,9 +241,10 @@ export const useFormErrorHandling = () => {
       const fieldErrors: Record<string, string> = {}
       
       if (Array.isArray(appError.details)) {
-        appError.details.forEach((issue: any) => {
-          const field = issue.path?.join('.') || 'general'
-          fieldErrors[field] = issue.message
+        appError.details.forEach((issue) => {
+          const issueDetail = issue as ValidationIssue
+          const field = issueDetail.path?.join('.') || 'general'
+          fieldErrors[field] = issueDetail.message
         })
       }
       

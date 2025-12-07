@@ -15,7 +15,6 @@ interface CartContainerProps {
   onClose: () => void
   cart: Record<string, { itemId: string; variationId?: string; quantity: number }>
   categories: MenuCategory[]
-  selectedVariations: Record<string, string>
   onUpdateQuantity: (cartKey: string, quantity: number) => void
   onRemoveItem: (cartKey: string) => void
   onClearCart: () => void
@@ -26,13 +25,12 @@ const CartContainer = ({
   onClose,
   cart,
   categories,
-  selectedVariations,
   onUpdateQuantity,
   onRemoveItem,
   onClearCart
 }: CartContainerProps) => {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
-  const { taxInfo, loading: taxLoading, error: taxError } = useTaxInfo()
+  const { taxInfo } = useTaxInfo()
 
   // Helper function to find item by ID across all categories
   const findItemById = (itemId: string): MenuItem | null => {

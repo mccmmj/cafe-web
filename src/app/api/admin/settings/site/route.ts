@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdminAuth } from '@/lib/admin/middleware'
+import { requireAdminAuth, isAdminAuthSuccess } from '@/lib/admin/middleware'
 import { addSecurityHeaders } from '@/lib/security/headers'
 import { getSiteSettings, getSiteStatusUsingServiceClient, saveSiteSettings } from '@/lib/services/siteSettings'
 
 export async function GET(request: NextRequest) {
   const authResult = await requireAdminAuth(request)
+  if (!isAdminAuthSuccess(authResult)) {
+    return authResult
+  }
   try {
     const settings = await getSiteSettings()
     const status = await getSiteStatusUsingServiceClient()
@@ -25,7 +28,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const authResult = await requireAdminAuth(request)
-  if (authResult instanceof NextResponse) {
+  if (!isAdminAuthSuccess(authResult)) {
     return authResult
   }
 
@@ -52,10 +55,6 @@ export async function POST(request: NextRequest) {
         { error: 'No valid fields provided' },
         { status: 400 }
       ))
-    }
-
-    if (!('userId' in authResult)) {
-      return authResult
     }
 
     const saved = await saveSiteSettings(payload, authResult.userId)

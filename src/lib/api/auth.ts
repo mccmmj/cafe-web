@@ -1,5 +1,6 @@
 // Authentication API operations
 import { createClient } from '@/lib/supabase/client'
+import type { Session } from '@supabase/supabase-js'
 import type { LoginFormData, SignupFormData } from '@/lib/validations'
 
 export interface AuthUser {
@@ -15,7 +16,7 @@ export interface AuthUser {
 export interface AuthResponse {
   user?: AuthUser
   error?: string
-  session?: any
+  session?: Session | null
 }
 
 // Sign up with email and password

@@ -5,18 +5,17 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ShoppingCart, Clock, MapPin, User } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
-import DynamicMenu from '@/components/DynamicMenu'
 import { useCartState } from '@/hooks/useCartData'
 import MenuSelection from './MenuSelection'
 import CartReview from './CartReview'
-import CustomerInfo from './CustomerInfo'
-import OrderConfirmation from './OrderConfirmation'
+import CustomerInfo, { type CustomerInfoForm } from './CustomerInfo'
+import OrderConfirmation, { type OrderPayload } from './OrderConfirmation'
 
 export type OrderingStep = 'menu' | 'cart' | 'customer' | 'confirmation'
 
 interface OrderingFlowProps {
   initialStep?: OrderingStep
-  onComplete?: (order: any) => void
+  onComplete?: (order: OrderPayload) => void
   onCancel?: () => void
 }
 
@@ -29,15 +28,14 @@ const steps = [
 
 export default function OrderingFlow({ initialStep = 'menu', onComplete, onCancel }: OrderingFlowProps) {
   const [currentStep, setCurrentStep] = useState<OrderingStep>(initialStep)
-  const [customerInfo, setCustomerInfo] = useState({})
-  const [orderData, setOrderData] = useState<any>(null)
+  const [customerInfo, setCustomerInfo] = useState<CustomerInfoForm | null>(null)
   const { cart, isEmpty, itemCount } = useCartState()
 
   const currentStepIndex = steps.findIndex(step => step.id === currentStep)
 
   const canProceedToCart = !isEmpty && itemCount > 0
   const canProceedToCustomer = canProceedToCart
-  const canConfirmOrder = canProceedToCustomer && Object.keys(customerInfo).length > 0
+  const canConfirmOrder = canProceedToCustomer && Boolean(customerInfo)
 
   const handleNext = useCallback(() => {
     switch (currentStep) {
@@ -96,13 +94,12 @@ export default function OrderingFlow({ initialStep = 'menu', onComplete, onCance
     }
   }, [canProceedToCart, canProceedToCustomer, canConfirmOrder])
 
-  const handleCustomerInfoSubmit = useCallback((info: any) => {
+  const handleCustomerInfoSubmit = useCallback((info: CustomerInfoForm) => {
     setCustomerInfo(info)
     handleNext()
   }, [handleNext])
 
-  const handleOrderConfirm = useCallback((order: any) => {
-    setOrderData(order)
+  const handleOrderConfirm = useCallback((order: OrderPayload) => {
     onComplete?.(order)
   }, [onComplete])
 
@@ -204,11 +201,11 @@ export default function OrderingFlow({ initialStep = 'menu', onComplete, onCance
               <CustomerInfo 
                 onPrevious={handlePrevious}
                 onSubmit={handleCustomerInfoSubmit}
-                initialData={customerInfo}
+                initialData={customerInfo ?? undefined}
               />
             )}
             
-            {currentStep === 'confirmation' && (
+            {currentStep === 'confirmation' && customerInfo && (
               <OrderConfirmation 
                 onPrevious={handlePrevious}
                 onConfirm={handleOrderConfirm}

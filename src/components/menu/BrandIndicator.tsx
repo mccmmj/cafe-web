@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { Coffee } from 'lucide-react'
 import { BRAND_SETTINGS } from '@/lib/constants/menu'
 
@@ -49,6 +50,12 @@ const BrandIndicator = ({
 
   const currentSize = sizeClasses[size]
 
+  const logoDimensions = {
+    sm: 12,
+    md: 16,
+    lg: 20
+  }
+
   return (
     <div className={`flex items-center ${currentSize.container} ${positionClasses}`}>
       {/* Icon (if enabled and not showing logo) */}
@@ -58,10 +65,12 @@ const BrandIndicator = ({
       
       {/* Logo (if enabled and available) */}
       {STARBUCKS_DISPLAY.SHOW_LOGO && (
-        <img 
-          src="/images/starbucks-logo.svg" 
+        <Image
+          src="/images/starbucks-logo.svg"
           alt="Starbucks"
-          className={currentSize.icon}
+          width={logoDimensions[size]}
+          height={logoDimensions[size]}
+          className={`${currentSize.icon} ${STARBUCKS_DISPLAY.LABEL_COLOR}`}
         />
       )}
       

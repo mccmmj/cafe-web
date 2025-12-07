@@ -92,7 +92,7 @@ const DataManagementExample: React.FC = () => {
           Offline Mode
         </Badge>
         <p className="mt-2 text-text-secondary">
-          You're currently offline. Some features may not be available.
+          You&rsquo;re currently offline. Some features may not be available.
         </p>
       </div>
     )

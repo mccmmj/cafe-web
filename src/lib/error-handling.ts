@@ -1,4 +1,5 @@
-import { toast } from 'react-hot-toast'
+import { createElement, type CSSProperties } from 'react'
+import { toast, type Toast } from 'react-hot-toast'
 
 // Error types
 export enum ErrorType {
@@ -16,12 +17,68 @@ export interface AppError {
   type: ErrorType
   message: string
   code?: string
-  details?: any
+  details?: unknown
   retryable?: boolean
 }
 
+const toRecord = (value: unknown): Record<string, unknown> => {
+  if (typeof value === 'object' && value !== null) {
+    return value as Record<string, unknown>
+  }
+  return {}
+}
+
+const retryToastContainerStyle: CSSProperties = {
+  backgroundColor: '#fff',
+  border: '1px solid #fecaca',
+  borderRadius: 12,
+  padding: '0.75rem',
+  boxShadow: '0 10px 30px rgba(0, 0, 0, 0.12)',
+  color: '#111827',
+  fontSize: '0.875rem',
+  maxWidth: '20rem'
+}
+
+const retryToastActionsStyle: CSSProperties = {
+  display: 'flex',
+  justifyContent: 'flex-end',
+  gap: '0.5rem',
+  marginTop: '0.5rem'
+}
+
+const retryToastTitleStyle: CSSProperties = {
+  margin: 0,
+  fontWeight: 600,
+  color: '#b91c1c'
+}
+
+const retryToastMessageStyle: CSSProperties = {
+  margin: 0,
+  color: '#374151'
+}
+
+const retryToastButtonStyle: CSSProperties = {
+  border: 'none',
+  background: 'none',
+  color: '#6b7280',
+  cursor: 'pointer',
+  fontSize: '0.75rem',
+  fontWeight: 600
+}
+
+const retryToastRetryButtonStyle: CSSProperties = {
+  border: 'none',
+  backgroundColor: '#ef4444',
+  color: '#fff',
+  borderRadius: 9999,
+  padding: '0.35rem 0.75rem',
+  fontSize: '0.75rem',
+  fontWeight: 600,
+  cursor: 'pointer'
+}
+
 // Error classification
-export const classifyError = (error: any): AppError => {
+export const classifyError = (error: unknown): AppError => {
   // Network errors
   if (!navigator.onLine) {
     return {
@@ -40,11 +97,20 @@ export const classifyError = (error: any): AppError => {
     }
   }
 
+  const errRecord = toRecord(error)
+  const status = typeof errRecord.status === 'number' ? errRecord.status : undefined
+  const name = typeof errRecord.name === 'string' ? errRecord.name : undefined
+  const errorCode = typeof errRecord.code === 'string' ? errRecord.code : undefined
+  const category = typeof errRecord.category === 'string' ? errRecord.category : undefined
+  const errorDetail = typeof errRecord.detail === 'string' ? errRecord.detail : undefined
+  const message = typeof errRecord.message === 'string' ? errRecord.message : undefined
+  const details = errRecord.details
+
   // HTTP Response errors
-  if (error?.status) {
+  if (status) {
     switch (true) {
-      case error.status >= 400 && error.status < 500:
-        if (error.status === 401) {
+      case status >= 400 && status < 500:
+        if (status === 401) {
           return {
             type: ErrorType.AUTHENTICATION,
             message: 'Please sign in to continue.',
@@ -52,7 +118,7 @@ export const classifyError = (error: any): AppError => {
             retryable: false,
           }
         }
-        if (error.status === 403) {
+        if (status === 403) {
           return {
             type: ErrorType.AUTHORIZATION,
             message: 'You don\'t have permission to perform this action.',
@@ -60,7 +126,7 @@ export const classifyError = (error: any): AppError => {
             retryable: false,
           }
         }
-        if (error.status === 404) {
+        if (status === 404) {
           return {
             type: ErrorType.NOT_FOUND,
             message: 'The requested resource was not found.',
@@ -68,21 +134,21 @@ export const classifyError = (error: any): AppError => {
             retryable: false,
           }
         }
-        if (error.status === 422) {
+        if (status === 422) {
           return {
             type: ErrorType.VALIDATION,
-            message: error.message || 'Invalid data provided.',
-            details: error.details,
+            message: message || 'Invalid data provided.',
+            details,
             retryable: false,
           }
         }
         return {
           type: ErrorType.VALIDATION,
-          message: error.message || 'Invalid request. Please check your input.',
+            message: message || 'Invalid request. Please check your input.',
           retryable: false,
         }
 
-      case error.status >= 500:
+      case status >= 500:
         return {
           type: ErrorType.SERVER,
           message: 'Server error. Please try again later.',
@@ -95,34 +161,34 @@ export const classifyError = (error: any): AppError => {
   }
 
   // Validation errors (Zod)
-  if (error?.name === 'ZodError' || error?.issues) {
+  if (name === 'ZodError' || Array.isArray(errRecord.issues)) {
     return {
       type: ErrorType.VALIDATION,
       message: 'Please check your input and try again.',
-      details: error.issues,
+      details: errRecord.issues,
       retryable: false,
     }
   }
 
   // Payment errors
-  if (error?.code && error.code.startsWith('PAYMENT_')) {
+  if (errorCode && errorCode.startsWith('PAYMENT_')) {
     return {
       type: ErrorType.PAYMENT,
-      message: error.message || 'Payment failed. Please try again.',
-      code: error.code,
+      message: message || 'Payment failed. Please try again.',
+      code: errorCode,
       retryable: true,
     }
   }
 
   // Square API errors
-  if (error?.category) {
-    switch (error.category) {
+  if (category) {
+    switch (category) {
       case 'PAYMENT_METHOD_ERROR':
       case 'REFUND_ERROR':
         return {
           type: ErrorType.PAYMENT,
-          message: error.detail || 'Payment error. Please try a different payment method.',
-          code: error.code,
+          message: errorDetail || 'Payment error. Please try a different payment method.',
+          code: errorCode,
           retryable: true,
         }
       case 'RATE_LIMIT_ERROR':
@@ -140,7 +206,7 @@ export const classifyError = (error: any): AppError => {
       default:
         return {
           type: ErrorType.SERVER,
-          message: error.detail || 'Server error. Please try again.',
+          message: errorDetail || 'Server error. Please try again.',
           retryable: true,
         }
     }
@@ -149,7 +215,7 @@ export const classifyError = (error: any): AppError => {
   // Generic error
   return {
     type: ErrorType.UNKNOWN,
-    message: error?.message || 'An unexpected error occurred. Please try again.',
+    message: message || 'An unexpected error occurred. Please try again.',
     retryable: true,
   }
 }
@@ -198,13 +264,46 @@ export const showRetryableErrorToast = (error: AppError, onRetry: () => void) =>
 
   const message = getErrorDisplayMessage(error)
   
-  toast.error(message, {
+  const renderRetryToast = (toastInstance: Toast) =>
+    createElement(
+      'div',
+      { style: retryToastContainerStyle },
+      createElement('p', { style: retryToastTitleStyle }, 'Retryable error'),
+      createElement('p', { style: retryToastMessageStyle }, message),
+      createElement(
+        'div',
+        { style: retryToastActionsStyle },
+        createElement(
+          'button',
+          {
+            type: 'button',
+            style: retryToastButtonStyle,
+            onClick: () => toast.dismiss(toastInstance.id)
+          },
+          'Dismiss'
+        ),
+        createElement(
+          'button',
+          {
+            type: 'button',
+            style: retryToastRetryButtonStyle,
+            onClick: () => {
+              onRetry()
+              toast.dismiss(toastInstance.id)
+            }
+          },
+          'Retry'
+        )
+      )
+    )
+
+  toast.custom(renderRetryToast, {
     duration: 8000,
     position: 'bottom-right',
-    style: {
-      background: '#ef4444',
-      color: 'white',
-    },
+    ariaProps: {
+      role: 'status',
+      'aria-live': 'polite'
+    }
   })
 }
 
@@ -315,7 +414,7 @@ export const waitForOnline = (): Promise<void> => {
 
 // Custom error classes
 export class ValidationError extends Error {
-  constructor(message: string, public details?: any) {
+  constructor(message: string, public details?: unknown) {
     super(message)
     this.name = 'ValidationError'
   }

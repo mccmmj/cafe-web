@@ -17,7 +17,7 @@ interface Category {
 interface CategoryEditModalProps {
   isOpen: boolean
   onClose: () => void
-  onUpdateCategory: (categoryId: string, updateData: any) => Promise<void>
+  onUpdateCategory: (categoryId: string, updateData: { name: string; ordinal: number }) => Promise<void>
   category: Category | null
   existingCategories: Array<{ id: string; name: string; ordinal: number }>
 }

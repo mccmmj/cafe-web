@@ -2,6 +2,51 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminAuth } from '@/lib/admin/middleware'
 import { createClient } from '@/lib/supabase/server'
 
+type InventoryExportRecord = {
+  item_name: string
+  current_stock: number
+  minimum_threshold: number
+  reorder_point: number
+  unit_cost: number
+  unit_type: string
+  location: string | null
+  supplier_name: string | null
+  notes: string | null
+}
+
+type MovementExportRecord = {
+  created_at: string
+  movement_type: string
+  quantity_change: number
+  reference_type: string | null
+  notes: string | null
+  inventory_items: Array<{
+    item_name: string
+    unit_type: string
+  }> | null
+}
+
+type PurchaseOrderExportRecord = {
+  order_number: string
+  status: string
+  order_date: string
+  expected_delivery_date: string | null
+  actual_delivery_date: string | null
+  total_amount: number
+  suppliers: Array<{
+    name: string
+  }> | null
+}
+
+type SupplierExportRecord = {
+  name: string
+  contact_person: string | null
+  email: string | null
+  phone: string | null
+  is_active: boolean
+  created_at: string
+}
+
 export async function GET(request: NextRequest) {
   try {
     // Verify admin authentication
@@ -81,8 +126,9 @@ export async function GET(request: NextRequest) {
     csvSections.push('INVENTORY OVERVIEW')
     csvSections.push('Item Name,Current Stock,Unit Type,Unit Cost,Value,Status,Min Threshold,Reorder Point,Location,Supplier,Notes')
     
-    if (inventoryResult.data) {
-      inventoryResult.data.forEach(item => {
+    const inventoryData = (inventoryResult.data ?? []) as InventoryExportRecord[]
+    if (inventoryData.length > 0) {
+      inventoryData.forEach(item => {
         const value = item.current_stock * item.unit_cost
         const status = item.current_stock === 0 ? 'Out of Stock' :
                      item.current_stock <= item.minimum_threshold ? 'Critical' :
@@ -111,16 +157,18 @@ export async function GET(request: NextRequest) {
     csvSections.push('STOCK MOVEMENTS')
     csvSections.push('Date,Time,Item Name,Movement Type,Quantity,Unit Type,Reference Type,Notes')
     
-    if (movementsResult.data) {
-      movementsResult.data.forEach(movement => {
+    const movementData = (movementsResult.data ?? []) as MovementExportRecord[]
+    if (movementData.length > 0) {
+      movementData.forEach(movement => {
         const date = new Date(movement.created_at)
+        const movementItem = movement.inventory_items?.[0]
         csvSections.push([
           date.toLocaleDateString(),
           date.toLocaleTimeString(),
-          `"${(movement.inventory_items as any)?.item_name || 'Unknown'}"`,
+          `"${movementItem?.item_name || 'Unknown'}"`,
           movement.movement_type.toUpperCase(),
           movement.quantity_change,
-          `"${(movement.inventory_items as any)?.unit_type || 'each'}"`,
+          `"${movementItem?.unit_type || 'each'}"`,
           `"${movement.reference_type || ''}"`,
           `"${movement.notes || ''}"`
         ].join(','))
@@ -134,8 +182,9 @@ export async function GET(request: NextRequest) {
     csvSections.push('PURCHASE ORDERS')
     csvSections.push('Order Number,Supplier,Status,Order Date,Expected Delivery,Actual Delivery,Total Amount,Delivery Performance')
     
-    if (ordersResult.data) {
-      ordersResult.data.forEach(order => {
+    const purchaseOrderData = (ordersResult.data ?? []) as PurchaseOrderExportRecord[]
+    if (purchaseOrderData.length > 0) {
+      purchaseOrderData.forEach(order => {
         const orderDate = new Date(order.order_date)
         const expectedDate = order.expected_delivery_date ? new Date(order.expected_delivery_date) : null
         const actualDate = order.actual_delivery_date ? new Date(order.actual_delivery_date) : null
@@ -147,9 +196,10 @@ export async function GET(request: NextRequest) {
           deliveryPerformance = expectedDate < now ? 'Overdue' : 'Pending'
         }
         
+        const supplierName = order.suppliers?.[0]?.name
         csvSections.push([
           `"${order.order_number}"`,
-          `"${(order.suppliers as any)?.name || 'Unknown Supplier'}"`,
+          `"${supplierName || 'Unknown Supplier'}"`,
           order.status.toUpperCase(),
           orderDate.toLocaleDateString(),
           expectedDate ? expectedDate.toLocaleDateString() : '',
@@ -167,8 +217,9 @@ export async function GET(request: NextRequest) {
     csvSections.push('SUPPLIERS')
     csvSections.push('Name,Contact Person,Email,Phone,Status,Added Date')
     
-    if (suppliersResult.data) {
-      suppliersResult.data.forEach(supplier => {
+    const supplierData = (suppliersResult.data ?? []) as SupplierExportRecord[]
+    if (supplierData.length > 0) {
+      supplierData.forEach(supplier => {
         const addedDate = new Date(supplier.created_at)
         csvSections.push([
           `"${supplier.name}"`,

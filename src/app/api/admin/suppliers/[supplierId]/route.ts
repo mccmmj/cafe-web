@@ -2,6 +2,28 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminAuth } from '@/lib/admin/middleware'
 import { createClient } from '@/lib/supabase/server'
 
+interface SupplierUpdateBody {
+  name: string
+  contact_person?: string | null
+  email?: string | null
+  phone?: string | null
+  address?: string | null
+  payment_terms?: string | null
+  notes?: string | null
+  is_active?: boolean
+}
+
+type SupplierPartialUpdatePayload = Partial<{
+  name: string | null
+  contact_person: string | null
+  email: string | null
+  phone: string | null
+  address: string | null
+  payment_terms: string | null
+  notes: string | null
+  is_active: boolean
+}>
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ supplierId: string }> }
@@ -22,7 +44,7 @@ export async function PUT(
       )
     }
 
-    const body = await request.json()
+    const body: SupplierUpdateBody = await request.json()
     const { 
       name,
       contact_person,
@@ -117,14 +139,14 @@ export async function PATCH(
       )
     }
 
-    const body = await request.json()
+    const body: SupplierPartialUpdatePayload = await request.json()
     
     console.log('Partially updating supplier:', supplierId, body)
 
     const supabase = await createClient()
 
     // Build update object with only provided fields
-    const updateData: any = {}
+    const updateData: SupplierPartialUpdatePayload = {}
     if (body.name !== undefined) updateData.name = body.name?.trim() || null
     if (body.contact_person !== undefined) updateData.contact_person = body.contact_person?.trim() || null
     if (body.email !== undefined) updateData.email = body.email?.trim() || null

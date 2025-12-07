@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createOrder } from '@/lib/supabase/database'
-import { createOrderSchema } from '@/lib/validations/order'
 import { rateLimiters } from '@/lib/security/rate-limiter'
 import { validateOrderItem, validateCustomerInfo, ValidationError } from '@/lib/security/input-validation'
 import { addSecurityHeaders } from '@/lib/security/headers'
@@ -90,8 +89,6 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '10')
-    const status = searchParams.get('status')
-    const userId = searchParams.get('userId')
     
     // This would typically fetch orders from database
     // For now, return an empty array as a placeholder

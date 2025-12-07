@@ -5,6 +5,8 @@ const SQUARE_BASE_URL = process.env.SQUARE_ENVIRONMENT === 'production'
 
 const SQUARE_VERSION = '2024-12-18'
 
+type SquareRequestBody = Record<string, unknown>
+
 function getHeaders() {
   // Use the single SQUARE_ACCESS_TOKEN from .env.local (which points to live/production)
   const accessToken = process.env.SQUARE_ACCESS_TOKEN
@@ -46,7 +48,7 @@ export async function listCatalogObjects(types?: string[]) {
   }
 }
 
-export async function searchCatalogItems(query: any) {
+export async function searchCatalogItems(query: SquareRequestBody) {
   try {
     const response = await fetch(`${SQUARE_BASE_URL}/v2/catalog/search`, {
       method: 'POST',
@@ -134,7 +136,7 @@ export async function getOrder(orderId: string) {
   }
 }
 
-export async function createOrder(orderData: any) {
+export async function createOrder(orderData: SquareRequestBody) {
   try {
     const response = await fetch(`${SQUARE_BASE_URL}/v2/orders`, {
       method: 'POST',
@@ -142,7 +144,7 @@ export async function createOrder(orderData: any) {
       body: JSON.stringify({
         ...orderData,
         order: {
-          ...orderData.order,
+          ...(orderData.order as SquareRequestBody | undefined),
           location_id: getLocationId()
         }
       })
@@ -167,7 +169,7 @@ export async function createOrder(orderData: any) {
 }
 
 // Payments API
-export async function createPayment(paymentData: any) {
+export async function createPayment(paymentData: SquareRequestBody) {
   try {
     const response = await fetch(`${SQUARE_BASE_URL}/v2/payments`, {
       method: 'POST',
@@ -241,7 +243,7 @@ export async function listCatalogTaxes() {
 }
 
 // Create or update catalog tax
-export async function createCatalogTax(taxData: any) {
+export async function createCatalogTax(taxData: SquareRequestBody) {
   try {
     const response = await fetch(`${SQUARE_BASE_URL}/v2/catalog/upsert`, {
       method: 'POST',
@@ -265,7 +267,7 @@ export async function createCatalogTax(taxData: any) {
 }
 
 // Create or update catalog item
-export async function upsertCatalogItem(itemData: any) {
+export async function upsertCatalogItem(itemData: SquareRequestBody) {
   try {
     const response = await fetch(`${SQUARE_BASE_URL}/v2/catalog/batch-upsert`, {
       method: 'POST',
@@ -298,7 +300,7 @@ export async function upsertCatalogItem(itemData: any) {
 }
 
 // Create or update catalog category
-export async function upsertCatalogCategory(categoryData: any) {
+export async function upsertCatalogCategory(categoryData: SquareRequestBody) {
   try {
     const response = await fetch(`${SQUARE_BASE_URL}/v2/catalog/batch-upsert`, {
       method: 'POST',
@@ -353,7 +355,7 @@ export async function deleteCatalogObject(objectId: string) {
 }
 
 // Batch upsert multiple catalog objects
-export async function batchUpsertCatalogObjects(objects: any[]) {
+export async function batchUpsertCatalogObjects(objects: SquareRequestBody[]) {
   try {
     const batches = objects.map(obj => ({
       object: obj,

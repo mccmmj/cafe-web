@@ -5,10 +5,15 @@ import { Button } from '@/components/ui'
 import { X, Plus, AlertTriangle } from 'lucide-react'
 import toast from 'react-hot-toast'
 
+interface CategoryCreatePayload {
+  name: string
+  ordinal: number
+}
+
 interface CategoryCreateModalProps {
   isOpen: boolean
   onClose: () => void
-  onCreateCategory: (categoryData: any) => Promise<void>
+  onCreateCategory: (categoryData: CategoryCreatePayload) => Promise<void>
   existingCategories: Array<{ id: string; name: string; ordinal: number }>
 }
 

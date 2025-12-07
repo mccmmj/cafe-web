@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAsync } from './useAsync'
 import { useDebounce } from './useDebounce'
 import { fetchMenu, searchMenuItems } from '@/lib/api/menu'
 import type { MenuCategory, MenuItem } from '@/types/menu'
+import type { MenuApiResponse } from '@/lib/api/menu'
 
 export interface UseMenuState {
   categories: MenuCategory[]
@@ -14,7 +15,7 @@ export interface UseMenuState {
   searchResults: MenuItem[]
   isSearching: boolean
   setSearchTerm: (term: string) => void
-  refreshMenu: () => Promise<any>
+  refreshMenu: () => Promise<MenuApiResponse | undefined>
   getItemById: (itemId: string) => MenuItem | null
   getCategoryById: (categoryId: string) => MenuCategory | null
   getItemsByCategory: (categoryId: string) => MenuItem[]
@@ -36,7 +37,7 @@ export function useMenu(): UseMenuState {
     execute: refreshMenu
   } = useAsync(fetchMenu, true)
 
-  const categories = menuData?.categories || []
+  const categories = useMemo(() => menuData?.categories ?? [], [menuData?.categories])
 
   // Search functionality
   useEffect(() => {

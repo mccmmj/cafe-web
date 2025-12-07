@@ -6,7 +6,7 @@ export async function GET() {
     const supabase = await createClient()
     
     // Test database connection by checking if tables exist
-    const { data: profiles, error: profilesError } = await supabase
+    const { error: profilesError } = await supabase
       .from('profiles')
       .select('count')
       .limit(1)
@@ -20,17 +20,17 @@ export async function GET() {
       }, { status: 500 })
     }
     
-    const { data: orders, error: ordersError } = await supabase
+    const { error: ordersError } = await supabase
       .from('orders')
       .select('count')
       .limit(1)
     
-    const { data: orderItems, error: orderItemsError } = await supabase
+    const { error: orderItemsError } = await supabase
       .from('order_items')
       .select('count')
       .limit(1)
     
-    const { data: userFavorites, error: userFavoritesError } = await supabase
+    const { error: userFavoritesError } = await supabase
       .from('user_favorites')
       .select('count')
       .limit(1)

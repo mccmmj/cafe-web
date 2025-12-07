@@ -6,6 +6,18 @@ interface RouteContext {
   params: Promise<{ orderId: string }>
 }
 
+interface AvailableInvoiceSummary {
+  id: string
+  invoice_number: string
+  invoice_date: string | null
+  total_amount: number | null
+  status: string
+  parsing_confidence: number | null
+  file_url: string | null
+  file_name: string | null
+  created_at: string
+}
+
 const INVOICE_MATCH_SELECT = `
   id,
   invoice_id,
@@ -78,7 +90,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       )
     }
 
-    let availableInvoices: any[] = []
+    let availableInvoices: AvailableInvoiceSummary[] = []
     if (order.supplier_id) {
       const matchedInvoiceIds = (matches || [])
         .map(match => match?.invoice_id)
@@ -111,7 +123,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       if (availableError) {
         console.error('Failed to fetch available invoices:', availableError)
       } else if (availableData) {
-        availableInvoices = availableData
+        availableInvoices = availableData as AvailableInvoiceSummary[]
       }
     }
 
