@@ -11,7 +11,7 @@ interface MenuSearchProps {
   className?: string
 }
 
-interface SearchResult {
+export interface SearchResult {
   item: MenuItem
   category: MenuCategory
   score: number

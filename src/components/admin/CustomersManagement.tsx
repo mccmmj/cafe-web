@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Users, Mail, Calendar, ShoppingBag, Search, Eye } from 'lucide-react'
+import { Users, Mail, ShoppingBag, Search, Eye } from 'lucide-react'
 import { Button } from '@/components/ui'
 import { CustomerDetailsModal } from './CustomerDetailsModal'
 

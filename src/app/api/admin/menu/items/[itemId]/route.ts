@@ -27,6 +27,38 @@ interface UpdateItemRequest {
   }>
 }
 
+interface SquareVariation {
+  id: string
+  item_variation_data: {
+    name: string
+    price_money?: {
+      amount?: number
+      currency?: string
+    }
+    ordinal?: number
+    [key: string]: unknown
+  }
+}
+
+interface SquareItemObject {
+  type: string
+  item_data: {
+    name?: string
+    description?: string
+    categories?: { id: string }[]
+    category_id?: string
+    available_for_pickup?: boolean
+    available_online?: boolean
+    variations?: SquareVariation[]
+    image_url?: string
+    ordinal?: number
+    [key: string]: unknown
+  }
+  version?: number
+  updated_at?: string
+  [key: string]: unknown
+}
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ itemId: string }> }
@@ -59,7 +91,7 @@ export async function PUT(
     }
 
     const currentItemResult = await currentItemResponse.json()
-    const currentItem = currentItemResult.object
+    const currentItem = currentItemResult.object as SquareItemObject | null
 
     if (!currentItem || currentItem.type !== 'ITEM') {
       return NextResponse.json(
@@ -87,7 +119,7 @@ export async function PUT(
 
     // Update variations if provided
     if (updateData.variations && updateData.variations.length > 0) {
-      updatedItem.item_data.variations = currentItem.item_data.variations?.map((variation: any) => {
+      updatedItem.item_data.variations = currentItem.item_data.variations?.map((variation: SquareVariation) => {
         const updateVariation = updateData.variations?.find(v => v.id === variation.id)
         if (updateVariation) {
           return {

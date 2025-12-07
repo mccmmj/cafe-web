@@ -6,9 +6,10 @@ import { Eye, EyeOff, Mail, Lock, User, Phone } from 'lucide-react'
 import { Button, Input, PhoneInput } from '@/components/ui'
 import { z } from 'zod'
 import { toast } from 'react-hot-toast'
+import type { Session } from '@supabase/supabase-js'
 
 interface SignupFormProps {
-  onSuccess?: (user: any) => void
+  onSuccess?: (user: Session['user'] | null) => void
   onSwitchToLogin?: () => void
 }
 

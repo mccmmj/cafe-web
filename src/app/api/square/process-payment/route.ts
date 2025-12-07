@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
     let squareOrderTax = 0 // Default to 0, will be updated with Square's calculation
     
     try {
-      orderId = await createSquareOrder(cartItems, customerInfo.email)
+      orderId = await createSquareOrder(cartItems)
       console.log('Square order created:', orderId)
       
       // Get the actual order total and tax from Square

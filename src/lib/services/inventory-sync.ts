@@ -14,6 +14,36 @@ if (!supabaseUrl || !supabaseServiceKey) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+type WebhookEventRecord = {
+  event_type: string
+  processed_at: string
+  sync_result?: {
+    errors?: number
+    success?: boolean
+    [key: string]: unknown
+  }
+}
+
+interface InventoryItemRow {
+  id: string
+  item_name: string
+  current_stock: number
+  minimum_threshold: number
+  reorder_point: number
+}
+
+interface SquareInventoryCount {
+  catalog_object_id: string
+  quantity: string | number
+  state: string
+}
+
+interface SquareInventoryEvent {
+  object?: {
+    inventory_counts?: SquareInventoryCount[]
+  }
+}
+
 export interface InventoryUpdateEvent {
   id: string
   type: 'stock_change' | 'item_created' | 'item_updated' | 'item_deleted'
@@ -25,15 +55,15 @@ export interface InventoryUpdateEvent {
     previous_stock?: number
     new_stock?: number
     location_id?: string
-    details?: any
+    details?: Record<string, unknown>
   }
 }
 
 export interface SyncConflict {
   square_item_id: string
   field: string
-  square_value: any
-  local_value: any
+  square_value: unknown
+  local_value: unknown
   resolution: 'square_wins' | 'local_wins' | 'manual_review'
 }
 
@@ -42,7 +72,7 @@ export class InventorySyncService {
   /**
    * Process incoming Square webhook events
    */
-  static async processSquareWebhook(eventType: string, eventData: any): Promise<{
+  static async processSquareWebhook(eventType: string, eventData: unknown): Promise<{
     success: boolean
     updates: number
     conflicts: SyncConflict[]
@@ -57,11 +87,11 @@ export class InventorySyncService {
 
     try {
       if (eventType === 'catalog.version.updated') {
-        const catalogResult = await this.handleCatalogUpdate(eventData)
+        const catalogResult = await this.handleCatalogUpdate()
         result.updates = catalogResult.updates
         result.conflicts = catalogResult.conflicts
       } else if (eventType === 'inventory.count.updated') {
-        const inventoryResult = await this.handleInventoryUpdate(eventData)
+        const inventoryResult = await this.handleInventoryUpdate(eventData as SquareInventoryEvent)
         result.updates = inventoryResult.updates
         result.alerts = inventoryResult.alerts
       }
@@ -78,7 +108,7 @@ export class InventorySyncService {
   /**
    * Handle catalog updates from Square
    */
-  private static async handleCatalogUpdate(eventData: any): Promise<{
+  private static async handleCatalogUpdate(): Promise<{
     updates: number
     conflicts: SyncConflict[]
   }> {
@@ -90,7 +120,7 @@ export class InventorySyncService {
   /**
    * Handle inventory count updates from Square
    */
-  private static async handleInventoryUpdate(eventData: any): Promise<{
+  private static async handleInventoryUpdate(eventData: SquareInventoryEvent): Promise<{
     updates: number
     alerts: number
   }> {
@@ -118,13 +148,13 @@ export class InventorySyncService {
   /**
    * Update local inventory from Square inventory count
    */
-  private static async updateLocalInventoryFromSquare(inventoryCount: any): Promise<{
+  private static async updateLocalInventoryFromSquare(inventoryCount: SquareInventoryCount): Promise<{
     updated: boolean
     alertCreated: boolean
     error?: string
   }> {
-    const { catalog_object_id, location_id, quantity, state } = inventoryCount
-    const newQuantity = parseInt(quantity, 10)
+    const { catalog_object_id, quantity, state } = inventoryCount
+    const newQuantity = Number(quantity ?? 0)
 
     // Find local inventory item
     const { data: item, error } = await supabase
@@ -224,7 +254,7 @@ export class InventorySyncService {
   /**
    * Check and create low stock alerts
    */
-  private static async checkAndCreateLowStockAlert(item: any, newQuantity: number): Promise<boolean> {
+  private static async checkAndCreateLowStockAlert(item: InventoryItemRow, newQuantity: number): Promise<boolean> {
     const { minimum_threshold, reorder_point } = item
     
     let alertLevel = null
@@ -278,7 +308,7 @@ export class InventorySyncService {
     lastCatalogSync: Date | null
     lastInventorySync: Date | null
     pendingAlerts: number
-    recentErrors: any[]
+    recentErrors: WebhookEventRecord[]
     webhookHealth: {
       catalogWebhook: boolean
       inventoryWebhook: boolean
@@ -305,8 +335,8 @@ export class InventorySyncService {
         .eq('is_acknowledged', false)
 
       // Get recent errors from webhook events
-      const recentErrors = lastEvents
-        ?.filter(e => e.sync_result?.errors > 0 || !e.sync_result?.success)
+      const recentErrors = (lastEvents as WebhookEventRecord[] | undefined)
+        ?.filter(e => (Array.isArray(e.sync_result?.errors) ? e.sync_result?.errors.length > 0 : !e.sync_result?.success))
         .slice(0, 5) || []
 
       return {
@@ -339,10 +369,10 @@ export class InventorySyncService {
    */
   static async forceManualSync(syncType: 'catalog' | 'inventory' | 'both' = 'both'): Promise<{
     success: boolean
-    results: any
+    results: Record<string, unknown>
   }> {
     try {
-      const results: any = {}
+      const results: Record<string, unknown> = {}
 
       if (syncType === 'catalog' || syncType === 'both') {
         // Trigger catalog sync

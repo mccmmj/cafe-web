@@ -45,7 +45,19 @@ export async function PUT(
       .select('purchase_order_id')
       .eq('invoice_id', id)
 
-    const matchedItems = invoice.invoice_items.filter((item: any) =>
+    type InvoiceItemRow = {
+      id: string
+      item_description: string
+      quantity: number
+      unit_price: number
+      total_price: number
+      matched_item_id: string | null
+      match_method: string | null
+    }
+
+    const invoiceItems = (invoice.invoice_items || []) as InvoiceItemRow[]
+
+    const matchedItems = invoiceItems.filter(item =>
       item.matched_item_id && item.match_method !== 'skipped'
     )
 
@@ -229,8 +241,8 @@ export async function PUT(
     // Generate summary stats
     const totalItems = invoice.invoice_items.length
     const matchedCount = matchedItems.length
-    const skippedCount = invoice.invoice_items.filter((item: any) => item.match_method === 'skipped').length
-    const createdCount = invoice.invoice_items.filter((item: any) => item.match_method === 'manual_create').length
+    const skippedCount = invoiceItems.filter(item => item.match_method === 'skipped').length
+    const createdCount = invoiceItems.filter(item => item.match_method === 'manual_create').length
 
     return NextResponse.json({
       success: true,
@@ -247,11 +259,11 @@ export async function PUT(
       }
     })
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error confirming invoice:', error)
     return NextResponse.json({
       success: false,
-      error: `Server error: ${error.message}`
+      error: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}`
     }, { status: 500 })
   }
 }

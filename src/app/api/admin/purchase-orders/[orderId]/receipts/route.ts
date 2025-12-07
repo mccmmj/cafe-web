@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminAuth, isAdminAuthSuccess } from '@/lib/admin/middleware'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import type { PostgrestError } from '@supabase/supabase-js'
 
 const RECEIPT_BUCKET = 'purchase-order-receipts'
 
@@ -40,6 +41,19 @@ type ReceiptInput = {
   weight?: number
   weight_unit?: string
   fileKey?: string
+}
+
+interface PurchaseOrderItemRow {
+  id: string
+  inventory_item_id: string
+  is_excluded?: boolean | null
+  exclusion_reason?: string | null
+  pack_size?: number | null
+  ordered_pack_qty?: number | null
+  inventory_items?: {
+    square_item_id?: string | null
+    pack_size?: number | null
+  } | null
 }
 
 function sanitizeFileName(name: string) {
@@ -98,13 +112,31 @@ async function enrichReceipts(receipts: ReceiptRow[]) {
       `)
       .in('id', itemIds)
 
-    itemsMap = (items || []).reduce((acc, item: any) => {
+    type RawPurchaseOrderItemRow = {
+      id: string
+      inventory_item_id: string
+      quantity_ordered: number
+      quantity_received: number
+      inventory_items?: Array<{
+        item_name?: string | null
+        unit_type?: string | null
+      }> | null
+    }
+
+    const rawItems = (items || []) as RawPurchaseOrderItemRow[]
+    itemsMap = rawItems.reduce((acc, item) => {
+      const linkedInventory = item.inventory_items?.[0]
       acc[item.id] = {
         id: item.id,
         inventory_item_id: item.inventory_item_id,
         quantity_ordered: item.quantity_ordered,
         quantity_received: item.quantity_received,
-        inventory_items: item.inventory_items
+        inventory_items: linkedInventory
+          ? {
+              item_name: linkedInventory.item_name ?? 'Item',
+              unit_type: linkedInventory.unit_type ?? null
+            }
+          : null
       }
       return acc
     }, {} as Record<string, ReceiptRow['purchase_order_items']>)
@@ -293,7 +325,7 @@ export async function POST(
     const supabase = await createClient()
 
     // Block receipts for excluded/out-of-stock items
-    const { data: poItem, error: poItemError } = await supabase
+    const { data: poItemData, error: poItemError } = await supabase
       .from('purchase_order_items')
       .select(`
         id,
@@ -310,11 +342,20 @@ export async function POST(
       .eq('id', purchaseOrderItemId)
       .single()
 
+    const poItem = poItemData as PurchaseOrderItemRow | null
+
     if (poItemError) {
       console.error('Failed to fetch purchase order item before receipt:', poItemError)
       return NextResponse.json(
         { error: 'Unable to validate purchase order item', details: poItemError.message },
         { status: 500 }
+      )
+    }
+
+    if (!poItem) {
+      return NextResponse.json(
+        { error: 'Purchase order item not found' },
+        { status: 404 }
       )
     }
 
@@ -374,7 +415,7 @@ export async function POST(
     const serviceSupabase = createServiceClient()
     // Determine target inventory item (prefer base single-unit with same Square ID)
     let targetInventoryId = poItem.inventory_item_id
-    const squareId = (poItem as any).inventory_items?.square_item_id || null
+    const squareId = poItem.inventory_items?.square_item_id || null
     if (squareId) {
       const { data: baseItem } = await serviceSupabase
         .from('inventory_items')
@@ -389,7 +430,7 @@ export async function POST(
     }
 
     // Use entered quantity as units (PO line is stored in units already); informational only
-    const packSize = (poItem as any).pack_size ?? (poItem as any).inventory_items?.pack_size ?? 1
+    const packSize = poItem.pack_size ?? poItem.inventory_items?.pack_size ?? 1
     const unitQuantity = quantity
 
     console.log('[PO receipt] info only (no stock change)', {
@@ -424,7 +465,7 @@ export async function POST(
         await supabase.storage.from(RECEIPT_BUCKET).remove([uploadedPhotoPath])
       }
 
-      const details = (error as any)?.message || 'Failed to create receipt'
+      const details = (error as PostgrestError | null)?.message || 'Failed to create receipt'
       return NextResponse.json(
         { error: 'Failed to log receipt', details },
         { status: 400 }

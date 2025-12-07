@@ -1,7 +1,9 @@
-import { ParsedInvoiceData, ParsedLineItem } from '@/types/invoice'
+import { ParsedInvoiceData } from '@/types/invoice'
+
+type OpenAIClient = InstanceType<typeof import('openai').default>
 
 // Dynamic OpenAI client to avoid build issues
-let openaiClient: any = null
+let openaiClient: OpenAIClient | null = null
 
 async function getOpenAIClient() {
   if (!openaiClient) {
@@ -21,7 +23,7 @@ async function getOpenAIClient() {
 export interface AIParseRequest {
   text: string
   supplier_name?: string
-  template_rules?: Record<string, any>
+  template_rules?: Record<string, unknown>
 }
 
 export interface AIParseResponse {
@@ -173,12 +175,12 @@ export async function parseInvoiceWithAI({
       }
     }
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('OpenAI API error:', error)
     return {
       success: false,
       confidence: 0,
-      errors: [`AI API error: ${error.message || 'Unknown error'}`]
+      errors: [`AI API error: ${(error as { message?: string }).message || 'Unknown error'}`]
     }
   }
 }
@@ -193,16 +195,16 @@ function validateParsedData(data: ParsedInvoiceData): ParsedInvoiceData {
   }
 
   // Validate and clean line items
-  data.line_items = data.line_items.map((item: any, index: number): ParsedLineItem => ({
-    line_number: item.line_number || index + 1,
-    item_code: item.item_code || null,
-    description: String(item.description || 'Unknown Item'),
-    quantity: Number(item.quantity) || 0,
-    unit_price: Number(item.unit_price) || 0,
-    total_price: Number(item.total_price) || (Number(item.quantity) * Number(item.unit_price)),
-    package_info: item.package_info || null,
-    unit_type: item.unit_type || 'each',
-    confidence: Number(item.confidence) || 0.5
+  data.line_items = data.line_items.map((item, index) => ({
+    line_number: item?.line_number ?? index + 1,
+    item_code: item?.item_code ?? undefined,
+    description: String(item?.description ?? 'Unknown Item'),
+    quantity: Number(item?.quantity ?? 0),
+    unit_price: Number(item?.unit_price ?? 0),
+    total_price: Number(item?.total_price ?? (Number(item?.quantity ?? 0) * Number(item?.unit_price ?? 0))),
+    package_info: item?.package_info ?? undefined,
+    unit_type: item?.unit_type ?? 'each',
+    confidence: Number(item?.confidence ?? 0.5) || 0.5
   }))
 
   // Validate numeric fields

@@ -2,6 +2,26 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { SupplierMetric, SupplierMetricSummary } from '@/types/purchase-order-metrics'
 
+interface MetricRow {
+  supplier_id: string | null
+  supplier_name: string | null
+  period_month: string
+  total_pos?: number | string | null
+  total_spend?: number | string | null
+  open_balance?: number | string | null
+  avg_approval_days?: number | string | null
+  avg_issue_days?: number | string | null
+  avg_receipt_days?: number | string | null
+  on_time_ratio?: number | string | null
+  fulfillment_ratio?: number | string | null
+  invoice_exception_rate?: number | string | null
+  variance_rate?: number | string | null
+  avg_invoice_throughput_days?: number | string | null
+  invoice_match_count?: number | null
+  invoice_exception_count?: number | null
+  variance_match_count?: number | null
+}
+
 function getSupabaseClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseServiceKey = process.env.SUPABASE_SECRET_KEY
@@ -15,13 +35,13 @@ function getSupabaseClient() {
 
 const DEFAULT_MONTH_WINDOW = 6
 
-const toNumber = (value: any): number => {
+const toNumber = (value: unknown): number => {
   if (value === null || value === undefined) return 0
   const numeric = typeof value === 'string' ? parseFloat(value) : Number(value)
   return Number.isFinite(numeric) ? numeric : 0
 }
 
-const toNullableNumber = (value: any): number | null => {
+const toNullableNumber = (value: unknown): number | null => {
   if (value === null || value === undefined) return null
   const numeric = typeof value === 'string' ? parseFloat(value) : Number(value)
   return Number.isFinite(numeric) ? numeric : null
@@ -53,7 +73,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: false, error: error.message }, { status: 500 })
     }
 
-    const metrics: SupplierMetric[] = (data || []).map((row: any) => ({
+    const metrics: SupplierMetric[] = (data || []).map((row: MetricRow) => ({
       supplierId: row.supplier_id,
       supplierName: row.supplier_name,
       periodMonth: row.period_month,

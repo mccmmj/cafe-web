@@ -69,11 +69,7 @@ const menuOnboardingSteps = [
   }
 ]
 
-interface UserOnboardingProps {
-  className?: string
-}
-
-const UserOnboarding = ({ className = '' }: UserOnboardingProps) => {
+const UserOnboarding = () => {
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState(true)
   const pathname = usePathname()

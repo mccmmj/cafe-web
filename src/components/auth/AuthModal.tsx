@@ -6,12 +6,13 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { X } from 'lucide-react'
 import LoginForm from './LoginForm'
 import SignupForm from './SignupForm'
+import type { Session } from '@supabase/supabase-js'
 
 interface AuthModalProps {
   isOpen: boolean
   onClose: () => void
   defaultMode?: 'login' | 'signup'
-  onAuthSuccess?: (user: any) => void
+  onAuthSuccess?: (user: Session['user'] | null) => void
 }
 
 export default function AuthModal({ isOpen, onClose, defaultMode = 'login', onAuthSuccess }: AuthModalProps) {
@@ -39,7 +40,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login', onAu
     }
   }, [isOpen])
 
-  const handleSuccess = useCallback((user: any) => {
+  const handleSuccess = useCallback((user: Session['user'] | null) => {
     onAuthSuccess?.(user)
     onClose()
   }, [onAuthSuccess, onClose])

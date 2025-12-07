@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs'
@@ -10,11 +10,9 @@ import {
   Package,
   MapPin,
   Bell,
-  Trash2,
   Plus,
   Save,
   RefreshCw,
-  Building2
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -53,15 +51,6 @@ interface UnitType {
 }
 
 const UNIT_CATEGORIES = ['Weight', 'Volume', 'Count', 'Length']
-const DEFAULT_UNITS = [
-  { name: 'Each', symbol: 'each', category: 'Count' },
-  { name: 'Pounds', symbol: 'lb', category: 'Weight' },
-  { name: 'Ounces', symbol: 'oz', category: 'Weight' },
-  { name: 'Gallons', symbol: 'gal', category: 'Volume' },
-  { name: 'Liters', symbol: 'L', category: 'Volume' },
-  { name: 'Milliliters', symbol: 'ml', category: 'Volume' }
-]
-
 const InventorySettings = () => {
   const [activeTab, setActiveTab] = useState('general')
   const [newLocation, setNewLocation] = useState({ name: '', description: '' })
@@ -105,7 +94,7 @@ const InventorySettings = () => {
     }
   })
 
-  const settings: InventorySettings = settingsData?.settings || {
+  const settings: InventorySettings = useMemo(() => settingsData?.settings || {
     global_low_stock_threshold: 10,
     global_critical_stock_threshold: 5,
     default_reorder_point_multiplier: 2.0,
@@ -119,7 +108,7 @@ const InventorySettings = () => {
     enable_expiry_tracking: false,
     require_purchase_orders: false,
     auto_update_costs: true
-  }
+  }, [settingsData?.settings])
 
   const locations: Location[] = locationsData?.locations || []
   const units: UnitType[] = unitsData?.units || []

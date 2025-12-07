@@ -1,6 +1,4 @@
 // Order management API operations
-import { API_ENDPOINTS } from '@/lib/constants'
-import type { OrderValidation } from '@/lib/validations'
 
 export interface OrderItem {
   itemId: string
@@ -36,7 +34,7 @@ export interface CreateOrderRequest {
   }
   notes?: string
   paymentMethod: 'square' | 'cash'
-  paymentDetails?: any
+  paymentDetails?: Record<string, unknown>
 }
 
 export interface OrderApiResponse {

@@ -602,7 +602,7 @@ export function InvoiceManagement() {
       <InvoiceUploadModal
         isOpen={showUploadModal}
         onClose={() => setShowUploadModal(false)}
-        onUploadComplete={fetchInvoices}
+        onUploadComplete={() => void fetchInvoices()}
         suppliers={suppliers}
       />
 

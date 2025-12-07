@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listCatalogObjects } from '@/lib/square/fetch-client'
 
+interface CatalogObject {
+  id: string
+  type: string
+  item_data?: { name?: string }
+  item_variation_data?: { name?: string }
+  category_data?: { name?: string }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { catalogObjectId } = await request.json()
@@ -22,13 +30,14 @@ export async function POST(request: NextRequest) {
     }
     
     // Check if the specific ID exists
-    const foundObject = catalogData.objects.find((obj: any) => obj.id === catalogObjectId)
+    const objects = (catalogData.objects || []) as CatalogObject[]
+    const foundObject = objects.find((obj) => obj.id === catalogObjectId)
     
     return NextResponse.json({
       exists: !!foundObject,
       objectDetails: foundObject || null,
-      totalCatalogObjects: catalogData.objects.length,
-      allObjectIds: catalogData.objects.map((obj: any) => ({
+      totalCatalogObjects: objects.length,
+      allObjectIds: objects.map((obj) => ({
         id: obj.id,
         type: obj.type,
         name: obj.item_data?.name || obj.item_variation_data?.name || obj.category_data?.name || 'Unknown'

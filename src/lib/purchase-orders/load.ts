@@ -37,6 +37,29 @@ export interface PurchaseOrderIssuance {
   items: PurchaseOrderLineItem[]
 }
 
+interface PurchaseOrderSupplierRow {
+  id: string
+  name?: string | null
+  contact_person?: string | null
+  email?: string | null
+  phone?: string | null
+  address?: string | null
+  payment_terms?: string | null
+}
+
+interface PurchaseOrderItemRow {
+  id: string
+  inventory_item_id: string
+  quantity_ordered: number
+  quantity_received?: number | null
+  unit_cost?: number | null
+  total_cost?: number | null
+  inventory_items?: {
+    item_name?: string | null
+    unit_type?: string | null
+  }
+}
+
 export async function fetchPurchaseOrderForIssuance(
   supabase: SupabaseClient,
   orderId: string
@@ -80,9 +103,13 @@ export async function fetchPurchaseOrderForIssuance(
     return { order: null }
   }
 
-  const supplierData = data.suppliers || {}
-
-  const items = (data.purchase_order_items || []).map((item: any) => ({
+  const orderData = data as {
+    suppliers?: PurchaseOrderSupplierRow
+    purchase_order_items?: PurchaseOrderItemRow[]
+  }
+  const supplierData = orderData.suppliers ?? ({} as PurchaseOrderSupplierRow)
+  
+  const items = (orderData.purchase_order_items ?? []).map((item) => ({
     id: item.id,
     inventory_item_id: item.inventory_item_id,
     name: item.inventory_items?.item_name || 'Unknown Item',

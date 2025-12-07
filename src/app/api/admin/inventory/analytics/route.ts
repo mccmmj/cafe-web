@@ -2,6 +2,68 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminAuth } from '@/lib/admin/middleware'
 import { createClient } from '@/lib/supabase/server'
 
+type InventoryItemRecord = {
+  id: string
+  item_name: string
+  current_stock: number
+  minimum_threshold: number
+  reorder_point: number
+  unit_cost: number
+  is_ingredient: boolean
+}
+
+type StockMovementRecord = {
+  id: string
+  movement_type: string
+  quantity_change: number
+  created_at: string
+  inventory_items: Array<{
+    item_name: string
+    unit_type: string
+  }> | null
+}
+
+type SupplierRecord = {
+  id: string
+  name: string
+  is_active: boolean
+}
+
+type PurchaseOrderRecord = {
+  id: string
+  supplier_id: string | null
+  status: string
+  total_amount: number
+  order_date: string
+  expected_delivery_date: string | null
+  actual_delivery_date: string | null
+  created_at: string
+  suppliers: Array<{
+    name: string
+  }> | null
+}
+
+type PurchaseOrderItemRecord = {
+  quantity_ordered: number
+  unit_cost: number
+  total_cost: number | null
+  created_at: string
+  inventory_items: Array<{
+    item_name: string
+  }> | null
+  purchase_orders: Array<{
+    created_at: string
+    suppliers: Array<{
+      name: string
+    }> | null
+  }> | null
+}
+
+type PurchaseOrderWithDeliveryDates = PurchaseOrderRecord & {
+  actual_delivery_date: string
+  expected_delivery_date: string
+}
+
 export async function GET(request: NextRequest) {
   try {
     // Verify admin authentication
@@ -36,7 +98,7 @@ export async function GET(request: NextRequest) {
     console.log('Generating inventory analytics for range:', range)
 
     // 1. Inventory Overview
-    const { data: inventoryItems, error: inventoryError } = await supabase
+    const { data: inventoryItemsData, error: inventoryError } = await supabase
       .from('inventory_items')
       .select('id, item_name, current_stock, minimum_threshold, reorder_point, unit_cost, is_ingredient')
 
@@ -45,20 +107,22 @@ export async function GET(request: NextRequest) {
       throw new Error('Failed to fetch inventory data')
     }
 
-    const totalItems = inventoryItems?.length || 0
-    const totalValue = inventoryItems?.reduce((sum, item) => sum + (item.current_stock * item.unit_cost), 0) || 0
-    const lowStockItems = inventoryItems?.filter(item => 
+    const inventoryItems = (inventoryItemsData ?? []) as InventoryItemRecord[]
+
+    const totalItems = inventoryItems.length
+    const totalValue = inventoryItems.reduce((sum, item) => sum + (item.current_stock * item.unit_cost), 0)
+    const lowStockItems = inventoryItems.filter(item => 
       item.current_stock <= item.reorder_point && item.current_stock > item.minimum_threshold
     ).length || 0
-    const criticalStockItems = inventoryItems?.filter(item => 
+    const criticalStockItems = inventoryItems.filter(item => 
       item.current_stock <= item.minimum_threshold && item.current_stock > 0
     ).length || 0
-    const outOfStockItems = inventoryItems?.filter(item => item.current_stock === 0).length || 0
+    const outOfStockItems = inventoryItems.filter(item => item.current_stock === 0).length || 0
     const averageStockLevel = totalItems > 0 ? 
-      inventoryItems?.reduce((sum, item) => sum + item.current_stock, 0) / totalItems : 0
+      inventoryItems.reduce((sum, item) => sum + item.current_stock, 0) / totalItems : 0
 
     // 2. Stock Movements Analysis
-    const { data: stockMovements, error: movementsError } = await supabase
+    const { data: stockMovementsData, error: movementsError } = await supabase
       .from('stock_movements')
       .select(`
         id, 
@@ -76,7 +140,7 @@ export async function GET(request: NextRequest) {
       console.error('Error fetching stock movements:', movementsError)
     }
 
-    const movements = stockMovements || []
+    const movements = (stockMovementsData ?? []) as StockMovementRecord[]
     const totalMovements = movements.length
     const inboundMovements = movements.filter(m => ['purchase', 'adjustment'].includes(m.movement_type) && m.quantity_change > 0).length
     const outboundMovements = movements.filter(m => ['sale', 'waste', 'adjustment'].includes(m.movement_type) && m.quantity_change < 0).length
@@ -89,49 +153,51 @@ export async function GET(request: NextRequest) {
     const netChange = inboundQuantity - outboundQuantity
 
     // Top consumed items
-    const consumedItems = movements
+    const consumedItemsMap = movements
       .filter(m => ['sale', 'waste', 'adjustment'].includes(m.movement_type) && m.quantity_change < 0)
-      .reduce((acc, m) => {
-        const inventoryItem = m.inventory_items as any
-        const key = inventoryItem?.item_name || 'Unknown Item'
-        if (!acc[key]) {
-          acc[key] = { 
-            item_name: key, 
-            total_consumed: 0, 
-            unit_type: inventoryItem?.unit_type || 'unit',
-            frequency: 0 
-          }
+      .reduce((acc, movement) => {
+        const movementItem = movement.inventory_items?.[0]
+        const key = movementItem?.item_name || 'Unknown Item'
+        const existing = acc.get(key) ?? {
+          item_name: key,
+          total_consumed: 0,
+          unit_type: movementItem?.unit_type || 'unit',
+          frequency: 0,
         }
-        acc[key].total_consumed += Math.abs(m.quantity_change)
-        acc[key].frequency += 1
+        existing.total_consumed += Math.abs(movement.quantity_change)
+        existing.frequency += 1
+        acc.set(key, existing)
         return acc
-      }, {} as Record<string, any>)
+      }, new Map<string, ConsumedItemStats>())
 
     // Top restocked items
-    const restockedItems = movements
+    const restockedItemsMap = movements
       .filter(m => ['purchase', 'adjustment'].includes(m.movement_type) && m.quantity_change > 0)
-      .reduce((acc, m) => {
-        const inventoryItem = m.inventory_items as any
-        const key = inventoryItem?.item_name || 'Unknown Item'
-        if (!acc[key]) {
-          acc[key] = { 
-            item_name: key, 
-            total_restocked: 0, 
-            unit_type: inventoryItem?.unit_type || 'unit',
-            frequency: 0 
-          }
+      .reduce((acc, movement) => {
+        const movementItem = movement.inventory_items?.[0]
+        const key = movementItem?.item_name || 'Unknown Item'
+        const existing = acc.get(key) ?? {
+          item_name: key,
+          total_restocked: 0,
+          unit_type: movementItem?.unit_type || 'unit',
+          frequency: 0,
         }
-        acc[key].total_restocked += Math.abs(m.quantity_change)
-        acc[key].frequency += 1
+        existing.total_restocked += Math.abs(movement.quantity_change)
+        existing.frequency += 1
+        acc.set(key, existing)
         return acc
-      }, {} as Record<string, any>)
+      }, new Map<string, RestockedItemStats>())
 
     // 3. Supplier Metrics
-    const { data: suppliers, error: suppliersError } = await supabase
+    const { data: suppliersData, error: suppliersError } = await supabase
       .from('suppliers')
       .select('id, name, is_active')
 
-    const { data: purchaseOrders, error: ordersError } = await supabase
+    if (suppliersError) {
+      console.error('Error fetching suppliers for analytics:', suppliersError)
+    }
+
+    const { data: purchaseOrdersData, error: ordersError } = await supabase
       .from('purchase_orders')
       .select(`
         id,
@@ -146,12 +212,19 @@ export async function GET(request: NextRequest) {
       `)
       .gte('created_at', startDate.toISOString())
 
-    const totalSuppliers = suppliers?.length || 0
-    const activeSuppliers = suppliers?.filter(s => s.is_active).length || 0
+    if (ordersError) {
+      console.error('Error fetching purchase orders for analytics:', ordersError)
+    }
+
+    const supplierList = (suppliersData ?? []) as SupplierRecord[]
+    const purchaseOrderList = (purchaseOrdersData ?? []) as PurchaseOrderRecord[]
+
+    const totalSuppliers = supplierList.length
+    const activeSuppliers = supplierList.filter(s => s.is_active).length || 0
 
     // Top suppliers by orders
-    const supplierOrderStats = (purchaseOrders || []).reduce((acc, order) => {
-      const supplier = order.suppliers as any
+    const supplierOrderStats = purchaseOrderList.reduce<Record<string, SupplierOrderStats>>((acc, order) => {
+      const supplier = order.suppliers?.[0]
       const supplierName = supplier?.name || 'Unknown Supplier'
       if (!acc[supplierName]) {
         acc[supplierName] = {
@@ -177,9 +250,9 @@ export async function GET(request: NextRequest) {
       }
       
       return acc
-    }, {} as Record<string, any>)
+    }, {} as Record<string, SupplierOrderStats>)
 
-    const topSuppliers = Object.values(supplierOrderStats).map((supplier: any) => ({
+    const topSuppliers = Object.values(supplierOrderStats).map((supplier) => ({
       ...supplier,
       avg_delivery_days: supplier.delivery_times.length > 0 ? 
         Math.round(supplier.delivery_times.reduce((sum: number, time: number) => sum + time, 0) / supplier.delivery_times.length) : 0,
@@ -188,30 +261,39 @@ export async function GET(request: NextRequest) {
     })).sort((a, b) => b.total_orders - a.total_orders)
 
     // Supplier performance
-    const supplierPerformance = Object.values(supplierOrderStats).map((supplier: any) => ({
+    const supplierPerformance = Object.values(supplierOrderStats).map((supplier) => ({
       supplier_name: supplier.supplier_name,
-      orders_sent: purchaseOrders?.filter(o => (o.suppliers as any)?.name === supplier.supplier_name && ['sent', 'confirmed', 'received'].includes(o.status)).length || 0,
-      orders_received: purchaseOrders?.filter(o => (o.suppliers as any)?.name === supplier.supplier_name && o.status === 'received').length || 0,
-      orders_overdue: purchaseOrders?.filter(o => {
-        if ((o.suppliers as any)?.name !== supplier.supplier_name || o.status === 'received' || o.status === 'cancelled') return false
+      orders_sent: purchaseOrderList.filter(o => {
+        const orderSupplierName = o.suppliers?.[0]?.name
+        return orderSupplierName === supplier.supplier_name && ['sent', 'confirmed', 'received'].includes(o.status)
+      }).length,
+      orders_received: purchaseOrderList.filter(o => {
+        const orderSupplierName = o.suppliers?.[0]?.name
+        return orderSupplierName === supplier.supplier_name && o.status === 'received'
+      }).length,
+      orders_overdue: purchaseOrderList.filter(o => {
+        const orderSupplierName = o.suppliers?.[0]?.name
+        if (orderSupplierName !== supplier.supplier_name || o.status === 'received' || o.status === 'cancelled') return false
         if (!o.expected_delivery_date) return false
         return new Date(o.expected_delivery_date) < now
-      }).length || 0,
+      }).length,
       avg_cost_per_order: supplier.total_orders > 0 ? supplier.total_value / supplier.total_orders : 0
     }))
 
     // 4. Purchase Orders Analysis
-    const totalOrdersInPeriod = purchaseOrders?.length || 0
-    const totalValueInPeriod = purchaseOrders?.reduce((sum, order) => sum + order.total_amount, 0) || 0
+    const totalOrdersInPeriod = purchaseOrderList.length
+    const totalValueInPeriod = purchaseOrderList.reduce((sum, order) => sum + order.total_amount, 0)
     const avgOrderValue = totalOrdersInPeriod > 0 ? totalValueInPeriod / totalOrdersInPeriod : 0
 
-    const ordersByStatus = (purchaseOrders || []).reduce((acc, order) => {
+    const ordersByStatus = purchaseOrderList.reduce((acc, order) => {
       acc[order.status] = (acc[order.status] || 0) + 1
       return acc
     }, {} as Record<string, number>)
 
     // Delivery performance
-    const deliveredOrders = purchaseOrders?.filter(o => o.actual_delivery_date && o.expected_delivery_date) || []
+    const deliveredOrders = purchaseOrderList.filter((o): o is PurchaseOrderWithDeliveryDates => 
+      !!(o.actual_delivery_date && o.expected_delivery_date)
+    )
     const onTimeDeliveries = deliveredOrders.filter(o => 
       new Date(o.actual_delivery_date) <= new Date(o.expected_delivery_date)
     ).length
@@ -238,25 +320,30 @@ export async function GET(request: NextRequest) {
       `)
       .gte('purchase_orders.created_at', startDate.toISOString())
 
-    const totalSpend = orderItems?.reduce((sum, item) => sum + (item.total_cost || item.quantity_ordered * item.unit_cost), 0) || 0
+    if (orderItemsError) {
+      console.error('Error fetching purchase order items for analytics:', orderItemsError)
+    }
+
+    const orderItemsList = (orderItems ?? []) as PurchaseOrderItemRecord[]
+
+    const totalSpend = orderItemsList.reduce((sum, item) => sum + (item.total_cost ?? item.quantity_ordered * item.unit_cost), 0)
 
     // Unit cost trends
-    const itemCosts = (orderItems || []).reduce((acc, item) => {
-      const inventoryItem = item.inventory_items as any
-      const itemName = inventoryItem?.item_name || 'Unknown Item'
+    const itemCosts = orderItemsList.reduce<Record<string, { costs: number[]; quantities: number[] }>>((acc, item) => {
+      const itemName = item.inventory_items?.[0]?.item_name || 'Unknown Item'
       if (!acc[itemName]) {
         acc[itemName] = { costs: [], quantities: [] }
       }
       acc[itemName].costs.push(item.unit_cost)
       acc[itemName].quantities.push(item.quantity_ordered)
       return acc
-    }, {} as Record<string, any>)
+    }, {})
 
-    const avgUnitCosts = Object.entries(itemCosts).map(([itemName, data]: [string, any]) => {
-      const avgCost = data.costs.reduce((sum: number, cost: number) => sum + cost, 0) / data.costs.length
-      const currentItem = inventoryItems?.find(item => (item as any).item_name === itemName)
-      const currentCost = currentItem?.unit_cost || avgCost
-      const costChange = ((currentCost - avgCost) / avgCost) * 100
+    const avgUnitCosts = Object.entries(itemCosts).map(([itemName, data]) => {
+      const avgCost = data.costs.reduce((sum, cost) => sum + cost, 0) / data.costs.length
+      const currentItem = inventoryItems.find(item => item.item_name === itemName)
+      const currentCost = currentItem?.unit_cost ?? avgCost
+      const costChange = avgCost === 0 ? 0 : ((currentCost - avgCost) / avgCost) * 100
       
       return {
         item_name: itemName,
@@ -268,23 +355,18 @@ export async function GET(request: NextRequest) {
     })
 
     // Spend by supplier
-    const spendBySupplier = (orderItems || []).reduce((acc, item) => {
-      const purchaseOrder = item.purchase_orders as any
-      const supplier = purchaseOrder?.suppliers as any
-      const supplierName = supplier?.name || 'Unknown Supplier'
-      const itemTotal = item.total_cost || item.quantity_ordered * item.unit_cost
-      if (!acc[supplierName]) {
-        acc[supplierName] = 0
-      }
-      acc[supplierName] += itemTotal
+    const spendBySupplier = orderItemsList.reduce<Record<string, number>>((acc, item) => {
+      const supplierName = item.purchase_orders?.[0]?.suppliers?.[0]?.name || 'Unknown Supplier'
+      const itemTotal = item.total_cost ?? item.quantity_ordered * item.unit_cost
+      acc[supplierName] = (acc[supplierName] || 0) + itemTotal
       return acc
-    }, {} as Record<string, number>)
+    }, {})
 
     const supplierSpendData = Object.entries(spendBySupplier).map(([name, spend]) => ({
       supplier_name: name,
-      total_spend: Number(spend) || 0,
-      percentage_of_total: totalSpend > 0 ? (Number(spend) / totalSpend) * 100 : 0
-    })).sort((a, b) => (b.total_spend as number) - (a.total_spend as number))
+      total_spend: spend,
+      percentage_of_total: totalSpend > 0 ? (spend / totalSpend) * 100 : 0
+    })).sort((a, b) => b.total_spend - a.total_spend)
 
     // Mock spend by category (you could enhance this with actual categories)
     const spendByCategory = [
@@ -329,8 +411,8 @@ export async function GET(request: NextRequest) {
         inbound_movements_30d: inboundMovements,
         outbound_movements_30d: outboundMovements,
         net_change_30d: netChange,
-        top_consumed_items: Object.values(consumedItems).sort((a: any, b: any) => b.total_consumed - a.total_consumed),
-        top_restocked_items: Object.values(restockedItems).sort((a: any, b: any) => b.total_restocked - a.total_restocked)
+        top_consumed_items: Array.from(consumedItemsMap.values()).sort((a, b) => b.total_consumed - a.total_consumed),
+        top_restocked_items: Array.from(restockedItemsMap.values()).sort((a, b) => b.total_restocked - a.total_restocked)
       },
       supplier_metrics: {
         total_suppliers: totalSuppliers,
@@ -384,4 +466,25 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     )
   }
+}
+type ConsumedItemStats = {
+  item_name: string
+  total_consumed: number
+  unit_type: string
+  frequency: number
+}
+
+type RestockedItemStats = {
+  item_name: string
+  total_restocked: number
+  unit_type: string
+  frequency: number
+}
+
+type SupplierOrderStats = {
+  supplier_name: string
+  total_orders: number
+  total_value: number
+  delivery_times: number[]
+  on_time_count: number
 }

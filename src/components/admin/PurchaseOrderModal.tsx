@@ -31,6 +31,8 @@ interface PurchaseOrder {
   status?: string
   order_date?: string
   expected_delivery_date?: string
+  sent_at?: string | null
+  actual_delivery_date?: string | null
   total_amount?: number
   notes?: string
   items?: PurchaseOrderItem[]
@@ -42,8 +44,33 @@ interface PurchaseOrderModalProps {
   onClose: () => void
 }
 
+interface Supplier {
+  id: string
+  name: string
+  is_active?: boolean
+  email?: string
+  phone?: string
+}
+
+interface InventoryItemForPO {
+  id: string
+  item_name: string
+  supplier_id?: string
+  current_stock?: number
+  unit_cost?: number
+  pack_size?: number | null
+  pack_price?: number | null
+  unit_type?: string
+  reorder_point?: number
+  item_type?: string | null
+}
+
+interface OrderableInventoryItem extends InventoryItemForPO {
+  recommendedQuantity: number
+}
+
 interface SearchableDropdownProps {
-  items: any[]
+  items: InventoryItemForPO[]
   value: string
   onChange: (value: string) => void
   placeholder: string
@@ -77,7 +104,7 @@ const SearchableDropdown = ({ items, value, onChange, placeholder, className }: 
   const selectedItem = items.find(item => item.id === value)
   const displayValue = selectedItem ? `${selectedItem.item_name} (${selectedItem.unit_type})` : ''
 
-  const handleSelect = (item: any) => {
+  const handleSelect = (item: InventoryItemForPO) => {
     onChange(item.id)
     setIsOpen(false)
     setSearchTerm('')
@@ -139,11 +166,11 @@ const SearchableDropdown = ({ items, value, onChange, placeholder, className }: 
                     <span className="font-medium">{item.item_name}</span>
                     <span className="text-xs text-gray-500">({item.unit_type})</span>
                   </div>
-                  {item.unit_cost > 0 && (
+                  {item.unit_cost && item.unit_cost > 0 ? (
                     <div className="text-xs text-gray-500 mt-0.5">
                       ${item.unit_cost.toFixed(2)} per {item.unit_type}
                     </div>
-                  )}
+                  ) : null}
                 </button>
               ))
             )}
@@ -159,6 +186,8 @@ const PurchaseOrderModal = ({ order, isOpen, onClose }: PurchaseOrderModalProps)
     supplier_id: '',
     order_number: '',
     expected_delivery_date: '',
+    sent_at: '',
+    actual_delivery_date: '',
     notes: '',
     items: [] as PurchaseOrderItem[]
   })
@@ -166,7 +195,7 @@ const PurchaseOrderModal = ({ order, isOpen, onClose }: PurchaseOrderModalProps)
   const [openCalc, setOpenCalc] = useState<Record<number, boolean>>({})
   const [bulkSelections, setBulkSelections] = useState<Record<string, { selected: boolean; quantity: number }>>({})
 
-  const deriveCosts = (invItem: any) => {
+  const deriveCosts = (invItem?: InventoryItemForPO) => {
     const packSize = invItem?.pack_size || 1
     let unitCost = invItem?.unit_cost || 0
     let packPrice = invItem?.pack_price ?? null
@@ -213,7 +242,7 @@ const PurchaseOrderModal = ({ order, isOpen, onClose }: PurchaseOrderModalProps)
   const queryClient = useQueryClient()
 
   // Fetch suppliers
-  const { data: suppliersData } = useQuery({
+  const { data: suppliersData } = useQuery<{ suppliers: Supplier[] }>({
     queryKey: ['admin-suppliers'],
     queryFn: async () => {
       const response = await fetch('/api/admin/suppliers')
@@ -226,7 +255,7 @@ const PurchaseOrderModal = ({ order, isOpen, onClose }: PurchaseOrderModalProps)
   })
 
   // Fetch inventory items
-  const { data: inventoryData } = useQuery({
+  const { data: inventoryData } = useQuery<{ items: InventoryItemForPO[] }>({
     queryKey: ['admin-inventory-for-orders'],
     queryFn: async () => {
       const response = await fetch('/api/admin/inventory')
@@ -239,31 +268,51 @@ const PurchaseOrderModal = ({ order, isOpen, onClose }: PurchaseOrderModalProps)
   })
 
   const suppliers = suppliersData?.suppliers || []
-  const inventoryItems = inventoryData?.items || []
-  const selectedSupplier = suppliers.find((supplier: any) => supplier.id === formData.supplier_id)
+  const inventoryItems = useMemo<InventoryItemForPO[]>(
+    () => inventoryData?.items || [],
+    [inventoryData?.items]
+  )
+  const selectedSupplier = suppliers.find((supplier) => supplier.id === formData.supplier_id)
 
   const getRecommendedQuantity = (inventoryItemId: string) => {
-    const invItem = inventoryItems.find((inv: any) => inv.id === inventoryItemId)
+    const invItem = inventoryItems.find((inv) => inv.id === inventoryItemId)
     if (!invItem) return 1
     const gap = (invItem.reorder_point || 0) - (invItem.current_stock || 0)
     const reorderQty = gap > 0 ? gap : invItem.reorder_point || 1
     return Math.max(1, reorderQty)
   }
 
-  const orderableItems = useMemo(() => {
+  const orderableItems = useMemo<OrderableInventoryItem[]>(() => {
     if (!formData.supplier_id) return []
     return inventoryItems
-      .filter((invItem: any) => invItem.supplier_id === formData.supplier_id && invItem.item_type !== 'prepared')
-      .map((invItem: any) => ({
+      .filter((invItem) => invItem.supplier_id === formData.supplier_id && invItem.item_type !== 'prepared')
+      .map((invItem) => ({
         ...invItem,
         recommendedQuantity: Math.max(1, (invItem.reorder_point || 0) - (invItem.current_stock || 0))
       }))
-      .sort((a: any, b: any) => {
+      .sort((a, b) => {
         const aGap = (a.reorder_point || 0) - (a.current_stock || 0)
         const bGap = (b.reorder_point || 0) - (b.current_stock || 0)
         return bGap - aGap
       })
   }, [inventoryItems, formData.supplier_id])
+
+  const toDateOnlyInput = (value?: string | null) => {
+    if (!value) return ''
+    if (value.includes('T')) {
+      return value.slice(0, 10)
+    }
+    return value
+  }
+
+  const toDateTimeLocalInput = (value?: string | null) => {
+    if (!value) return ''
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return ''
+    const tzOffsetMs = date.getTimezoneOffset() * 60 * 1000
+    const local = new Date(date.getTime() - tzOffsetMs)
+    return local.toISOString().slice(0, 16)
+  }
 
   // Reset form when modal opens/closes or order changes
   useEffect(() => {
@@ -273,7 +322,9 @@ const PurchaseOrderModal = ({ order, isOpen, onClose }: PurchaseOrderModalProps)
         setFormData({
           supplier_id: order.supplier_id,
           order_number: order.order_number,
-          expected_delivery_date: order.expected_delivery_date?.split('T')[0] || '',
+          expected_delivery_date: toDateOnlyInput(order.expected_delivery_date || null),
+          sent_at: toDateTimeLocalInput(order.sent_at || null),
+          actual_delivery_date: toDateOnlyInput(order.actual_delivery_date || null),
           notes: order.notes || '',
           items: order.items || []
         })
@@ -284,6 +335,8 @@ const PurchaseOrderModal = ({ order, isOpen, onClose }: PurchaseOrderModalProps)
           supplier_id: '',
           order_number: orderNumber,
           expected_delivery_date: '',
+          sent_at: '',
+          actual_delivery_date: '',
           notes: '',
           items: []
         })
@@ -384,12 +437,12 @@ const addItem = () => {
     }))
   }
 
-  const updateItem = (index: number, field: keyof PurchaseOrderItem, value: any) => {
+  const updateItem = (index: number, field: keyof PurchaseOrderItem, value: PurchaseOrderItem[keyof PurchaseOrderItem]) => {
     setFormData(prev => ({
       ...prev,
       items: prev.items.map((item, i) => {
         if (i !== index) return item
-        let updatedItem = { ...item, [field]: value }
+        const updatedItem = { ...item, [field]: value }
 
        // Switching units
        if (field === 'order_unit') {
@@ -434,7 +487,8 @@ const addItem = () => {
 
         // Auto-fill unit cost from inventory item
         if (field === 'inventory_item_id') {
-          const inventoryItem = inventoryItems.find((inv: any) => inv.id === value)
+          const inventoryItemId = value as string
+          const inventoryItem = inventoryItems.find((inv) => inv.id === inventoryItemId)
           if (inventoryItem) {
             const recommendedQty = getRecommendedQuantity(inventoryItem.id)
             const shouldSetQuantity = item.quantity_ordered === 1 || !item.inventory_item_id
@@ -502,7 +556,7 @@ const addItem = () => {
       const existingMap = new Map(existingItems.map((item, index) => [item.inventory_item_id, index]))
 
       selections.forEach(([itemId, data]) => {
-        const inventoryItem = orderableItems.find((item: any) => item.id === itemId)
+        const inventoryItem = orderableItems.find((item) => item.id === itemId)
         if (!inventoryItem) return
         const quantity = data.quantity || 1
         const { packSize, packPrice, unitCost } = deriveCosts(inventoryItem)
@@ -648,7 +702,7 @@ const addItem = () => {
                   {quickAddOpen && (
                     <div id="quick-add-panel" className="p-4">
                       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                        {orderableItems.slice(0, 18).map((invItem: any) => {
+                        {orderableItems.slice(0, 18).map((invItem) => {
                           const selection = bulkSelections[invItem.id] || { selected: false, quantity: invItem.recommendedQuantity }
                           const quantityValue = selection.quantity ?? invItem.recommendedQuantity ?? 1
                           const reorderGap = (invItem.reorder_point || 0) - (invItem.current_stock || 0)
@@ -709,7 +763,7 @@ const addItem = () => {
                                   />
                                   {(() => {
                                     const { packSize, packPrice, unitCost } = deriveCosts(invItem)
-                                    const displayPrice = packSize > 1 ? packPrice : unitCost
+                                    const displayPrice = (packSize > 1 ? packPrice : unitCost) ?? 0
                                     return displayPrice > 0 ? (
                                       <span className="text-gray-400">
                                         ${displayPrice.toFixed(2)} {packSize > 1 ? 'per pack' : 'ea'}
@@ -723,7 +777,7 @@ const addItem = () => {
                         })}
                         {orderableItems.length > 18 && (
                           <div className="text-xs text-gray-500">
-                            Showing top 18 items. Use "Add Item" to select others.
+                            Showing top 18 items. Use &quot;Add Item&quot; to select others.
                           </div>
                         )}
                       </div>
@@ -951,7 +1005,7 @@ const addItem = () => {
                   required
                 >
                   <option value="">Select a supplier</option>
-                  {suppliers.map((supplier: any) => (
+                  {suppliers.map((supplier) => (
                     <option key={supplier.id} value={supplier.id}>
                       {supplier.name}
                     </option>
@@ -983,6 +1037,36 @@ const addItem = () => {
                   onChange={(e) => setFormData(prev => ({ ...prev, expected_delivery_date: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Sent to Supplier (Date &amp; Time)
+                </label>
+                <input
+                  type="datetime-local"
+                  value={formData.sent_at}
+                  onChange={(e) => setFormData(prev => ({ ...prev, sent_at: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Backdate when the PO was emailed or otherwise sent. Leave blank to keep current value.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Delivered / Received Date
+                </label>
+                <input
+                  type="date"
+                  value={formData.actual_delivery_date}
+                  onChange={(e) => setFormData(prev => ({ ...prev, actual_delivery_date: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Use this to correct the actual delivery date if you recorded it late.
+                </p>
               </div>
 
               <div>

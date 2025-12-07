@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { Upload, X, FileText, AlertCircle, CheckCircle, Calendar, User } from 'lucide-react'
+import { Upload, X, FileText, AlertCircle } from 'lucide-react'
+import { Invoice } from '@/types/invoice'
 
 interface Supplier {
   id: string
@@ -12,7 +13,7 @@ interface Supplier {
 interface InvoiceUploadModalProps {
   isOpen: boolean
   onClose: () => void
-  onUploadComplete?: (invoice?: any) => void
+  onUploadComplete?: (invoice?: Invoice) => void
   suppliers?: Supplier[]
   defaultSupplierId?: string
   lockSupplier?: boolean
@@ -201,9 +202,9 @@ export function InvoiceUploadModal({
         onClose()
       }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Upload failed:', error)
-      setError(error.message || 'Upload failed. Please try again.')
+      setError(error instanceof Error ? error.message : 'Upload failed. Please try again.')
     } finally {
       setUploading(false)
     }
@@ -340,7 +341,7 @@ export function InvoiceUploadModal({
               )}
               {!lockSupplier && (
                 <p className="text-xs text-gray-500 mt-1">
-                  If left blank, we'll create a new supplier from the invoice information
+                  If left blank, we&rsquo;ll create a new supplier from the invoice information
                 </p>
               )}
             </div>

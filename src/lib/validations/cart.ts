@@ -25,6 +25,13 @@ export const addToCartSchema = z.object({
   specialInstructions: z.string().max(200, 'Special instructions too long').optional(),
 })
 
+export type CartItemDetails = {
+  name: string
+  price: number
+  imageUrl?: string
+  isAvailable: boolean
+}
+
 // Update Cart Item Schema
 export const updateCartItemSchema = z.object({
   quantity: z.number().int().min(1, 'Quantity must be at least 1').max(50, 'Quantity cannot exceed 50').optional(),

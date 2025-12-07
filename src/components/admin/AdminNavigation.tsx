@@ -17,6 +17,7 @@ import {
   FileText
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import type { User } from '@supabase/supabase-js'
 
 const navigation = [
   { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
@@ -30,7 +31,7 @@ const navigation = [
 ]
 
 export function AdminNavigation() {
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<User | null>(null)
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()

@@ -3,7 +3,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCartModal } from '@/providers/CartProvider'
 import { cartSchema, addToCartSchema, updateCartItemSchema } from '@/lib/validations'
-import type { Cart, CartItemType, AddToCart, UpdateCartItem } from '@/lib/validations/cart'
+import type { Cart, CartItemType, AddToCart, UpdateCartItem, CartItemDetails } from '@/lib/validations/cart'
+import type { MenuCategory, MenuItem } from '@/types/menu'
 
 // Query Keys
 export const cartQueryKeys = {
@@ -85,7 +86,7 @@ const saveCart = async (cart: Cart): Promise<Cart> => {
   return validated.data
 }
 
-const addItemToCart = async (item: AddToCart & { itemDetails?: { name: string; price: number; imageUrl?: string; isAvailable: boolean } }): Promise<Cart> => {
+const addItemToCart = async (item: AddToCart & { itemDetails?: CartItemDetails }): Promise<Cart> => {
   const validatedItem = addToCartSchema.safeParse(item)
   if (!validatedItem.success) {
     throw new Error('Invalid item data')
@@ -100,9 +101,9 @@ const addItemToCart = async (item: AddToCart & { itemDetails?: { name: string; p
     if (!response.ok) {
       throw new Error('Failed to fetch menu data')
     }
-    const menuData = await response.json()
-    const allItems = menuData.categories?.flatMap((cat: any) => cat.items) || []
-    const foundItem = allItems.find((menuItem: any) => menuItem.id === validatedItem.data.itemId)
+    const menuData: { categories?: MenuCategory[] } = await response.json()
+    const allItems = menuData.categories?.flatMap((cat) => cat.items) ?? []
+    const foundItem = allItems.find((menuItem: MenuItem) => menuItem.id === validatedItem.data.itemId)
     if (!foundItem) {
       throw new Error('Item not found in menu')
     }
@@ -242,7 +243,8 @@ export const useAddToCart = () => {
 
   return useMutation({
     mutationFn: addItemToCart,
-    onMutate: async (newItem) => {
+    onMutate: async (_newItem) => {
+      void _newItem
       // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: cartQueryKeys.cart() })
 

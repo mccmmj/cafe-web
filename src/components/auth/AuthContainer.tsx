@@ -23,7 +23,6 @@ const AuthContainer = ({ isOpen, onClose, defaultMode = 'login' }: AuthContainer
   const [mfaFactors, setMfaFactors] = useState<Factor[]>([])
   const [selectedFactorId, setSelectedFactorId] = useState<string | null>(null)
   const [mfaCode, setMfaCode] = useState('')
-  const [pendingUserId, setPendingUserId] = useState<string | null>(null)
   
   const supabase = createClient()
 
@@ -43,7 +42,6 @@ const AuthContainer = ({ isOpen, onClose, defaultMode = 'login' }: AuthContainer
 
         const needMfa = await initiateMfaChallenge(data.session)
         if (needMfa) {
-          setPendingUserId(data.user?.id ?? null)
           return
         }
 
@@ -158,7 +156,6 @@ const AuthContainer = ({ isOpen, onClose, defaultMode = 'login' }: AuthContainer
     setMfaCode('')
     setMfaFactors([])
     setSelectedFactorId(null)
-    setPendingUserId(null)
     setTimeout(() => {
       setSuccess(null)
       onClose()
@@ -173,13 +170,12 @@ const AuthContainer = ({ isOpen, onClose, defaultMode = 'login' }: AuthContainer
     setMfaFactors([])
     setSelectedFactorId(null)
     setMfaCode('')
-    setPendingUserId(null)
   }
 
-  const extractVerifiedTotpFactors = (user: any): Factor[] => {
+  const extractVerifiedTotpFactors = (user?: { factors?: Factor[] | null } | null): Factor[] => {
     const rawFactors = Array.isArray(user?.factors) ? user.factors : []
     return rawFactors.filter(
-      (factor: any) => factor?.factor_type === 'totp' && factor?.status === 'verified'
+      (factor) => factor?.factor_type === 'totp' && factor?.status === 'verified'
     )
   }
 
@@ -267,7 +263,6 @@ const AuthContainer = ({ isOpen, onClose, defaultMode = 'login' }: AuthContainer
                 setMfaFactors([])
                 setSelectedFactorId(null)
                 setMfaCode('')
-                setPendingUserId(null)
                 setError(null)
               }}
               className="text-sm text-amber-600 hover:text-amber-700 underline w-full text-center"

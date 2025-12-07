@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdminAuth } from '@/lib/admin/middleware'
+import { requireAdminAuth, isAdminAuthSuccess } from '@/lib/admin/middleware'
 import { createClient } from '@/lib/supabase/server'
 
 type TextQueue =
@@ -16,7 +16,15 @@ interface FilterParams {
   end_date?: string | null
 }
 
-function applyBaseFilters(query: any, filters: FilterParams) {
+interface FilterableQuery<TSelf> {
+  eq(column: string, value: unknown): TSelf
+  gte(column: string, value: unknown): TSelf
+  lte(column: string, value: unknown): TSelf
+  gt(column: string, value: unknown): TSelf
+  neq(column: string, value: unknown): TSelf
+}
+
+function applyBaseFilters<T extends FilterableQuery<T>>(query: T, filters: FilterParams) {
   const { status, supplier_id, start_date, end_date } = filters
   if (status) query = query.eq('status', status)
   if (supplier_id) query = query.eq('supplier_id', supplier_id)
@@ -25,7 +33,7 @@ function applyBaseFilters(query: any, filters: FilterParams) {
   return query
 }
 
-function applyTextQueueFilter(query: any, queue: TextQueue | null) {
+function applyTextQueueFilter<T extends FilterableQuery<T>>(query: T, queue: TextQueue | null) {
   if (!queue || queue === 'all') {
     return query
   }
@@ -53,7 +61,7 @@ export async function GET(request: NextRequest) {
   try {
     // Verify admin authentication
     const authResult = await requireAdminAuth(request)
-    if (authResult instanceof NextResponse) {
+    if (!isAdminAuthSuccess(authResult)) {
       return authResult
     }
 
@@ -176,9 +184,10 @@ export async function POST(request: NextRequest) {
   try {
     // Verify admin authentication
     const authResult = await requireAdminAuth(request)
-    if (authResult instanceof NextResponse) {
+    if (!isAdminAuthSuccess(authResult)) {
       return authResult
     }
+    const adminAuth = authResult
 
     const body = await request.json()
     const {
@@ -231,7 +240,7 @@ export async function POST(request: NextRequest) {
         file_type,
         file_size,
         status: 'uploaded',
-        created_by: (authResult as any).userId
+        created_by: adminAuth.userId
       })
       .select(`
         id,

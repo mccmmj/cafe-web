@@ -1,16 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdminAuth } from '@/lib/admin/middleware'
+import { requireAdminAuth, isAdminAuthSuccess } from '@/lib/admin/middleware'
 import { createClient } from '@/lib/supabase/server'
 
 interface RouteContext {
   params: Promise<{ id: string }>
 }
 
+interface InvoiceUpdateRequestBody {
+  invoice_number?: string
+  invoice_date?: string
+  due_date?: string
+  total_amount?: number
+  status?: string
+  parsed_data?: Record<string, unknown> | null
+  parsing_confidence?: number | null
+  parsing_error?: string | null
+}
+
+interface InvoiceUpdatePayload extends InvoiceUpdateRequestBody {
+  processed_at?: string
+  processed_by?: string
+}
+
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
     // Verify admin authentication
     const authResult = await requireAdminAuth(request)
-    if (authResult instanceof NextResponse) {
+    if (!isAdminAuthSuccess(authResult)) {
       return authResult
     }
 
@@ -125,13 +141,14 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   try {
     // Verify admin authentication
     const authResult = await requireAdminAuth(request)
-    if (authResult instanceof NextResponse) {
+    if (!isAdminAuthSuccess(authResult)) {
       return authResult
     }
+    const adminAuth = authResult
 
     const resolvedParams = await context.params
     const { id } = resolvedParams
-    const body = await request.json()
+    const body: InvoiceUpdateRequestBody = await request.json()
     const {
       invoice_number,
       invoice_date,
@@ -146,7 +163,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     const supabase = await createClient()
 
     // Update invoice
-    const updateData: any = {}
+    const updateData: InvoiceUpdatePayload = {}
     if (invoice_number !== undefined) updateData.invoice_number = invoice_number
     if (invoice_date !== undefined) updateData.invoice_date = invoice_date
     if (due_date !== undefined) updateData.due_date = due_date
@@ -159,7 +176,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     // Add processing metadata if status is being updated
     if (status && ['parsed', 'matched', 'confirmed'].includes(status)) {
       updateData.processed_at = new Date().toISOString()
-      updateData.processed_by = (authResult as any).userId
+      updateData.processed_by = adminAuth.userId
     }
 
     const { data: updatedInvoice, error } = await supabase
@@ -217,7 +234,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
     // Verify admin authentication
     const authResult = await requireAdminAuth(request)
-    if (authResult instanceof NextResponse) {
+    if (!isAdminAuthSuccess(authResult)) {
       return authResult
     }
 

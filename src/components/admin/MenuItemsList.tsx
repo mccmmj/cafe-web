@@ -1,7 +1,6 @@
 'use client'
 
-import { useState } from 'react'
-import { Eye, Edit, Power, PowerOff, DollarSign, Clock, Coffee } from 'lucide-react'
+import { Edit, Power, PowerOff, Coffee } from 'lucide-react'
 import { Button } from '@/components/ui'
 import { formatPrice } from '@/lib/utils'
 import { isStarbucksCategory } from '@/lib/constants/menu'
@@ -66,11 +65,6 @@ const MenuItemsList = ({
 
   const isAllSelected = selectedItems.size > 0 && selectedItems.size === items.length
   const isSomeSelected = selectedItems.size > 0 && selectedItems.size < items.length
-
-  const getDefaultPrice = (item: MenuItem) => {
-    const defaultVariation = item.variations.find(v => v.isDefault) || item.variations[0]
-    return defaultVariation ? defaultVariation.price / 100 : 0
-  }
 
   const getPriceRange = (item: MenuItem) => {
     const prices = item.variations.map(v => v.price / 100)

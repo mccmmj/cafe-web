@@ -152,10 +152,15 @@ async function insertInventoryItems(items: InventoryItemInput[]) {
     throw new Error(`Failed to insert inventory items: ${error.message}`)
   }
 
-  return data
+  return (data ?? []) as InsertedInventoryItem[]
 }
 
-async function createStockMovements(inventoryItems: any[]) {
+type InsertedInventoryItem = {
+  id: string
+  current_stock: number
+}
+
+async function createStockMovements(inventoryItems: InsertedInventoryItem[]) {
   const stockMovements = inventoryItems
     .filter(item => item.current_stock > 0)
     .map(item => ({
@@ -206,7 +211,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate admin access
-    const admin = await validateAdminAccess(body.adminEmail)
+    await validateAdminAccess(body.adminEmail)
 
     // Validate inventory items
     await validateInventoryItems(body.items)

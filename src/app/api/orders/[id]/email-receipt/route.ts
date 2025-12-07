@@ -4,6 +4,30 @@ import { Resend } from 'resend'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
+interface OrderItemRow {
+  id: string
+  item_name: string
+  quantity: number
+  unit_price: number
+  total_price: number
+  variations?: Record<string, string>
+  modifiers?: Record<string, string>
+}
+
+interface OrderRow {
+  id: string
+  order_number?: string | null
+  status: string
+  payment_status: string
+  created_at: string
+  customer_email: string | null
+  subtotal?: number | null
+  tax_amount?: number | null
+  total_amount: number
+  special_instructions?: string | null
+  order_items?: OrderItemRow[]
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -27,7 +51,7 @@ export async function POST(
       `)
       .eq('id', id)
       .eq('user_id', user.id)
-      .single()
+      .single<OrderRow>()
 
     if (orderError || !order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 })
@@ -91,8 +115,10 @@ export async function POST(
   }
 }
 
-function generateReceiptEmailContent(order: any): string {
+function generateReceiptEmailContent(order: OrderRow): string {
   const formatPrice = (price: number) => (price / 100).toFixed(2)
+  const taxAmount = order.tax_amount ?? 0
+  const subtotalValue = order.subtotal ?? (order.total_amount - taxAmount)
   
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString('en-US', {
@@ -144,19 +170,19 @@ function generateReceiptEmailContent(order: any): string {
 
   <div class="items">
     <h3>Order Items:</h3>
-    ${order.order_items?.map((item: any) => `
+    ${order.order_items?.map((item) => `
       <div class="item">
         <div class="item-name">${item.quantity}x ${item.item_name} - $${formatPrice(item.total_price)}</div>
         <div style="display: flex; justify-content: space-between; color: #6b7280; font-size: 14px;">
           <span>$${formatPrice(item.unit_price)} each</span>
         </div>
         ${item.variations && Object.keys(item.variations).length > 0 ? 
-          Object.entries(item.variations).map(([key, value]: [string, any]) => 
+          Object.entries(item.variations).map(([key, value]) => 
             `<div class="item-details">• ${key}: ${value}</div>`
           ).join('') : ''
         }
         ${item.modifiers && Object.keys(item.modifiers).length > 0 ? 
-          Object.entries(item.modifiers).map(([key, value]: [string, any]) => 
+          Object.entries(item.modifiers).map(([key, value]) => 
             `<div class="item-details">+ ${key}: ${value}</div>`
           ).join('') : ''
         }
@@ -167,12 +193,12 @@ function generateReceiptEmailContent(order: any): string {
   <div class="totals">
     <div class="total-line">
       <span>Subtotal:</span>
-      <span>$${formatPrice(order.subtotal || (order.total_amount - (order.tax_amount || 0)))}</span>
+      <span>$${formatPrice(subtotalValue)}</span>
     </div>
-    ${order.tax_amount > 0 ? `
+    ${taxAmount > 0 ? `
       <div class="total-line">
         <span>Tax:</span>
-        <span>$${formatPrice(order.tax_amount)}</span>
+        <span>$${formatPrice(taxAmount)}</span>
       </div>
     ` : ''}
     <div class="total-line final-total">

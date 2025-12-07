@@ -3,8 +3,36 @@
 import { X, User, Mail, Phone, Clock, Package, DollarSign } from 'lucide-react'
 import { Button } from '@/components/ui'
 
+interface OrderItemDetails {
+  item_name?: string
+  quantity?: number
+  total_price?: number
+  unit_price?: number
+  variations?: Record<string, unknown>
+  modifiers?: Record<string, unknown>
+}
+
+interface OrderDetails {
+  id: string
+  created_at: string
+  status: string
+  order_items?: OrderItemDetails[]
+  profiles?: {
+    full_name?: string
+  } | null
+  customer_email?: string
+  customer_phone?: string
+  special_instructions?: string
+  total_amount?: number
+  tax_amount?: number
+  subtotal_amount?: number
+  payment_status?: string
+  square_order_id?: string
+  updated_at?: string
+}
+
 interface OrderDetailsModalProps {
-  order: any
+  order: OrderDetails | null
   isOpen: boolean
   onClose: () => void
 }
@@ -103,7 +131,7 @@ export function OrderDetailsModal({ order, isOpen, onClose }: OrderDetailsModalP
               Order Items ({order.order_items?.length || 0})
             </h3>
             <div className="space-y-3">
-              {order.order_items?.map((item: any, index: number) => (
+              {order.order_items?.map((item: OrderItemDetails, index: number) => (
                 <div key={index} className="bg-gray-50 rounded-lg p-4">
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
@@ -169,10 +197,10 @@ export function OrderDetailsModal({ order, isOpen, onClose }: OrderDetailsModalP
                     </div>
                     <div className="text-right ml-4">
                       <p className="font-medium text-gray-900">
-                        ${formatPrice(item.total_price)}
+                        ${formatPrice(item.total_price ?? 0)}
                       </p>
                       <p className="text-sm text-gray-600">
-                        ${formatPrice(item.unit_price)} each
+                        ${formatPrice(item.unit_price ?? 0)} each
                       </p>
                     </div>
                   </div>
@@ -248,10 +276,12 @@ export function OrderDetailsModal({ order, isOpen, onClose }: OrderDetailsModalP
                 <span className="text-gray-600">Created:</span>
                 <span className="text-gray-900">{formatDate(order.created_at)}</span>
               </div>
+            {order.updated_at && (
               <div className="flex justify-between">
                 <span className="text-gray-600">Last Updated:</span>
                 <span className="text-gray-900">{formatDate(order.updated_at)}</span>
               </div>
+            )}
             </div>
           </div>
         </div>

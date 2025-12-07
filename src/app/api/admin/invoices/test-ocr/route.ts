@@ -1,6 +1,18 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 
-export async function POST(request: NextRequest) {
+interface OcrLoggerMessage {
+  status: string
+  progress: number
+}
+
+interface RecognizeResult {
+  data: {
+    text: string
+    confidence: number
+  }
+}
+
+export async function POST() {
   try {
     console.log('🧪 Testing OCR functionality...')
     
@@ -23,7 +35,7 @@ export async function POST(request: NextRequest) {
       
       // Create a simple worker
       const worker = await tesseract.createWorker('eng', 1, {
-        logger: (m: any) => {
+        logger: (m: OcrLoggerMessage) => {
           console.log(`Test OCR: ${m.status} - ${(m.progress * 100).toFixed(1)}%`)
         }
       })
@@ -36,7 +48,7 @@ export async function POST(request: NextRequest) {
         setTimeout(() => reject(new Error('Test timeout after 30 seconds')), 30000)
       })
       
-      const result = await Promise.race([ocrPromise, timeoutPromise]) as any
+      const result = await Promise.race([ocrPromise, timeoutPromise]) as RecognizeResult
       await worker.terminate()
       
       console.log('✅ Test OCR completed')
@@ -51,21 +63,23 @@ export async function POST(request: NextRequest) {
         }
       })
       
-    } catch (tesseractError: any) {
+    } catch (tesseractError) {
+      const message = tesseractError instanceof Error ? tesseractError.message : 'Unknown error'
       console.error('❌ Tesseract error:', tesseractError)
       return NextResponse.json({
         success: false,
         error: 'Tesseract loading or processing failed',
-        details: tesseractError.message
+        details: message
       }, { status: 500 })
     }
     
-  } catch (error: any) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
     console.error('❌ OCR test failed:', error)
     return NextResponse.json({
       success: false,
       error: 'OCR test failed',
-      details: error.message
+      details: message
     }, { status: 500 })
   }
 }

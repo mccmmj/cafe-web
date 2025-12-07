@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { User, LogOut, Heart, Clock, Settings } from 'lucide-react'
+import { LogOut, Heart, Clock, Settings } from 'lucide-react'
 
 interface UserMenuProps {
   user: {

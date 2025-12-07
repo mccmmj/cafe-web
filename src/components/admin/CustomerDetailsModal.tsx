@@ -1,11 +1,25 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { X, User, Mail, Calendar, ShoppingBag, MapPin, Phone } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { X, User, Mail, Calendar, ShoppingBag } from 'lucide-react'
 import { Button } from '@/components/ui'
 
+interface CustomerSummary {
+  id: string
+  full_name?: string | null
+  email?: string | null
+  created_at: string
+  role?: string
+}
+
+interface CustomerOrderItem {
+  id: string
+  quantity: number
+  item_name: string
+}
+
 interface CustomerDetailsModalProps {
-  customer: any
+  customer: CustomerSummary | null
   isOpen: boolean
   onClose: () => void
 }
@@ -15,20 +29,14 @@ interface CustomerOrder {
   created_at: string
   total_amount: number
   status: string
-  order_items: any[]
+  order_items: CustomerOrderItem[]
 }
 
 export function CustomerDetailsModal({ customer, isOpen, onClose }: CustomerDetailsModalProps) {
   const [customerOrders, setCustomerOrders] = useState<CustomerOrder[]>([])
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    if (isOpen && customer) {
-      fetchCustomerOrders()
-    }
-  }, [isOpen, customer])
-
-  const fetchCustomerOrders = async () => {
+  const fetchCustomerOrders = useCallback(async () => {
     if (!customer?.id) return
     
     try {
@@ -37,14 +45,20 @@ export function CustomerDetailsModal({ customer, isOpen, onClose }: CustomerDeta
       
       if (response.ok) {
         const data = await response.json()
-        setCustomerOrders(data.orders || [])
+        setCustomerOrders((data.orders || []) as CustomerOrder[])
       }
     } catch (error) {
       console.error('Error fetching customer orders:', error)
     } finally {
       setLoading(false)
     }
-  }
+  }, [customer?.id])
+
+  useEffect(() => {
+    if (isOpen && customer) {
+      fetchCustomerOrders()
+    }
+  }, [isOpen, customer, fetchCustomerOrders])
 
   if (!isOpen || !customer) return null
 

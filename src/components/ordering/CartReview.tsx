@@ -1,13 +1,14 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, type SyntheticEvent } from 'react'
 import { motion } from 'framer-motion'
-import { Trash2, Plus, Minus, Edit3, AlertCircle, Clock, MapPin } from 'lucide-react'
+import { Trash2, Plus, Minus, AlertCircle, Clock, MapPin } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { useCartState } from '@/hooks/useCartData'
 import { useOptimisticCart } from '@/hooks/useOptimisticCart'
 import { useCartValidation } from '@/hooks/useCartData'
+import Image from 'next/image'
 
 interface CartReviewProps {
   onPrevious: () => void
@@ -16,7 +17,7 @@ interface CartReviewProps {
 }
 
 export default function CartReview({ onPrevious, onContinue, canContinue }: CartReviewProps) {
-  const { cart, isEmpty, itemCount, total } = useCartState()
+  const { cart, isEmpty, itemCount } = useCartState()
   const { updateCartItem, removeCartItem, clearCart } = useOptimisticCart()
   const { data: validation } = useCartValidation()
   const [orderType, setOrderType] = useState<'pickup' | 'dine_in'>('pickup')
@@ -43,10 +44,14 @@ export default function CartReview({ onPrevious, onContinue, canContinue }: Cart
     }
   }, [clearCart])
 
-  const estimatedTime = cart?.items.reduce((max, item) => {
+  const estimatedTime = cart?.items.reduce((max) => {
     const prepTime = 5 // Default prep time, would come from item data
     return Math.max(max, prepTime)
   }, 0) || 0
+
+  const handleImageError = (event: SyntheticEvent<HTMLImageElement>) => {
+    event.currentTarget.style.display = 'none'
+  }
 
   if (isEmpty) {
     return (
@@ -135,14 +140,13 @@ export default function CartReview({ onPrevious, onContinue, canContinue }: Cart
                 >
                   <div className="w-16 h-16 bg-gray-200 rounded-lg flex-shrink-0">
                     {item.imageUrl ? (
-                      <img 
-                        src={item.imageUrl} 
+                      <Image
+                        src={item.imageUrl}
                         alt={item.name}
+                        width={64}
+                        height={64}
                         className="w-full h-full object-cover rounded-lg"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement
-                          target.style.display = 'none'
-                        }}
+                        onError={handleImageError}
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-gray-400">

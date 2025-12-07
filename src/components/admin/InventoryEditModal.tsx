@@ -36,6 +36,22 @@ interface InventoryEditModalProps {
   onClose: () => void
 }
 
+interface CostHistoryEntry {
+  changed_at: string
+  source: string
+  previous_unit_cost: number | null
+  new_unit_cost: number
+  pack_size?: number | null
+}
+
+interface SquareSearchResult {
+  variationId: string
+  itemName: string
+  variationName?: string
+  sku?: string
+  price?: number
+}
+
 const UNIT_TYPES = [
   { value: 'each', label: 'Each' },
   { value: 'lb', label: 'Pounds (lb)' },
@@ -48,8 +64,8 @@ const UNIT_TYPES = [
 export default function InventoryEditModal({ item, suppliers, isOpen, onClose }: InventoryEditModalProps) {
   const [formData, setFormData] = useState<Partial<InventoryItem>>({})
   const [packPrice, setPackPrice] = useState<string>('0')
-  const [costHistory, setCostHistory] = useState<any[]>([])
-  const [squareResults, setSquareResults] = useState<any[]>([])
+  const [costHistory, setCostHistory] = useState<CostHistoryEntry[]>([])
+  const [squareResults, setSquareResults] = useState<SquareSearchResult[]>([])
   const [squareSearchLoading, setSquareSearchLoading] = useState(false)
   const [squareSearchError, setSquareSearchError] = useState<string | null>(null)
   const queryClient = useQueryClient()
@@ -84,7 +100,7 @@ export default function InventoryEditModal({ item, suppliers, isOpen, onClose }:
     try {
       const res = await fetch(`/api/admin/inventory/cost-history?id=${itemId}&limit=5`)
       const json = await res.json()
-      if (json.success) setCostHistory(json.history || [])
+      if (json.success) setCostHistory((json.history || []) as CostHistoryEntry[])
     } catch (err) {
       console.error('Failed to load cost history', err)
     }
@@ -175,7 +191,7 @@ export default function InventoryEditModal({ item, suppliers, isOpen, onClose }:
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Failed to search Square catalog')
       }
-      setSquareResults(data.results || [])
+      setSquareResults((data.results || []) as SquareSearchResult[])
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Square catalog search failed'
       setSquareSearchError(message)
@@ -185,7 +201,7 @@ export default function InventoryEditModal({ item, suppliers, isOpen, onClose }:
     }
   }
 
-  const handleSelectSquareResult = (result: any) => {
+  const handleSelectSquareResult = (result: SquareSearchResult) => {
     setFormData(prev => ({
       ...prev,
       square_item_id: result.variationId,
@@ -288,7 +304,7 @@ export default function InventoryEditModal({ item, suppliers, isOpen, onClose }:
             )}
             {squareResults.length > 0 && (
               <div className="mt-3 rounded-lg border border-indigo-100 bg-indigo-50/70 text-sm text-gray-900">
-                {squareResults.map((result: any) => (
+                {squareResults.map((result) => (
                   <button
                     key={result.variationId}
                     type="button"

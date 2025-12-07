@@ -7,6 +7,8 @@ import { useAuth } from '@/hooks/useAuth'
 import { useAddToCart } from '@/hooks/useCartData'
 import Button from '@/components/ui/Button'
 import { toast } from 'react-hot-toast'
+import type { Favorite } from '@/hooks/useFavorites'
+import type { MenuCategory, MenuItem } from '@/types/menu'
 
 export default function FavoritesList() {
   const { user } = useAuth()
@@ -14,18 +16,18 @@ export default function FavoritesList() {
   const addToCart = useAddToCart()
   const [addingToCart, setAddingToCart] = useState<string | null>(null)
 
-  const handleAddToCart = async (favorite: any) => {
+  const handleAddToCart = async (favorite: Favorite) => {
     setAddingToCart(favorite.square_item_id)
     
     try {
       // Fetch full item details from menu to get proper variation ID and pricing
       const response = await fetch('/api/menu')
-      const menuData = await response.json()
+      const menuData: { categories?: MenuCategory[] } = await response.json()
       
       // Find the item in the menu data
-      let foundItem = null
-      for (const category of menuData.categories) {
-        foundItem = category.items.find((item: any) => item.id === favorite.square_item_id)
+      let foundItem: MenuItem | null = null
+      for (const category of menuData.categories ?? []) {
+        foundItem = category.items.find(item => item.id === favorite.square_item_id) ?? null
         if (foundItem) break
       }
       

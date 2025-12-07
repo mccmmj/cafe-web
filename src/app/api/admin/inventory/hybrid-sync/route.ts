@@ -25,11 +25,6 @@ interface EnrichmentRecord extends Record<string, unknown> {
   description?: string
 }
 
-interface ConflictResolutionStrategy {
-  strategy: 'square_wins' | 'yaml_wins' | 'merge'
-  fieldStrategies?: Record<string, 'square_wins' | 'yaml_wins' | 'merge'>
-}
-
 interface EnrichmentSettings {
   conflict_resolution?: {
     default_strategy?: 'square_wins' | 'yaml_wins' | 'merge'
@@ -42,17 +37,41 @@ interface EnrichmentPayload {
   enrichment_settings?: EnrichmentSettings
 }
 
+type InventoryItemRow = {
+  id: string
+  square_item_id: string
+  item_name: string
+  unit_cost: number | null
+  current_stock: number | null
+  minimum_threshold: number | null
+  reorder_point: number | null
+  supplier_id: string | null
+  location: string | null
+  notes: string | null
+}
+
+type InventoryUpdatePlan = {
+  id: string
+  updates: Record<string, unknown>
+  changes: string[]
+}
+
+type StockMovementPlan = {
+  inventory_item_id: string
+  movement_type: 'adjustment'
+  quantity_change: number
+  previous_stock: number
+  new_stock: number
+  reference_id: string
+  notes: string
+}
+
 interface HybridSyncRequest {
   adminEmail: string
   dryRun?: boolean
   skipSquareSync?: boolean
   skipEnrichment?: boolean
   enrichmentData?: EnrichmentPayload
-}
-
-interface ConflictResolution {
-  strategy: 'square_wins' | 'yaml_wins' | 'merge'
-  fieldStrategies?: Record<string, 'square_wins' | 'yaml_wins'>
 }
 
 async function validateAdminAccess(adminEmail: string) {
@@ -122,7 +141,7 @@ async function runSquareSync(adminEmail: string, dryRun: boolean) {
   }
 }
 
-async function runEnrichmentSync(adminEmail: string, enrichmentData: any, dryRun: boolean) {
+async function runEnrichmentSync(adminEmail: string, enrichmentData: EnrichmentPayload, dryRun: boolean) {
   if (!enrichmentData || !enrichmentData.inventory_enrichments) {
     return {
       success: false,
@@ -147,7 +166,7 @@ async function runEnrichmentSync(adminEmail: string, enrichmentData: any, dryRun
     })
 
     // Get existing inventory items
-    const { data: items, error: itemsError } = await supabase
+    const { data: itemsData, error: itemsError } = await supabase
       .from('inventory_items')
       .select('id, square_item_id, item_name, unit_cost, current_stock, minimum_threshold, reorder_point, supplier_id, location, notes')
 
@@ -155,14 +174,15 @@ async function runEnrichmentSync(adminEmail: string, enrichmentData: any, dryRun
       throw new Error(`Failed to fetch inventory items: ${itemsError.message}`)
     }
 
-    const itemMap: Record<string, any> = {}
-    items.forEach(item => {
+    const itemMap: Record<string, InventoryItemRow> = {}
+    const inventoryItems = (itemsData ?? []) as InventoryItemRow[]
+    inventoryItems.forEach(item => {
       itemMap[item.square_item_id] = item
     })
 
     // Process enrichments with conflict resolution
-    const updates: any[] = []
-    const stockMovements: any[] = []
+    const updates: InventoryUpdatePlan[] = []
+    const stockMovements: StockMovementPlan[] = []
     const stats = {
       processed: 0,
       updated: 0,
@@ -170,7 +190,7 @@ async function runEnrichmentSync(adminEmail: string, enrichmentData: any, dryRun
       stockChanges: 0
     }
 
-    enrichmentData.inventory_enrichments.forEach((enrichment: any) => {
+    enrichmentData.inventory_enrichments.forEach((enrichment) => {
       stats.processed++
       
       const existingItem = itemMap[enrichment.square_item_id]
@@ -180,8 +200,9 @@ async function runEnrichmentSync(adminEmail: string, enrichmentData: any, dryRun
       }
 
       // Build update object with conflict resolution
-      const updates_obj: any = {}
-      const changes: any[] = []
+      const updates_obj: Record<string, unknown> = {}
+      const changes: string[] = []
+      const existingRecord = existingItem as Record<string, unknown>
 
       // Apply enrichment settings for conflict resolution
       const settings = enrichmentData.enrichment_settings || {}
@@ -197,7 +218,8 @@ async function runEnrichmentSync(adminEmail: string, enrichmentData: any, dryRun
         // Handle special field mappings
         if (field === 'supplier_name') {
           dbField = 'supplier_id'
-          newValue = supplierMap[enrichment[field]]
+          const supplierName = typeof enrichment[field] === 'string' ? enrichment[field] : undefined
+          newValue = supplierName ? supplierMap[supplierName] : undefined
         } else if (field === 'custom_fields') {
           // Skip custom fields for now
           return
@@ -212,9 +234,9 @@ async function runEnrichmentSync(adminEmail: string, enrichmentData: any, dryRun
         }
 
         // Check if value changed
-        if (existingItem[dbField] !== newValue) {
+        if (existingRecord[dbField] !== newValue) {
           updates_obj[dbField] = newValue
-          changes.push(`${field}: ${existingItem[dbField] || 'null'} → ${newValue}`)
+          changes.push(`${field}: ${existingRecord[dbField] || 'null'} → ${newValue}`)
           
           // Track stock changes
           if (field === 'current_stock' && typeof newValue === 'number') {

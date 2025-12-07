@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { listLocations, listCatalogTaxes } from '@/lib/square/fetch-client'
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     console.log('Fetching Square location tax configuration...')
     

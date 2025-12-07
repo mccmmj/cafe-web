@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { cartQueryKeys } from './useCartData'
-import type { Cart, CartItemType, AddToCart, UpdateCartItem } from '@/lib/validations/cart'
+import type { Cart, CartItemType, AddToCart, UpdateCartItem, CartItemDetails } from '@/lib/validations/cart'
 import { toast } from 'react-hot-toast'
 
 // Optimistic cart operations with immediate UI feedback
@@ -10,7 +10,7 @@ export const useOptimisticCart = () => {
   const queryClient = useQueryClient()
 
   const addToCartOptimistic = useMutation({
-    mutationFn: async (item: AddToCart & { itemDetails: any }) => {
+    mutationFn: async (item: AddToCart & { itemDetails: CartItemDetails }) => {
       // Simulate API call delay for real implementation
       await new Promise(resolve => setTimeout(resolve, 100))
       
@@ -113,7 +113,7 @@ export const useOptimisticCart = () => {
       
       console.error('Add to cart error:', error)
     },
-    onSuccess: (actualCart, newItem) => {
+    onSuccess: (actualCart) => {
       // Update with actual server response
       queryClient.setQueryData(cartQueryKeys.cart(), actualCart)
       

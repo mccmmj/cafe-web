@@ -1,16 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-interface SupplierData {
+interface SupplierImportPayload {
+  suppliers: SupplierInput[]
+  replaceExisting?: boolean
+}
+
+interface SupplierInput {
   name: string
-  contact_person?: string
-  email?: string
-  phone?: string
-  address?: string
-  payment_terms?: string
-  notes?: string
+  contact_person?: string | null
+  email?: string | null
+  phone?: string | null
+  address?: string | null
+  payment_terms?: string | null
+  notes?: string | null
   is_active?: boolean
 }
+
+type ValidatedSupplier = Required<Pick<SupplierInput, 'name'>> &
+  Omit<SupplierInput, 'name'> & {
+    contact_person: string | null
+    email: string | null
+    phone: string | null
+    address: string | null
+    payment_terms: string | null
+    notes: string | null
+    is_active: boolean
+  }
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,7 +49,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 
-    const body = await request.json()
+    const body = await request.json() as SupplierImportPayload
     const { suppliers, replaceExisting = false } = body
 
     if (!Array.isArray(suppliers)) {
@@ -41,7 +57,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate supplier data
-    const validatedSuppliers = suppliers.map((supplier: any, index: number) => {
+    const validatedSuppliers: ValidatedSupplier[] = suppliers.map((supplier, index: number) => {
       if (!supplier.name || typeof supplier.name !== 'string') {
         throw new Error(`Supplier at index ${index} must have a name`)
       }
@@ -131,7 +147,8 @@ export async function POST(request: NextRequest) {
           }
         }
       } catch (error) {
-        result.errors.push(`Error processing ${supplier.name}: ${error}`)
+        const message = error instanceof Error ? error.message : 'Unknown error'
+        result.errors.push(`Error processing ${supplier.name}: ${message}`)
       }
     }
 

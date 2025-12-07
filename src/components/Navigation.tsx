@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Menu, X, ShoppingCart, User, Search, Bell, Heart, Coffee } from 'lucide-react'
+import { Menu, X, ShoppingCart, Search, Heart, Coffee } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { AuthContainer, UserDropdown } from './auth'
 import { Button } from './ui'
@@ -22,7 +22,7 @@ const Navigation = () => {
   const pathname = usePathname()
   
   const supabase = createClient()
-  const { itemCount, isOpen: cartOpen, openCart } = useCartState()
+  const { itemCount, openCart } = useCartState()
 
   // Handle escape key for modals
   useEffect(() => {
@@ -48,11 +48,6 @@ const Navigation = () => {
     { name: 'Gallery', href: '/gallery' },
     { name: 'Contact', href: '/contact' },
     { name: 'Profile', href: '/profile' },
-  ]
-
-  const authenticatedNavItems = [
-    { name: 'Orders', href: '/orders' },
-    { name: 'Favorites', href: '/favorites' },
   ]
 
   useEffect(() => {

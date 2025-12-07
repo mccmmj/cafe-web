@@ -1,45 +1,69 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { CreditCard, Lock, CheckCircle, ArrowLeft, Loader2 } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { CreditCard, Lock, CheckCircle, Loader2 } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
-import Input from '@/components/ui/Input'
 import { useCartState } from '@/hooks/useCartData'
 import { useSquareCartTotals } from '@/hooks/useSquareCartTotals'
 import { toast } from 'react-hot-toast'
-import { z } from 'zod'
-import SquarePaymentForm from '@/components/square/SquarePaymentForm'
+import SquarePaymentForm, { PaymentSuccessPayload } from '@/components/square/SquarePaymentForm'
 
-interface CheckoutFlowProps {
-  customerInfo: any
-  onSuccess: (paymentData: any) => void
-  onCancel: () => void
+type PaymentMethod = 'card' | 'cash' | 'mobile'
+
+interface CustomerInfo {
+  name: string
+  email: string
+  phone: string
+  paymentMethod?: PaymentMethod
 }
 
-const paymentSchema = z.object({
-  cardNumber: z.string().regex(/^\d{4}\s?\d{4}\s?\d{4}\s?\d{4}$/, 'Please enter a valid card number'),
-  expiryDate: z.string().regex(/^(0[1-9]|1[0-2])\/\d{2}$/, 'Please enter a valid expiry date (MM/YY)'),
-  cvv: z.string().regex(/^\d{3,4}$/, 'Please enter a valid CVV'),
-  cardholderName: z.string().min(2, 'Please enter the cardholder name'),
-  billingAddress: z.object({
-    street: z.string().min(1, 'Street address is required'),
-    city: z.string().min(1, 'City is required'),
-    state: z.string().min(2, 'State is required'),
-    zipCode: z.string().regex(/^\d{5}(-\d{4})?$/, 'Please enter a valid ZIP code'),
-  }),
-  saveCard: z.boolean().optional(),
-})
+interface CheckoutFlowProps {
+  customerInfo: CustomerInfo
+  onSuccess: (paymentData: PaymentData) => void
+  onCancel?: () => void
+}
 
-type PaymentForm = z.infer<typeof paymentSchema>
+interface BillingAddress {
+  street: string
+  city: string
+  state: string
+  zipCode: string
+}
 
+interface PaymentForm {
+  cardNumber: string
+  expiryDate: string
+  cvv: string
+  cardholderName: string
+  billingAddress: BillingAddress
+  saveCard?: boolean
+}
+
+interface SavedCard {
+  id: string
+  last4: string
+  expMonth: number
+  expYear: number
+  cardholderName?: string
+  cardBrand?: string
+}
+
+interface PaymentData {
+  paymentId: string
+  orderId: string
+  method: PaymentMethod
+  amount: number
+  status: string
+  timestamp: string
+  savedCardId?: string
+}
 export default function CheckoutFlow({ customerInfo, onSuccess, onCancel }: CheckoutFlowProps) {
   const [step, setStep] = useState<'payment' | 'processing' | 'success'>('payment')
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'cash' | 'mobile'>('card')
   const [isProcessing, setIsProcessing] = useState(false)
-  const [errors, setErrors] = useState<Record<string, string>>({})
-  const [savedCards, setSavedCards] = useState<any[]>([])
+  const [savedCards, setSavedCards] = useState<SavedCard[]>([])
   const [selectedSavedCard, setSelectedSavedCard] = useState<string>('')
   const [showSquareForm, setShowSquareForm] = useState(false)
   
@@ -60,46 +84,8 @@ export default function CheckoutFlow({ customerInfo, onSuccess, onCancel }: Chec
     }
   }, [])
 
-  const savePaymentCard = useCallback(async (paymentToken: string, cardData: PaymentForm) => {
-    if (!cardData.saveCard || !customerInfo?.email) return
-
-    try {
-      const response = await fetch('/api/square/customers/save-card', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          paymentToken,
-          customerEmail: customerInfo.email,
-          customerName: customerInfo.name,
-          cardholderName: cardData.cardholderName,
-          billingAddress: {
-            street: cardData.billingAddress.street,
-            city: cardData.billingAddress.city,
-            state: cardData.billingAddress.state,
-            zipCode: cardData.billingAddress.zipCode
-          }
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to save payment method')
-      }
-
-      // Refresh saved cards
-      const cards = await getSavedCards()
-      setSavedCards(cards)
-      
-      toast.success('Payment method saved successfully!')
-    } catch (error) {
-      console.error('Error saving payment method:', error)
-      toast.error('Failed to save payment method')
-    }
-  }, [customerInfo]) // Removed getSavedCards from dependency array to prevent infinite loop
-
   const loadSavedCard = useCallback((cardId: string) => {
-    const card = savedCards.find((c: any) => c.id === cardId)
+    const card = savedCards.find((c) => c.id === cardId)
     if (card) {
       setFormData(prev => ({
         ...prev,
@@ -118,7 +104,15 @@ export default function CheckoutFlow({ customerInfo, onSuccess, onCancel }: Chec
     }
   }, [savedCards])
 
-  const handleSquarePaymentSuccess = useCallback(async (result: { token: string, details: any }) => {
+  const handlePaymentMethodSelect = useCallback((method: PaymentMethod) => {
+    setPaymentMethod(method)
+    if (method !== 'card') {
+      setShowSquareForm(false)
+      setSelectedSavedCard('')
+    }
+  }, [])
+
+  const handleSquarePaymentSuccess = useCallback(async (result: PaymentSuccessPayload) => {
     setIsProcessing(true)
     setStep('processing')
 
@@ -177,13 +171,15 @@ export default function CheckoutFlow({ customerInfo, onSuccess, onCancel }: Chec
         }
       }
 
-      const paymentData = {
+      const paymentData: PaymentData = {
         paymentId: paymentResult.paymentId,
         orderId: paymentResult.orderId,
         method: paymentMethod,
         amount: squareTotals.total,
         status: paymentResult.status,
         timestamp: new Date().toISOString()
+        ,
+        savedCardId: selectedSavedCard || undefined
       }
       
       setStep('success')
@@ -200,7 +196,7 @@ export default function CheckoutFlow({ customerInfo, onSuccess, onCancel }: Chec
     } finally {
       setIsProcessing(false)
     }
-  }, [squareTotals.total, customerInfo, cart, paymentMethod, onSuccess])
+  }, [squareTotals.total, customerInfo, cart, paymentMethod, selectedSavedCard, onSuccess])
 
   const handleSquarePaymentError = useCallback((error: Error) => {
     console.error('Square payment error:', error)
@@ -232,60 +228,7 @@ export default function CheckoutFlow({ customerInfo, onSuccess, onCancel }: Chec
       setSavedCards(cards)
     }
     loadCards()
-  }, [customerInfo]) // Removed getSavedCards from dependency array to prevent infinite loop
-
-  const handleInputChange = useCallback((field: string, value: string | boolean) => {
-    if (field.startsWith('billingAddress.')) {
-      const addressField = field.split('.')[1]
-      setFormData(prev => ({
-        ...prev,
-        billingAddress: {
-          ...prev.billingAddress,
-          [addressField]: value,
-        }
-      }))
-    } else {
-      setFormData(prev => ({ ...prev, [field]: value }))
-    }
-    
-    // Clear error when user starts typing
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }))
-    }
-  }, [errors])
-
-  const formatCardNumber = (value: string) => {
-    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '')
-    const matches = v.match(/\d{4,16}/g)
-    const match = matches && matches[0] || ''
-    const parts = []
-    for (let i = 0, len = match.length; i < len; i += 4) {
-      parts.push(match.substring(i, i + 4))
-    }
-    if (parts.length) {
-      return parts.join(' ')
-    } else {
-      return v
-    }
-  }
-
-  const formatExpiryDate = (value: string) => {
-    const v = value.replace(/\D/g, '')
-    if (v.length >= 2) {
-      return v.substring(0, 2) + '/' + v.substring(2, 4)
-    }
-    return v
-  }
-
-  const handleCardNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatCardNumber(e.target.value)
-    handleInputChange('cardNumber', formatted)
-  }
-
-  const handleExpiryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatExpiryDate(e.target.value)
-    handleInputChange('expiryDate', formatted)
-  }
+  }, [customerInfo, getSavedCards])
 
   const processSquarePayment = useCallback(async () => {
     setIsProcessing(true)
@@ -296,6 +239,7 @@ export default function CheckoutFlow({ customerInfo, onSuccess, onCancel }: Chec
         // For non-card payments, create order directly
         const paymentData = {
           paymentId: `pay_${Date.now()}`,
+          orderId: '',
           method: paymentMethod,
           amount: squareTotals.total,
           status: 'completed',
@@ -373,7 +317,6 @@ export default function CheckoutFlow({ customerInfo, onSuccess, onCancel }: Chec
 
   const handleSubmitPayment = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
-    setErrors({})
 
     if (paymentMethod === 'card' && !selectedSavedCard && !showSquareForm) {
       // Show Square payment form for new cards
@@ -384,15 +327,6 @@ export default function CheckoutFlow({ customerInfo, onSuccess, onCancel }: Chec
     // Process payment for saved cards, mobile, or cash
     await processSquarePayment()
   }, [paymentMethod, selectedSavedCard, showSquareForm, processSquarePayment])
-
-  const getCardType = (number: string) => {
-    const num = number.replace(/\s/g, '')
-    if (/^4/.test(num)) return 'visa'
-    if (/^5[1-5]/.test(num)) return 'mastercard'
-    if (/^3[47]/.test(num)) return 'amex'
-    if (/^6/.test(num)) return 'discover'
-    return 'unknown'
-  }
 
   if (step === 'processing') {
     return (
@@ -454,7 +388,18 @@ export default function CheckoutFlow({ customerInfo, onSuccess, onCancel }: Chec
 
       {/* Payment Method Selection */}
       <Card variant="default" className="p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Method</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">Payment Method</h3>
+          {onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+            >
+              Edit customer info
+            </button>
+          )}
+        </div>
         
         <div className="grid grid-cols-3 gap-4 mb-6">
           <label className="flex flex-col items-center space-y-2 p-4 border rounded-lg cursor-pointer hover:bg-gray-50">
@@ -463,7 +408,7 @@ export default function CheckoutFlow({ customerInfo, onSuccess, onCancel }: Chec
               name="paymentMethod"
               value="card"
               checked={paymentMethod === 'card'}
-              onChange={(e) => setPaymentMethod(e.target.value as any)}
+              onChange={() => handlePaymentMethodSelect('card')}
               className="text-primary-600 focus:ring-primary-500"
             />
             <CreditCard className="w-6 h-6 text-gray-600" />
@@ -476,7 +421,7 @@ export default function CheckoutFlow({ customerInfo, onSuccess, onCancel }: Chec
               name="paymentMethod"
               value="mobile"
               checked={paymentMethod === 'mobile'}
-              onChange={(e) => setPaymentMethod(e.target.value as any)}
+              onChange={() => handlePaymentMethodSelect('mobile')}
               className="text-primary-600 focus:ring-primary-500"
             />
             <div className="text-2xl">📱</div>
@@ -489,7 +434,7 @@ export default function CheckoutFlow({ customerInfo, onSuccess, onCancel }: Chec
               name="paymentMethod"
               value="cash"
               checked={paymentMethod === 'cash'}
-              onChange={(e) => setPaymentMethod(e.target.value as any)}
+              onChange={() => handlePaymentMethodSelect('cash')}
               className="text-primary-600 focus:ring-primary-500"
             />
             <div className="text-2xl">💵</div>
@@ -516,7 +461,7 @@ export default function CheckoutFlow({ customerInfo, onSuccess, onCancel }: Chec
                   <div className="space-y-4">
                     <h4 className="font-medium text-gray-900">Saved Payment Methods</h4>
                     <div className="space-y-2">
-                      {savedCards.map((card: any) => (
+                      {savedCards.map((card) => (
                         <label key={card.id} className="flex items-center space-x-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
                           <input
                             type="radio"
@@ -587,7 +532,7 @@ export default function CheckoutFlow({ customerInfo, onSuccess, onCancel }: Chec
                 You can pay with cash when you pick up your order at the counter.
               </p>
               <div className="text-sm text-gray-500">
-                Please have the exact amount ready or we'll provide change.
+                Please have the exact amount ready or we&rsquo;ll provide change.
               </div>
             </div>
           )}

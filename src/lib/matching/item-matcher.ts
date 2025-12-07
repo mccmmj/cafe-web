@@ -1,15 +1,26 @@
 // Dynamic imports to avoid build issues
-let Fuse: any = null
-let stringSimilarity: any = null
+type FuseModule = typeof import('fuse.js')
+type FuseInstance = FuseModule['default']
+type StringSimilarityModule = typeof import('string-similarity')
+
+let Fuse: FuseInstance | null = null
+let stringSimilarity: StringSimilarityModule | null = null
+
+const getMatcherErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) return error.message
+  if (typeof error === 'string') return error
+  return 'Unknown error'
+}
 
 async function getMatchingLibraries() {
   if (!Fuse || !stringSimilarity) {
     try {
-      Fuse = (await import('fuse.js')).default
-      // @ts-expect-error string-similarity has no type definitions
-      stringSimilarity = await import('string-similarity')
+      const fuseModule = await import('fuse.js')
+      Fuse = fuseModule.default
+      const similarityModule = await import('string-similarity')
+      stringSimilarity = similarityModule
     } catch (error) {
-      console.error('Failed to load matching libraries:', error)
+      console.error('Failed to load matching libraries:', getMatcherErrorMessage(error))
       throw new Error('Matching libraries not available')
     }
   }
@@ -54,9 +65,7 @@ export interface ItemMatch {
 export interface MatchingOptions {
   supplier_name?: string
   fuzzy_threshold?: number // 0-1, default 0.6
-  exact_match_boost?: number // default 0.3
   supplier_match_boost?: number // default 0.1
-  sku_match_boost?: number // default 0.2
   max_suggestions?: number // default 5
 }
 
@@ -72,9 +81,7 @@ export async function findItemMatches(
     const {
       supplier_name,
       fuzzy_threshold = 0.6,
-      exact_match_boost = 0.3,
       supplier_match_boost = 0.1,
-      sku_match_boost = 0.2,
       max_suggestions = 5
     } = options
 
@@ -204,8 +211,8 @@ export async function findItemMatches(
     
     return sortedMatches
 
-  } catch (error: any) {
-    console.error('Item matching error:', error)
+  } catch (error: unknown) {
+    console.error('Item matching error:', getMatcherErrorMessage(error))
     return []
   }
 }
@@ -225,7 +232,7 @@ function calculateQuantityConversion(
   }
 
   // If inventory item has a pack size, present an equivalent-in-packs helper WITHOUT multiplying stock
-  const packSize = Number((inventoryItem as any)?.pack_size) || 1
+  const packSize = Number(inventoryItem.pack_size ?? 1) || 1
   if (packSize > 1) {
     const approxPacks = (invoiceItem.quantity || 0) / packSize
     return {
@@ -377,8 +384,8 @@ export async function findOrderMatches(
     
     return sortedMatches
 
-  } catch (error: any) {
-    console.error('Order matching error:', error)
+  } catch (error: unknown) {
+    console.error('Order matching error:', getMatcherErrorMessage(error))
     return []
   }
 }

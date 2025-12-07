@@ -8,7 +8,6 @@ import {
   Plus,
   Search,
   Filter,
-  Calendar,
   CheckCircle,
   XCircle,
   Clock,
@@ -24,12 +23,12 @@ import {
   RefreshCcw,
   MoreVertical
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import toast from 'react-hot-toast'
 import PurchaseOrderModal from './PurchaseOrderModal'
 import PurchaseOrderViewModal from './PurchaseOrderViewModal'
 import { buildPurchaseOrderTemplateContext, renderTemplate } from '@/lib/purchase-orders/templates'
 import type { SupplierEmailTemplate } from '@/lib/purchase-orders/templates'
-import { CostCalculator } from './CostCalculator'
 
 const ActionMenuButton = ({
   label,
@@ -115,11 +114,10 @@ interface PurchaseOrder {
 }
 
 interface PurchaseOrdersManagementProps {
-  onOrderSelect?: (order: PurchaseOrder) => void
   showCreateButton?: boolean
 }
 
-const STATUS_CONFIG: Record<string, { color: string; label: string; icon: any }> = {
+const STATUS_CONFIG: Record<string, { color: string; label: string; icon: LucideIcon }> = {
   draft: { color: 'bg-gray-100 text-gray-800', label: 'Draft', icon: FileText },
   pending_approval: { color: 'bg-amber-100 text-amber-800', label: 'Pending Approval', icon: Clock },
   approved: { color: 'bg-blue-100 text-blue-800', label: 'Approved', icon: CheckCircle },
@@ -134,7 +132,6 @@ const getStatusConfig = (status: PurchaseOrderStatus) => {
 }
 
 const PurchaseOrdersManagement = ({ 
-  onOrderSelect, 
   showCreateButton = true 
 }: PurchaseOrdersManagementProps) => {
   const [searchQuery, setSearchQuery] = useState('')
@@ -163,7 +160,6 @@ const PurchaseOrdersManagement = ({
   const [emailTemplateLoading, setEmailTemplateLoading] = useState(false)
   const [emailTemplatePreview, setEmailTemplatePreview] = useState('')
   const [markingReceiptOrderId, setMarkingReceiptOrderId] = useState<string | null>(null)
-  const [inlinePackPrice, setInlinePackPrice] = useState<Record<string, string>>({})
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null)
   const [filtersOpen, setFiltersOpen] = useState<boolean>(false)
   
@@ -862,165 +858,35 @@ const PurchaseOrdersManagement = ({
                       </td>
                       
                       <td className="px-6 py-4 whitespace-normal text-sm font-medium">
-                        {/* Desktop / wide: show inline buttons */}
-                        <div className="hidden lg:flex flex-wrap items-center gap-2">
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => handleViewOrder(order)}
-                            className="text-primary-600"
-                          >
-                            <Eye className="w-4 h-4 mr-1" />
-                            View
-                          </Button>
-
-                          {(order.status === 'draft' || order.status === 'pending_approval' || order.status === 'approved' || order.status === 'sent') && (
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => handleEditOrder(order)}
-                              className="text-primary-600"
-                            >
-                              <Edit className="w-4 h-4 mr-1" />
-                              Edit
-                            </Button>
-                          )}
-
-                          {(['approved', 'confirmed', 'sent', 'received'] as PurchaseOrderStatus[]).includes(order.status) && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => { void handleDownloadPdf(order) }}
-                              className="text-indigo-600"
-                            >
-                              <Download className="w-4 h-4 mr-1" />
-                              PDF
-                            </Button>
-                          )}
-
-                          {(['approved', 'confirmed', 'sent'] as PurchaseOrderStatus[]).includes(order.status) && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => { void handleEmailSupplier(order) }}
-                              className="text-indigo-600"
-                              disabled={emailSending && selectedOrder?.id === order.id}
-                            >
-                              <Mail className="w-4 h-4 mr-1" />
-                              Email
-                            </Button>
-                          )}
-
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDuplicateOrder(order)}
-                            className="text-gray-700"
-                          >
-                            <Copy className="w-4 h-4 mr-1" />
-                            Duplicate
-                          </Button>
-
-                          {order.status === 'draft' && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => void handleStatusChange(order, 'pending_approval', 'Purchase order submitted for approval')}
-                              className="text-amber-600"
-                              disabled={updateStatusMutation.isPending}
-                            >
-                              <Clock className="w-4 h-4 mr-1" />
-                              Submit for Approval
-                            </Button>
-                          )}
-
-                          {order.status === 'pending_approval' && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => void handleStatusChange(order, 'approved', 'Purchase order approved')}
-                              className="text-blue-600"
-                              disabled={updateStatusMutation.isPending}
-                            >
-                              <CheckCircle className="w-4 h-4 mr-1" />
-                              Approve
-                            </Button>
-                          )}
-
-                          {(order.status === 'approved' || order.status === 'confirmed') && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedOrder(order)
-                                setSendForm({
-                                  method: order.sent_via || 'email',
-                                  notes: order.sent_notes || '',
-                                  sent_at: (order.sent_at ? new Date(order.sent_at).toISOString() : new Date().toISOString()).slice(0, 16)
-                                })
-                                setSendModalOpen(true)
-                              }}
-                              className="text-indigo-600"
-                              disabled={updateStatusMutation.isPending}
-                            >
-                              <Send className="w-4 h-4 mr-1" />
-                              Mark Sent
-                            </Button>
-                          )}
-
-                          {(order.status === 'sent' || order.status === 'approved' || order.status === 'confirmed') && (
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => { void handleMarkReceived(order) }}
-                              className="text-green-600"
-                              disabled={
-                                updateStatusMutation.isPending ||
-                                markingReceiptOrderId === order.id ||
-                                outstandingItems.length === 0
-                              }
-                            >
-                              <CheckCircle className="w-4 h-4 mr-1" />
-                              {markingReceiptOrderId === order.id ? 'Receiving...' : 'Mark Received'}
-                            </Button>
-                          )}
-
-                          {(order.status !== 'cancelled' && order.status !== 'received') && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => void handleStatusChange(order, 'cancelled', 'Purchase order cancelled')}
-                              className="text-red-600"
-                              disabled={updateStatusMutation.isPending}
-                            >
-                              <XCircle className="w-4 h-4 mr-1" />
-                              Cancel
-                            </Button>
-                          )}
-                        </div>
-
-                        {/* Mobile / narrow: kebab menu */}
-                        <div className="lg:hidden relative">
+                        <div className="relative inline-flex">
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => setOpenActionMenuId(prev => prev === order.id ? null : order.id)}
                             className="text-gray-700"
+                            aria-haspopup="menu"
+                            aria-expanded={openActionMenuId === order.id}
+                            aria-label={`Actions for purchase order ${order.order_number}`}
                           >
                             <MoreVertical className="w-4 h-4" />
                           </Button>
                           {openActionMenuId === order.id && (
-                            <div className="absolute right-0 mt-2 w-52 rounded-md border border-gray-200 bg-white shadow-lg z-20">
+                            <div className="absolute right-0 top-full mt-2 w-56 rounded-md border border-gray-200 bg-white shadow-lg z-20">
                               <div className="py-1">
                                 <ActionMenuButton label="View" icon={<Eye className="w-4 h-4" />} onClick={() => { setOpenActionMenuId(null); handleViewOrder(order) }} />
-                                {(['draft', 'pending_approval', 'approved', 'sent'] as PurchaseOrderStatus[]).includes(order.status) && (
+                                {(['draft', 'pending_approval', 'approved', 'sent', 'received'] as PurchaseOrderStatus[]).includes(order.status) && (
                                   <ActionMenuButton label="Edit" icon={<Edit className="w-4 h-4" />} onClick={() => { setOpenActionMenuId(null); handleEditOrder(order) }} />
                                 )}
                                 {(['approved', 'confirmed', 'sent', 'received'] as PurchaseOrderStatus[]).includes(order.status) && (
                                   <ActionMenuButton label="PDF" icon={<Download className="w-4 h-4" />} onClick={() => { setOpenActionMenuId(null); void handleDownloadPdf(order) }} />
                                 )}
-                                {(['approved', 'confirmed', 'sent'] as PurchaseOrderStatus[]).includes(order.status) && (
-                                  <ActionMenuButton label="Email" icon={<Mail className="w-4 h-4" />} onClick={() => { setOpenActionMenuId(null); void handleEmailSupplier(order) }} />
+                                {(['approved', 'sent'] as PurchaseOrderStatus[]).includes(order.status) && (
+                                  <ActionMenuButton
+                                    label="Email"
+                                    icon={<Mail className="w-4 h-4" />}
+                                    disabled={emailSending && selectedOrder?.id === order.id}
+                                    onClick={() => { setOpenActionMenuId(null); void handleEmailSupplier(order) }}
+                                  />
                                 )}
                                 <ActionMenuButton label="Duplicate" icon={<Copy className="w-4 h-4" />} onClick={() => { setOpenActionMenuId(null); handleDuplicateOrder(order) }} />
                                 {order.status === 'draft' && (
@@ -1039,7 +905,7 @@ const PurchaseOrdersManagement = ({
                                     onClick={() => { setOpenActionMenuId(null); void handleStatusChange(order, 'approved', 'Purchase order approved') }}
                                   />
                                 )}
-                                {(order.status === 'approved' || order.status === 'confirmed') && (
+                                {order.status === 'approved' && (
                                   <ActionMenuButton
                                     label="Mark Sent"
                                     icon={<Send className="w-4 h-4" />}
@@ -1056,7 +922,7 @@ const PurchaseOrdersManagement = ({
                                     }}
                                   />
                                 )}
-                                {(order.status === 'sent' || order.status === 'approved' || order.status === 'confirmed') && (
+                                {(order.status === 'sent' || order.status === 'approved') && (
                                   <ActionMenuButton
                                     label={markingReceiptOrderId === order.id ? 'Receiving...' : 'Mark Received'}
                                     icon={<CheckCircle className="w-4 h-4" />}
@@ -1069,7 +935,7 @@ const PurchaseOrdersManagement = ({
                                     onClick={() => { setOpenActionMenuId(null); void handleMarkReceived(order) }}
                                   />
                                 )}
-                                {(order.status !== 'cancelled' && order.status !== 'received') && (
+                                {(order.status !== 'cancelled' && order.status !== 'received' && order.status !== 'confirmed') && (
                                   <ActionMenuButton
                                     label="Cancel"
                                     icon={<XCircle className="w-4 h-4" />}
@@ -1300,7 +1166,7 @@ const PurchaseOrdersManagement = ({
                     <input
                       type="checkbox"
                       checked={!emailForm.excludedItemIds.includes(item.id)}
-                      onChange={(e) => toggleExcludedItem(item.id)}
+                      onChange={() => toggleExcludedItem(item.id)}
                       className="h-4 w-4 text-primary-600 border-gray-300 rounded"
                     />
                   </label>

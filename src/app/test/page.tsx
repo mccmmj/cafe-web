@@ -2,21 +2,31 @@
 
 import { useState } from 'react'
 
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }
+
+interface TestResult {
+  success: boolean
+  message?: string
+  error?: string
+  [key: string]: JsonValue | undefined
+}
+
 export default function TestPage() {
-  const [squareTest, setSquareTest] = useState<any>(null)
-  const [supabaseTest, setSupabaseTest] = useState<any>(null)
-  const [catalogTest, setCatalogTest] = useState<any>(null)
-  const [configTest, setConfigTest] = useState<any>(null)
-  const [databaseTest, setDatabaseTest] = useState<any>(null)
+  const [squareTest, setSquareTest] = useState<TestResult | null>(null)
+  const [supabaseTest, setSupabaseTest] = useState<TestResult | null>(null)
+  const [catalogTest, setCatalogTest] = useState<TestResult | null>(null)
+  const [configTest, setConfigTest] = useState<TestResult | null>(null)
+  const [databaseTest, setDatabaseTest] = useState<TestResult | null>(null)
   const [loading, setLoading] = useState(false)
 
   const testSquare = async () => {
     setLoading(true)
     try {
       const response = await fetch('/api/test-square-simple')
-      const result = await response.json()
+      const result = await response.json() as TestResult
       setSquareTest(result)
     } catch (error) {
+      console.error('Square test failed:', error)
       setSquareTest({ success: false, error: 'Failed to test Square' })
     } finally {
       setLoading(false)
@@ -27,9 +37,10 @@ export default function TestPage() {
     setLoading(true)
     try {
       const response = await fetch('/api/test-supabase')
-      const result = await response.json()
+      const result = await response.json() as TestResult
       setSupabaseTest(result)
     } catch (error) {
+      console.error('Supabase test failed:', error)
       setSupabaseTest({ success: false, error: 'Failed to test Supabase' })
     } finally {
       setLoading(false)
@@ -40,9 +51,10 @@ export default function TestPage() {
     setLoading(true)
     try {
       const response = await fetch('/api/test-catalog')
-      const result = await response.json()
+      const result = await response.json() as TestResult
       setCatalogTest(result)
     } catch (error) {
+      console.error('Catalog test failed:', error)
       setCatalogTest({ success: false, error: 'Failed to test Catalog' })
     } finally {
       setLoading(false)
@@ -53,9 +65,10 @@ export default function TestPage() {
     setLoading(true)
     try {
       const response = await fetch('/api/test-simple')
-      const result = await response.json()
+      const result = await response.json() as TestResult
       setConfigTest(result)
     } catch (error) {
+      console.error('Config test failed:', error)
       setConfigTest({ success: false, error: 'Failed to test Config' })
     } finally {
       setLoading(false)
@@ -66,9 +79,10 @@ export default function TestPage() {
     setLoading(true)
     try {
       const response = await fetch('/api/test-database')
-      const result = await response.json()
+      const result = await response.json() as TestResult
       setDatabaseTest(result)
     } catch (error) {
+      console.error('Database test failed:', error)
       setDatabaseTest({ success: false, error: 'Failed to test Database' })
     } finally {
       setLoading(false)
@@ -120,7 +134,7 @@ export default function TestPage() {
                 </div>
                 {squareTest.locations && (
                   <div className="text-sm text-gray-600 mt-2">
-                    Locations found: {squareTest.locations.length}
+                    Locations found: {Array.isArray(squareTest.locations) ? squareTest.locations.length : 0}
                   </div>
                 )}
                 {squareTest.error && (
@@ -151,9 +165,9 @@ export default function TestPage() {
                 <div className="text-sm text-gray-600 mt-2">
                   {supabaseTest.message}
                 </div>
-                {supabaseTest.sessionInfo && (
+                {supabaseTest.sessionInfo && typeof supabaseTest.sessionInfo === 'object' && 'email' in supabaseTest.sessionInfo && (
                   <div className="text-sm text-gray-600 mt-2">
-                    User: {supabaseTest.sessionInfo.email}
+                    User: {(supabaseTest.sessionInfo as { email?: string }).email || 'Unknown'}
                   </div>
                 )}
                 {supabaseTest.error && (
@@ -184,7 +198,7 @@ export default function TestPage() {
                 <div className="text-sm text-gray-600 mt-2">
                   {catalogTest.message}
                 </div>
-                {catalogTest.categoriesCount !== undefined && (
+                {typeof catalogTest.categoriesCount === 'number' && (
                   <div className="text-sm text-gray-600 mt-2">
                     Categories found: {catalogTest.categoriesCount}
                   </div>
@@ -214,17 +228,19 @@ export default function TestPage() {
                 <div className={`font-semibold ${configTest.success ? 'text-green-600' : 'text-red-600'}`}>
                   {configTest.success ? '✅ Success' : '❌ Failed'}
                 </div>
-                <div className="text-sm text-gray-600 mt-2">
-                  Environment: {configTest.environment}
-                </div>
-                {configTest.square && (
+                {typeof configTest.environment === 'string' && (
                   <div className="text-sm text-gray-600 mt-2">
-                    Square: {configTest.square.configured ? '✓ Configured' : '✗ Not configured'}
+                    Environment: {configTest.environment}
                   </div>
                 )}
-                {configTest.supabase && (
+                {configTest.square && typeof configTest.square === 'object' && 'configured' in configTest.square && (
                   <div className="text-sm text-gray-600 mt-2">
-                    Supabase: {configTest.supabase.configured ? '✓ Configured' : '✗ Not configured'}
+                    Square: {(configTest.square as { configured?: boolean }).configured ? '✓ Configured' : '✗ Not configured'}
+                  </div>
+                )}
+                {configTest.supabase && typeof configTest.supabase === 'object' && 'configured' in configTest.supabase && (
+                  <div className="text-sm text-gray-600 mt-2">
+                    Supabase: {(configTest.supabase as { configured?: boolean }).configured ? '✓ Configured' : '✗ Not configured'}
                   </div>
                 )}
               </div>

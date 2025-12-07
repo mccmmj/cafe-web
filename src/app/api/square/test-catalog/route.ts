@@ -1,7 +1,21 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { listCatalogObjects } from '@/lib/square/fetch-client'
 
-export async function GET(request: NextRequest) {
+interface CatalogObject {
+  id: string
+  type: string
+  item_variation_data?: {
+    name?: string
+  }
+  item_data?: {
+    name?: string
+  }
+  category_data?: {
+    name?: string
+  }
+}
+
+export async function GET() {
   try {
     console.log('Testing catalog objects...')
     
@@ -20,9 +34,11 @@ export async function GET(request: NextRequest) {
     const foundVariations = []
     const missingVariations = []
     
-    if (result.objects) {
+  const objects = (result.objects || []) as CatalogObject[]
+
+    if (objects.length > 0) {
       for (const variationId of testVariationIds) {
-        const found = result.objects.find((obj: any) => obj.id === variationId)
+        const found = objects.find((obj) => obj.id === variationId)
         if (found) {
           foundVariations.push({
             id: found.id,

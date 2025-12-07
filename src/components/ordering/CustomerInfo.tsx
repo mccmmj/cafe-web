@@ -10,12 +10,6 @@ import { Card } from '@/components/ui/Card'
 import { z } from 'zod'
 import { toast } from 'react-hot-toast'
 
-interface CustomerInfoProps {
-  onPrevious: () => void
-  onSubmit: (data: any) => void
-  initialData?: any
-}
-
 const customerInfoSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   email: z.string().email('Please enter a valid email address'),
@@ -28,19 +22,31 @@ const customerInfoSchema = z.object({
   specialRequests: z.string().max(500, 'Special requests must be less than 500 characters').optional(),
 })
 
-type CustomerInfoForm = z.infer<typeof customerInfoSchema>
+export type CustomerInfoForm = z.infer<typeof customerInfoSchema>
+
+interface CustomerInfoProps {
+  onPrevious: () => void
+  onSubmit: (data: CustomerInfoForm) => void
+  initialData?: Partial<CustomerInfoForm>
+}
+
 
 export default function CustomerInfo({ onPrevious, onSubmit, initialData }: CustomerInfoProps) {
+  const defaultForm: CustomerInfoForm = {
+    name: '',
+    email: '',
+    phone: '',
+    orderType: 'pickup',
+    pickupTime: '',
+    tableNumber: '',
+    loyaltyNumber: '',
+    paymentMethod: 'card',
+    specialRequests: '',
+  }
+
   const [formData, setFormData] = useState<CustomerInfoForm>({
-    name: initialData?.name || '',
-    email: initialData?.email || '',
-    phone: initialData?.phone || '',
-    orderType: initialData?.orderType || 'pickup',
-    pickupTime: initialData?.pickupTime || '',
-    tableNumber: initialData?.tableNumber || '',
-    loyaltyNumber: initialData?.loyaltyNumber || '',
-    paymentMethod: initialData?.paymentMethod || 'card',
-    specialRequests: initialData?.specialRequests || '',
+    ...defaultForm,
+    ...initialData,
   })
   
   const [errors, setErrors] = useState<Record<string, string>>({})

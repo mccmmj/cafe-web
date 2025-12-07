@@ -15,7 +15,6 @@ import {
 } from 'lucide-react'
 import { Button, Card } from '@/components/ui'
 import { useOrderUpdates } from '@/hooks/useOrderUpdates'
-import { createClient } from '@/lib/supabase/client'
 import { toast } from 'react-hot-toast'
 
 interface OrderStatusTrackerProps {
@@ -39,8 +38,6 @@ const OrderStatusTracker = ({
     isConnected, 
     refreshOrders 
   } = useOrderUpdates(userId)
-
-  const supabase = createClient()
 
   const getStatusIcon = (status: string) => {
     switch (status) {

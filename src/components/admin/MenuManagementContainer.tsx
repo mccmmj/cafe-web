@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs'
 import { Button } from '@/components/ui'
-import { Search, Filter, RefreshCw, Plus } from 'lucide-react'
+import { Search, RefreshCw, Plus } from 'lucide-react'
 import MenuItemsList from './MenuItemsList'
 import MenuItemEditModal from './MenuItemEditModal'
-import MenuItemCreateModal from './MenuItemCreateModal'
+import MenuItemCreateModal, { type NewItemData } from './MenuItemCreateModal'
 import CategoryManagement from './CategoryManagement'
 import toast from 'react-hot-toast'
 
@@ -42,6 +42,21 @@ interface UpdateItemData {
   }>
 }
 
+interface CatalogCategory {
+  id: string
+  name?: string
+  category_data?: {
+    name?: string
+  }
+}
+
+interface MenuManagementResponse {
+  success?: boolean
+  items?: MenuItem[]
+  categories?: CatalogCategory[]
+  total?: number
+}
+
 const MenuManagementContainer = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
@@ -58,7 +73,7 @@ const MenuManagementContainer = () => {
     isLoading, 
     error,
     refetch 
-  } = useQuery({
+  } = useQuery<MenuManagementResponse>({
     queryKey: ['admin-menu-items'],
     queryFn: async () => {
       const response = await fetch('/api/admin/menu/items')
@@ -122,7 +137,7 @@ const MenuManagementContainer = () => {
 
   // Create item mutation
   const createItemMutation = useMutation({
-    mutationFn: async (itemData: any) => {
+    mutationFn: async (itemData: NewItemData) => {
       const response = await fetch('/api/admin/menu/items', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -150,9 +165,9 @@ const MenuManagementContainer = () => {
   const categories = [...new Set(items.map(item => item.categoryName))].sort()
   
   // Get category data for create modal
-  const categoryOptions = itemsData?.categories?.map((cat: any) => ({
+  const categoryOptions = itemsData?.categories?.map((cat) => ({
     id: cat.id,
-    name: cat.category_data?.name || cat.name
+    name: cat.category_data?.name || cat.name || 'Uncategorized'
   })) || []
 
   // Filter items based on search and category

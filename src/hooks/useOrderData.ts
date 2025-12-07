@@ -2,7 +2,14 @@
 
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
 import { createOrderSchema, updateOrderSchema, orderSearchSchema } from '@/lib/validations'
-import type { Order, CreateOrder, UpdateOrder, OrderSearch, OrderStatus, PaymentStatus } from '@/lib/validations/order'
+import type {
+  Order,
+  CreateOrder,
+  UpdateOrder,
+  OrderSearch,
+  OrderStatus,
+  OrderAnalytics
+} from '@/lib/validations/order'
 
 // Query Keys
 export const orderQueryKeys = {
@@ -13,7 +20,7 @@ export const orderQueryKeys = {
   detail: (id: string) => [...orderQueryKeys.details(), id] as const,
   user: (userId: string) => [...orderQueryKeys.all, 'user', userId] as const,
   status: (status: OrderStatus) => [...orderQueryKeys.all, 'status', status] as const,
-  analytics: (params: any) => [...orderQueryKeys.all, 'analytics', params] as const,
+  analytics: (params?: OrderAnalytics | null) => [...orderQueryKeys.all, 'analytics', params ?? null] as const,
 }
 
 // API Functions
@@ -116,7 +123,7 @@ const cancelOrder = async (id: string): Promise<Order> => {
   return response.json()
 }
 
-const processPayment = async (orderId: string, paymentData: any): Promise<{ success: boolean; paymentId?: string }> => {
+const processPayment = async (orderId: string, paymentData: Record<string, unknown>): Promise<{ success: boolean; paymentId?: string }> => {
   const response = await fetch(`/api/orders/${orderId}/payment`, {
     method: 'POST',
     headers: {
@@ -256,7 +263,7 @@ export const useProcessPayment = () => {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ orderId, paymentData }: { orderId: string; paymentData: any }) =>
+    mutationFn: ({ orderId, paymentData }: { orderId: string; paymentData: Record<string, unknown> }) =>
       processPayment(orderId, paymentData),
     onSuccess: (result, { orderId }) => {
       // Refetch the order to get updated payment status
@@ -287,7 +294,7 @@ export const useOrderPolling = (orderId: string, enabled = true) => {
 }
 
 // Order analytics
-export const useOrderAnalytics = (params: any) => {
+export const useOrderAnalytics = (params?: OrderAnalytics | null) => {
   return useQuery({
     queryKey: orderQueryKeys.analytics(params),
     queryFn: async () => {

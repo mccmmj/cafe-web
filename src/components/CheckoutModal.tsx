@@ -5,6 +5,13 @@ import { X, CreditCard, Loader2 } from 'lucide-react'
 import { PaymentForm, CreditCard as SquareCreditCard } from 'react-square-web-payments-sdk'
 import type { MenuItem, MenuCategory } from '@/types/menu'
 
+interface SquarePaymentToken {
+  token?: string
+  detail?: string
+}
+
+type SquareVerifiedBuyer = unknown
+
 interface CheckoutModalProps {
   isOpen: boolean
   onClose: () => void
@@ -117,7 +124,7 @@ export default function CheckoutModal({
 
   const formatPrice = (price: number) => `$${price.toFixed(2)}`
 
-  const handlePaymentToken = async (token: any, verifiedBuyer: any) => {
+  const handlePaymentToken = async (token: SquarePaymentToken, verifiedBuyer: SquareVerifiedBuyer) => {
     console.log('Payment token received:', token)
     
     if (!token || !token.token) {
@@ -162,32 +169,6 @@ export default function CheckoutModal({
       setPaymentError(error instanceof Error ? error.message : 'Payment failed. Please try again.')
     } finally {
       setIsProcessing(false)
-    }
-  }
-
-  // Handle Square SDK validation errors
-  const handleSquareError = (errors: any[]) => {
-    console.log('Square validation errors:', errors)
-    
-    if (errors && errors.length > 0) {
-      const errorMessages = errors.map(error => {
-        switch (error.field) {
-          case 'cardNumber':
-            return 'Please enter a valid credit card number'
-          case 'expirationDate':
-            return 'Please enter a valid expiration date'
-          case 'cvv':
-            return 'Please enter a valid CVV'
-          case 'postalCode':
-            return 'Please enter a valid postal code'
-          default:
-            return error.message || 'Please check your card information'
-        }
-      })
-      
-      setPaymentError(errorMessages.join('. '))
-    } else {
-      setPaymentError('Please check your card information and try again')
     }
   }
 

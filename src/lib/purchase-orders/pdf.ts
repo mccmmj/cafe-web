@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb, type RGB } from 'pdf-lib'
+import { PDFDocument, StandardFonts, rgb, type RGB, type PDFFont } from 'pdf-lib'
 import type { PurchaseOrderIssuance } from './load'
 
 const currencyFormatter = new Intl.NumberFormat('en-US', {
@@ -32,9 +32,15 @@ export async function generatePurchaseOrderPdf(order: PurchaseOrderIssuance): Pr
 
   const drawText = (
     text: string,
-    options: { x?: number; y?: number; size?: number; font?: any; color?: RGB } = {}
+    options: { x?: number; y?: number; size?: number; font?: PDFFont; color?: RGB } = {}
   ) => {
-    const { x = margin, y = cursorY, size = 12, font = regularFont, color = rgb(0.15, 0.15, 0.15) } = options
+    const {
+      x = margin,
+      y = cursorY,
+      size = 12,
+      font = regularFont,
+      color = rgb(0.15, 0.15, 0.15),
+    } = options
     page.drawText(text, { x, y, size, font, color })
   }
 

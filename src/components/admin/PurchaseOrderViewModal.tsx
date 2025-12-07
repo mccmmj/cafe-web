@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Button, Modal } from '@/components/ui'
 import { X, Package, Building2, Calendar, Truck, Clock, CheckCircle, Send, Paperclip, Upload, Trash2, FileText, Link2, Unlink, ExternalLink, Eye } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { InvoiceUploadModal } from './InvoiceUploadModal'
 import { InvoiceDetailsModal } from './InvoiceDetailsModal'
 import type { Invoice, InvoiceStatus } from '@/types/invoice'
@@ -159,7 +160,7 @@ interface PurchaseOrderViewModalProps {
   onClose: () => void
 }
 
-const STATUS_CONFIG: Record<string, { color: string; label: string; icon: any }> = {
+const STATUS_CONFIG: Record<string, { color: string; label: string; icon: LucideIcon }> = {
   draft: { color: 'bg-gray-100 text-gray-800', label: 'Draft', icon: Package },
   pending_approval: { color: 'bg-amber-100 text-amber-800', label: 'Pending Approval', icon: Clock },
   approved: { color: 'bg-blue-100 text-blue-800', label: 'Approved', icon: CheckCircle },

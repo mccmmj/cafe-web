@@ -1,13 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { 
   X, 
   FileText, 
   Calendar, 
   DollarSign, 
   Package, 
-  User, 
   Building, 
   Clock, 
   CheckCircle,
@@ -40,7 +39,7 @@ interface InvoiceItem {
 }
 
 interface DetailedInvoice extends Omit<Invoice, 'invoice_items'> {
-  invoice_items: any[]
+  invoice_items: InvoiceItem[]
 }
 
 interface InvoiceDetailsModalProps {
@@ -55,13 +54,7 @@ export function InvoiceDetailsModal({ invoice, isOpen, onClose }: InvoiceDetails
   const [downloading, setDownloading] = useState(false)
   const [downloadError, setDownloadError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (isOpen && invoice.id) {
-      loadInvoiceDetails()
-    }
-  }, [isOpen, invoice.id])
-
-  const loadInvoiceDetails = async () => {
+  const loadInvoiceDetails = useCallback(async () => {
     try {
       setLoading(true)
       const response = await fetch(`/api/admin/invoices/${invoice.id}`)
@@ -77,7 +70,13 @@ export function InvoiceDetailsModal({ invoice, isOpen, onClose }: InvoiceDetails
     } finally {
       setLoading(false)
     }
-  }
+  }, [invoice.id])
+
+  useEffect(() => {
+    if (isOpen && invoice.id) {
+      loadInvoiceDetails()
+    }
+  }, [isOpen, invoice.id, loadInvoiceDetails])
 
   const handleDownload = async () => {
     if (!invoice?.id) return

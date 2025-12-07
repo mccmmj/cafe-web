@@ -1,10 +1,20 @@
 import { NextResponse } from 'next/server'
 import { listCatalogObjects, searchAllCatalogItems } from '@/lib/square/fetch-client'
 import { sortMenuItems, sortMenuCategories } from '@/lib/constants/menu'
+import type { MenuCategory, MenuItem as CanonicalMenuItem, MenuSubcategory as CanonicalMenuSubcategory } from '@/types/menu'
+
+interface MenuResponse {
+  categories: MenuCategory[]
+  items: CanonicalMenuItem[]
+  fallback?: boolean
+  message?: string
+  legalAttribution?: string
+  lastUpdated?: string
+}
 
 // In-memory cache for menu data
 let menuCache: {
-  data: any
+  data: MenuResponse
   timestamp: number
   ttl: number
 } | null = null
@@ -15,7 +25,7 @@ function isCacheValid(): boolean {
   return menuCache !== null && Date.now() - menuCache.timestamp < menuCache.ttl
 }
 
-function getCachedMenu() {
+function getCachedMenu(): MenuResponse | null {
   if (isCacheValid()) {
     console.log('✅ Serving menu from cache')
     return menuCache!.data
@@ -23,34 +33,13 @@ function getCachedMenu() {
   return null
 }
 
-function setCachedMenu(data: any) {
+function setCachedMenu(data: MenuResponse) {
   menuCache = {
     data,
     timestamp: Date.now(),
     ttl: CACHE_TTL
   }
   console.log('💾 Menu data cached for 5 minutes')
-}
-
-interface TransformedMenuItem {
-  id: string
-  name: string
-  description: string
-  price: number
-  categoryId: string
-  imageUrl?: string
-  variations: Array<{
-    id: string
-    name: string
-    priceDifference: number
-  }>
-  isAvailable: boolean
-  modifiers: Array<{
-    id: string
-    name: string
-    price: number
-    type: 'selection'
-  }>
 }
 
 interface CatalogObject {
@@ -89,6 +78,14 @@ interface CatalogObject {
   }
 }
 
+function isItemObject(obj: CatalogObject): obj is CatalogObject & { item_data: NonNullable<CatalogObject['item_data']> } {
+  return obj.type === 'ITEM' && !!obj.item_data
+}
+
+function isCategoryObject(obj: CatalogObject): obj is CatalogObject & { category_data: NonNullable<CatalogObject['category_data']> } {
+  return obj.type === 'CATEGORY' && !!obj.category_data
+}
+
 export async function GET() {
   try {
     // Check cache first
@@ -110,11 +107,11 @@ export async function GET() {
     ])
     
     // Combine the results (search returns different structure)
-    const catalogData = {
+    const catalogData: { objects: CatalogObject[] } = {
       objects: [
         ...(itemsData.objects || []),
         ...(categoriesData.objects || [])
-      ]
+      ] as CatalogObject[]
     }
     
     if (!catalogData.objects || catalogData.objects.length === 0) {
@@ -139,19 +136,19 @@ export async function GET() {
     // })))
 
     // Separate items and categories, explicitly filter out ITEM_VARIATIONS and other types
-    const items = catalogData.objects.filter((obj: CatalogObject) => obj.type === 'ITEM')
-    const rawCategories = catalogData.objects.filter((obj: any) => obj.type === 'CATEGORY')
+    const items = catalogData.objects.filter(isItemObject)
+    const rawCategories = catalogData.objects.filter(isCategoryObject)
     
     // console.log(`Found ${items.length} items and ${rawCategories.length} categories`)
     
     // Remove duplicate categories (same ID)
-    const categories = rawCategories.filter((category: any, index: number, arr: any[]) => 
-      arr.findIndex((c: any) => c.id === category.id) === index
+    const categories = rawCategories.filter((category, index, arr) => 
+      arr.findIndex(c => c.id === category.id) === index
     )
 
     // Filter items for location availability and status
     const locationId = process.env.SQUARE_LOCATION_ID
-    const availableItems = items.filter((item: any) => {
+    const availableItems = items.filter(item => {
       const itemData = item.item_data
       
       // Filter out deleted and archived items
@@ -165,8 +162,12 @@ export async function GET() {
         const presentAtLocations = item.present_at_location_ids || []
         const absentAtLocations = item.absent_at_location_ids || []
         
+        const locationIdValue = locationId ?? ''
+        if (!locationIdValue) {
+          return false
+        }
         // Must be present at our location and not absent
-        if (!presentAtLocations.includes(locationId) || absentAtLocations.includes(locationId)) {
+        if (!(presentAtLocations ?? []).includes(locationIdValue) || (absentAtLocations ?? []).includes(locationIdValue)) {
           return false
         }
       }
@@ -177,7 +178,7 @@ export async function GET() {
     // console.log(`Filtered ${items.length} items to ${availableItems.length} available items for location ${locationId}`)
 
     // Transform Square data to our menu format
-    const transformedItems = availableItems.map((item: any) => {
+    const transformedItems: CanonicalMenuItem[] = availableItems.map(item => {
       const itemData = item.item_data
       if (!itemData) {
         return {
@@ -205,13 +206,13 @@ export async function GET() {
         price: price / 100, // Convert cents to dollars
         categoryId: categoryId,
         imageUrl: itemData.image_ids?.[0] ? `/api/square/image/${itemData.image_ids[0]}` : undefined,
-        variations: itemData?.variations?.map((variation: any) => ({
+        variations: itemData?.variations?.map((variation) => ({
           id: variation.id,
           name: variation.item_variation_data.name,
           priceDifference: (variation.item_variation_data.price_money?.amount || 0) / 100 - price / 100
         })) || [],
         isAvailable: !itemData.is_deleted,
-        modifiers: itemData?.modifier_list_info?.map((modInfo: any) => ({
+        modifiers: itemData?.modifier_list_info?.map((modInfo) => ({
           id: modInfo.modifier_list_id,
           name: modInfo.name || 'Modifier',
           price: 0, // Modifier prices come from the modifier list details
@@ -221,12 +222,12 @@ export async function GET() {
     })
 
     // First, organize categories by parent-child relationships
-    const topLevelCategories: any[] = []
-    const childCategories: any[] = []
+    const topLevelCategories: typeof categories = []
+    const childCategories: typeof categories = []
     
     // Organize categories by parent-child relationships
     
-    categories.forEach((category: any) => {
+    categories.forEach((category) => {
       const parentCategory = category.category_data?.parent_category
       const parentId = parentCategory?.id
       const categoryOrdinal = category.category_data?.ordinal
@@ -237,7 +238,7 @@ export async function GET() {
       } else {
         // For sandbox environment, check if there's a category with ordinal immediately before this one
         // that could be the parent (e.g., FRAPPUCCINO=20, COFFEE=21, CREME=22)
-        const potentialParent = categories.find((potentialParent: any) => {
+        const potentialParent = categories.find((potentialParent) => {
           const parentOrdinal = potentialParent.category_data?.ordinal
           // Look for a category with an ordinal exactly 1 or 2 less than this category
           // and that could logically be a parent (like FRAPPUCCINO for COFFEE/CREME)
@@ -255,9 +256,9 @@ export async function GET() {
     })
     
 
-    const transformedCategories = topLevelCategories.map((category: any) => {
+    const transformedCategories: MenuCategory[] = topLevelCategories.map((category) => {
       // Find child categories for this parent
-      const children = childCategories.filter((child: any) => {
+      const children = childCategories.filter((child) => {
         const childParentId = child.category_data?.parent_category?.id
         const categoryOrdinal = category.category_data?.ordinal
         const childOrdinal = child.category_data?.ordinal
@@ -276,17 +277,17 @@ export async function GET() {
       })
       
       // Get direct items for this category
-      let categoryItems = transformedItems.filter((item: any) => item.categoryId === category.id)
+      let categoryItems = transformedItems.filter(item => item.categoryId === category.id)
       
       // Get items from child categories
-      const childItems = children.flatMap((child: any) => 
-        transformedItems.filter((item: any) => item.categoryId === child.id)
+      const childItems = children.flatMap(child => 
+        transformedItems.filter(item => item.categoryId === child.id)
       )
       
       // If no items found by ID, try matching by category name for common seeded categories
       if (categoryItems.length === 0 && childItems.length === 0) {
         const categoryName = category.category_data?.name.toLowerCase() || ''
-        categoryItems = transformedItems.filter((item: any) => {
+        categoryItems = transformedItems.filter(item => {
           const itemCategoryId = item.categoryId?.toLowerCase()
           return itemCategoryId?.includes(categoryName.replace(/\s+/g, '-')) || 
                  itemCategoryId?.includes(categoryName.replace(/\s+/g, ''))
@@ -297,8 +298,8 @@ export async function GET() {
       //   categoryItems.map(item => `${item.name} (categoryId: ${item.categoryId})`))
       
       // Create subcategories structure for child categories
-      const subcategories = children.map((child: any) => {
-        const childItems = transformedItems.filter((item: any) => item.categoryId === child.id)
+      const subcategories: CanonicalMenuSubcategory[] = children.map((child) => {
+        const childItems = transformedItems.filter(item => item.categoryId === child.id)
         return {
           id: child.id,
           name: child.category_data?.name || '',
@@ -306,7 +307,7 @@ export async function GET() {
           items: sortMenuItems(childItems),
           sortOrder: child.category_data?.ordinal || 0
         }
-      }).sort((a: any, b: any) => a.sortOrder - b.sortOrder)
+      }).sort((a, b) => a.sortOrder - b.sortOrder)
 
       return {
         id: category.id,
@@ -319,8 +320,8 @@ export async function GET() {
     })
 
     // Add uncategorized items
-    const uncategorizedItems = transformedItems.filter((item: any) => 
-      !categories.some((cat: any) => cat.id === item.categoryId)
+    const uncategorizedItems = transformedItems.filter(item => 
+      !categories.some(cat => cat.id === item.categoryId)
     )
 
     // console.log(`Uncategorized items check:`)
@@ -343,7 +344,7 @@ export async function GET() {
     // Sort categories using business logic priority instead of just ordinal
     const sortedCategories = sortMenuCategories(transformedCategories)
 
-    const menuData = {
+    const menuData: MenuResponse = {
       categories: sortedCategories,
       items: transformedItems,
       lastUpdated: new Date().toISOString(),
@@ -392,7 +393,7 @@ export async function POST() {
   return NextResponse.json({ message: 'Menu updates not implemented yet' }, { status: 501 })
 }
 
-function getFallbackMenu() {
+function getFallbackMenu(): MenuCategory[] {
   // WPS Starbucks® Compliant Menu Structure
   // Based on Mobile Ordering Guidelines - Updated September 2023
   const starbucksCompliantCategories = [
@@ -414,9 +415,9 @@ function getFallbackMenu() {
           ],
           isAvailable: true,
           modifiers: [
-            { id: 'extra-shot', name: 'Extra Shot', price: 0.75, type: 'selection' },
-            { id: 'oatmilk', name: 'Oatmilk', price: 0.65, type: 'selection' },
-            { id: 'almondmilk', name: 'Almondmilk', price: 0.65, type: 'selection' }
+            { id: 'extra-shot', name: 'Extra Shot', price: 0.75, type: 'selection' as const },
+            { id: 'oatmilk', name: 'Oatmilk', price: 0.65, type: 'selection' as const },
+            { id: 'almondmilk', name: 'Almondmilk', price: 0.65, type: 'selection' as const }
           ]
         },
         {
@@ -593,7 +594,7 @@ function getFallbackMenu() {
           ],
           isAvailable: true,
           modifiers: [
-            { id: 'add-lemonade', name: 'Add Lemonade', price: 0.60, type: 'selection' }
+            { id: 'add-lemonade', name: 'Add Lemonade', price: 0.60, type: 'selection' as const }
           ]
         },
         {
@@ -609,7 +610,7 @@ function getFallbackMenu() {
           ],
           isAvailable: true,
           modifiers: [
-            { id: 'add-lemonade', name: 'Add Lemonade', price: 0.60, type: 'selection' }
+            { id: 'add-lemonade', name: 'Add Lemonade', price: 0.60, type: 'selection' as const }
           ]
         }
       ],
@@ -633,7 +634,7 @@ function getFallbackMenu() {
           ],
           isAvailable: true,
           modifiers: [
-            { id: 'with-lemonade', name: 'With Lemonade', price: 0, type: 'selection' }
+            { id: 'with-lemonade', name: 'With Lemonade', price: 0, type: 'selection' as const }
           ]
         },
         {
@@ -670,8 +671,10 @@ function getFallbackMenu() {
   ]
   
   // Apply sorting to Starbucks compliant menu items
-  return starbucksCompliantCategories.map(category => ({
+  const typedCategories = starbucksCompliantCategories.map(category => ({
     ...category,
     items: sortMenuItems(category.items)
   }))
+
+  return typedCategories as MenuCategory[]
 }

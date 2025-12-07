@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { CartItem } from '@/types/cart'
+import type { CartItemType } from '@/lib/validations/cart'
 
 interface SquareCartTotals {
   subtotal: number
@@ -13,7 +13,7 @@ interface SquareCartTotals {
  * Hook to get accurate cart totals from Square
  * This replaces frontend tax estimation with Square's actual calculations
  */
-export function useSquareCartTotals(cart: any[] | null): SquareCartTotals {
+export function useSquareCartTotals(cart: CartItemType[] | null): SquareCartTotals {
   const [totals, setTotals] = useState<SquareCartTotals>({
     subtotal: 0,
     tax: 0,
@@ -21,7 +21,7 @@ export function useSquareCartTotals(cart: any[] | null): SquareCartTotals {
     loading: false
   })
 
-  const fetchSquareTotals = useCallback(async (cartItems: any[]) => {
+  const fetchSquareTotals = useCallback(async (cartItems: CartItemType[]) => {
     if (!cartItems || cartItems.length === 0) {
       setTotals({
         subtotal: 0,
