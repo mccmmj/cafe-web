@@ -11,6 +11,7 @@ interface InventoryItem {
   current_stock: number
   unit_type: string
   unit_cost: number
+  is_packaged_variant?: boolean
 }
 
 interface RestockModalProps {
@@ -34,6 +35,8 @@ export default function RestockModal({ item, isOpen, onClose }: RestockModalProp
       setReferenceId('')
     }
   }, [item, isOpen])
+
+  const isPackagedVariant = Boolean(item?.is_packaged_variant)
 
   const restockMutation = useMutation({
     mutationFn: async (data: {
@@ -59,7 +62,8 @@ export default function RestockModal({ item, isOpen, onClose }: RestockModalProp
     onSuccess: () => {
       toast.success('Item restocked successfully')
       queryClient.invalidateQueries({ queryKey: ['admin-inventory'] })
-      queryClient.invalidateQueries({ queryKey: ['admin-inventory-alerts'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-stock-alerts'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-sales-sync-status'] })
       onClose()
     },
     onError: (error: Error) => {
@@ -71,6 +75,11 @@ export default function RestockModal({ item, isOpen, onClose }: RestockModalProp
     e.preventDefault()
     
     if (!item) return
+
+    if (isPackagedVariant) {
+      toast.error('Pack variants have stock fixed at 0. Restock the base (single-unit) item instead.')
+      return
+    }
     
     if (quantity <= 0) {
       toast.error('Quantity must be greater than 0')
@@ -115,6 +124,14 @@ export default function RestockModal({ item, isOpen, onClose }: RestockModalProp
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {isPackagedVariant && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm font-medium text-amber-900">Pack variant stock is locked</p>
+              <p className="mt-1 text-sm text-amber-800">
+                Stock is tracked on the base (single-unit) item with the same Square ID.
+              </p>
+            </div>
+          )}
           {/* Item Info */}
           <div className="bg-gray-50 rounded-lg p-4">
             <h3 className="font-medium text-gray-900 mb-2">{item.item_name}</h3>
@@ -139,6 +156,7 @@ export default function RestockModal({ item, isOpen, onClose }: RestockModalProp
                 min="1"
                 value={quantity || ''}
                 onChange={(e) => setQuantity(parseInt(e.target.value) || 0)}
+                disabled={isPackagedVariant}
                 className="w-full px-3 py-2 pr-16 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 placeholder="0"
                 required
@@ -160,6 +178,7 @@ export default function RestockModal({ item, isOpen, onClose }: RestockModalProp
               step="0.01"
               value={unitCost || ''}
               onChange={(e) => setUnitCost(parseFloat(e.target.value) || 0)}
+              disabled={isPackagedVariant}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               placeholder="0.00"
             />
@@ -174,6 +193,7 @@ export default function RestockModal({ item, isOpen, onClose }: RestockModalProp
               type="text"
               value={referenceId}
               onChange={(e) => setReferenceId(e.target.value)}
+              disabled={isPackagedVariant}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               placeholder="PO-123, INV-456, etc."
             />
@@ -191,6 +211,7 @@ export default function RestockModal({ item, isOpen, onClose }: RestockModalProp
               rows={3}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
+              disabled={isPackagedVariant}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               placeholder="Additional notes about this restock..."
             />
@@ -222,7 +243,7 @@ export default function RestockModal({ item, isOpen, onClose }: RestockModalProp
             </button>
             <button
               type="submit"
-              disabled={restockMutation.isPending || quantity <= 0}
+              disabled={restockMutation.isPending || quantity <= 0 || isPackagedVariant}
               className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Plus className="w-4 h-4 mr-2" />

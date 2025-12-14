@@ -98,8 +98,12 @@ export async function PUT(
         }
       }
 
-      // Treat invoice quantity as units; do not expand by pack_size (source of truth is invoice)
-      const quantityChange = Number(invoiceItem.quantity)
+      const invoiceQty = Number(invoiceItem.quantity)
+      // If the matched item is a pack variant (pack_size > 1) and we're applying stock to the base item,
+      // treat the invoice quantity as number of packs and expand to units.
+      const quantityChange = (packSize > 1 && targetInventoryId !== invRow.id)
+        ? invoiceQty * packSize
+        : invoiceQty
 
       console.log('[Invoice confirm] stock update', {
         invoice_id: invoice.id,
@@ -107,7 +111,7 @@ export async function PUT(
         matched_item_id: invoiceItem.matched_item_id,
         target_inventory_id: targetInventoryId,
         pack_size: packSize,
-        invoice_qty: Number(invoiceItem.quantity),
+        invoice_qty: invoiceQty,
         applied_qty: quantityChange,
         square_id: invRow.square_item_id
       })

@@ -1,0 +1,67 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { requireAdminAuth, isAdminAuthSuccess } from '@/lib/admin/middleware'
+
+function normalizeText(value: unknown) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+export async function GET(request: NextRequest) {
+  const authResult = await requireAdminAuth(request)
+  if (!isAdminAuthSuccess(authResult)) return authResult
+
+  const url = new URL(request.url)
+  const includeInactive = url.searchParams.get('includeInactive') === '1'
+
+  const supabase = createServiceClient()
+  let query = supabase
+    .from('cogs_modifier_sets')
+    .select('id, square_modifier_list_id, name, is_active, created_at, updated_at')
+    .order('name', { ascending: true })
+
+  if (!includeInactive) {
+    query = query.eq('is_active', true)
+  }
+
+  const { data, error } = await query
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  return NextResponse.json({ modifierSets: data ?? [] })
+}
+
+export async function POST(request: NextRequest) {
+  const authResult = await requireAdminAuth(request)
+  if (!isAdminAuthSuccess(authResult)) return authResult
+
+  const body = (await request.json().catch(() => ({}))) as {
+    square_modifier_list_id?: unknown
+    name?: unknown
+    is_active?: unknown
+  }
+
+  const squareModifierListId = normalizeText(body.square_modifier_list_id)
+  const name = normalizeText(body.name)
+  const isActive = typeof body.is_active === 'boolean' ? body.is_active : true
+
+  if (!squareModifierListId || !name) {
+    return NextResponse.json({ error: 'square_modifier_list_id and name are required' }, { status: 400 })
+  }
+
+  const supabase = createServiceClient()
+  const { data, error } = await supabase
+    .from('cogs_modifier_sets')
+    .insert([{
+      square_modifier_list_id: squareModifierListId,
+      name,
+      is_active: isActive,
+    }])
+    .select()
+    .single()
+
+  if (error || !data) {
+    return NextResponse.json({ error: error?.message ?? 'Failed to create modifier set' }, { status: 500 })
+  }
+
+  return NextResponse.json({ modifierSet: data })
+}
+

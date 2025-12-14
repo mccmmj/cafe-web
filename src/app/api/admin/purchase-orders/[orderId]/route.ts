@@ -25,6 +25,8 @@ interface PurchaseOrderItemRow {
   quantity_ordered: number
   quantity_received: number
   unit_cost?: number | null
+  total_cost?: number | null
+  is_excluded?: boolean | null
   unit_type?: string | null
   pack_size?: number | null
   ordered_pack_qty?: number | null
@@ -44,6 +46,16 @@ interface PurchaseOrderRow {
   purchase_order_items?: PurchaseOrderItemRow[]
   purchase_order_status_history?: OrderStatusEntry[]
   [key: string]: unknown
+}
+
+function computeOrderTotal(items: PurchaseOrderItemRow[] | undefined) {
+  return (items || []).reduce((sum, item) => {
+    if (item.is_excluded) return sum
+    const lineTotal = typeof item.total_cost === 'number'
+      ? item.total_cost
+      : (Number(item.quantity_ordered) || 0) * (Number(item.unit_cost) || 0)
+    return sum + lineTotal
+  }, 0)
 }
 
 interface PurchaseOrderPatchBody {
@@ -195,6 +207,7 @@ export async function GET(
       supplier_contact: typedOrder.suppliers?.contact_person,
       supplier_email: typedOrder.suppliers?.email,
       supplier_phone: typedOrder.suppliers?.phone,
+      total_amount: computeOrderTotal(typedOrder.purchase_order_items),
       items: typedOrder.purchase_order_items?.map((item: PurchaseOrderItemRow) => ({
         ...item,
         inventory_item_name: item.inventory_items?.item_name || 'Unknown Item',

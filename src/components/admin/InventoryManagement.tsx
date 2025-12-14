@@ -19,7 +19,8 @@ import {
   Building2,
   ClipboardList,
   Settings,
-  MoreVertical
+  MoreVertical,
+  X
 } from 'lucide-react'
 import InventoryEditModal from './InventoryEditModal'
 import InventoryCreateModal from './InventoryCreateModal'
@@ -40,6 +41,7 @@ interface InventoryItem {
   unit_type: string
   pack_size?: number
   pack_price?: number
+  is_packaged_variant?: boolean
   is_ingredient: boolean
   item_type?: 'ingredient' | 'prepackaged' | 'prepared' | 'supply'
   auto_decrement?: boolean
@@ -205,11 +207,19 @@ const InventoryManagement = () => {
   }
 
   const handleRestockItem = (item: InventoryItem) => {
+    if (item.is_packaged_variant) {
+      toast.error('Pack variants have stock fixed at 0. Restock the base (single-unit) item instead.')
+      return
+    }
     setSelectedItem(item)
     setRestockModalOpen(true)
   }
 
   const handleAdjustItem = (item: InventoryItem) => {
+    if (item.is_packaged_variant) {
+      toast.error('Pack variants have stock fixed at 0. Adjust the base (single-unit) item instead.')
+      return
+    }
     setSelectedItem(item)
     setAdjustModalOpen(true)
   }
@@ -274,8 +284,35 @@ const InventoryManagement = () => {
     setSelectedItem(null)
   }
 
+  const inventoryItemsWithPackFlags = (() => {
+    const bySquareId = new Map<string, Array<{ id: string; pack_size: number }>>()
+    for (const item of inventoryItems) {
+      if (!item.square_item_id) continue
+      const packSize = Number(item.pack_size) || 1
+      const list = bySquareId.get(item.square_item_id) ?? []
+      list.push({ id: item.id, pack_size: packSize })
+      bySquareId.set(item.square_item_id, list)
+    }
+
+    const pairedSquareIds = new Set<string>()
+    for (const [squareId, list] of bySquareId.entries()) {
+      const hasBase = list.some(entry => entry.pack_size === 1)
+      const hasPack = list.some(entry => entry.pack_size > 1)
+      if (hasBase && hasPack) pairedSquareIds.add(squareId)
+    }
+
+    return inventoryItems.map(item => {
+      const packSize = Number(item.pack_size) || 1
+      const isPackagedVariant = Boolean(item.square_item_id && packSize > 1 && pairedSquareIds.has(item.square_item_id))
+      return {
+        ...item,
+        is_packaged_variant: isPackagedVariant
+      }
+    })
+  })()
+
   // Filter items based on search, stock level, and supplier
-  const filteredItems = inventoryItems.filter(item => {
+  const filteredItems = inventoryItemsWithPackFlags.filter(item => {
     const matchesSearch = item.item_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          item.location.toLowerCase().includes(searchQuery.toLowerCase())
     
@@ -298,15 +335,15 @@ const InventoryManagement = () => {
   })
 
   // Calculate summary statistics
-  const totalItems = inventoryItems.length
-  const lowStockItems = inventoryItems.filter(item => 
+  const totalItems = inventoryItemsWithPackFlags.length
+  const lowStockItems = inventoryItemsWithPackFlags.filter(item => 
     item.current_stock <= item.reorder_point && item.current_stock > item.minimum_threshold
   ).length
-  const criticalStockItems = inventoryItems.filter(item => 
+  const criticalStockItems = inventoryItemsWithPackFlags.filter(item => 
     item.current_stock <= item.minimum_threshold && item.current_stock > 0
   ).length
-  const outOfStockItems = inventoryItems.filter(item => item.current_stock === 0).length
-  const totalValue = inventoryItems.reduce((sum, item) => sum + (item.current_stock * item.unit_cost), 0)
+  const outOfStockItems = inventoryItemsWithPackFlags.filter(item => item.current_stock === 0).length
+  const totalValue = inventoryItemsWithPackFlags.reduce((sum, item) => sum + (item.current_stock * item.unit_cost), 0)
 
   const getStockStatus = (item: InventoryItem) => {
     if (item.current_stock === 0) return { status: 'out_of_stock', color: 'text-red-600 bg-red-50', label: 'Out of Stock' }
@@ -485,8 +522,18 @@ const InventoryManagement = () => {
                     placeholder="Search inventory items..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 hover:text-gray-600"
+                      aria-label="Clear search"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -622,8 +669,10 @@ const InventoryManagement = () => {
                     </tr>
                   ) : (
                     filteredItems.map((item) => {
-                      const stockStatus = getStockStatus(item)
-                      const itemValue = item.current_stock * item.unit_cost
+                      const isPackagedVariant = Boolean(item.is_packaged_variant)
+                      const displayItem = isPackagedVariant ? { ...item, current_stock: 0 } : item
+                      const stockStatus = getStockStatus(displayItem)
+                      const itemValue = displayItem.current_stock * item.unit_cost
                       const itemType = item.item_type || (item.is_ingredient ? 'ingredient' : 'prepackaged')
                       const typeBadge = (() => {
                         switch (itemType) {
@@ -663,7 +712,13 @@ const InventoryManagement = () => {
                           </td>
                           <td className="px-4 py-4 text-sm text-gray-900 sm:px-6 sm:whitespace-nowrap">
                             <div className="text-sm text-gray-900">
-                              {item.current_stock} {item.unit_type}
+                              {isPackagedVariant ? (
+                                <span title="Pack variant stock is tracked on the base (single-unit) item.">
+                                  0 {item.unit_type}
+                                </span>
+                              ) : (
+                                `${item.current_stock} ${item.unit_type}`
+                              )}
                             </div>
                             <div className="text-xs text-gray-500">
                               Min: {item.minimum_threshold} • Reorder: {item.reorder_point}
@@ -724,14 +779,16 @@ const InventoryManagement = () => {
                                       Edit Details
                                     </button>
                                     <button
-                                      className="w-full px-3 py-2 text-green-600 hover:bg-gray-50 flex items-center gap-2"
+                                      className={`w-full px-3 py-2 flex items-center gap-2 ${isPackagedVariant ? 'text-gray-400 cursor-not-allowed' : 'text-green-600 hover:bg-gray-50'}`}
                                       onClick={() => { setOpenInventoryActionMenuId(null); handleRestockItem(item) }}
+                                      disabled={isPackagedVariant}
                                     >
                                       Restock
                                     </button>
                                     <button
-                                      className="w-full px-3 py-2 text-amber-600 hover:bg-gray-50 flex items-center gap-2"
+                                      className={`w-full px-3 py-2 flex items-center gap-2 ${isPackagedVariant ? 'text-gray-400 cursor-not-allowed' : 'text-amber-600 hover:bg-gray-50'}`}
                                       onClick={() => { setOpenInventoryActionMenuId(null); handleAdjustItem(item) }}
+                                      disabled={isPackagedVariant}
                                     >
                                       Adjust Stock
                                     </button>

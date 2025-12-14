@@ -18,6 +18,8 @@
     "debug-square": "node scripts/debug-square-env.js",
     "setup-inventory": "node scripts/setup-inventory-system.js",
     "upload-suppliers": "node scripts/bulk-upload-suppliers.js",
+    "audit-square-mapping": "node scripts/audit-square-inventory-mapping.js",
+    "fix-square-mapping": "node scripts/fix-square-inventory-mapping.js",
     "db:migrate": "npx supabase db push",
     "db:reset": "npx supabase db reset",
     "db:generate": "npx supabase gen types typescript --local",

@@ -2,7 +2,9 @@
 const nextConfig = {
   // Enable experimental features for better performance
   experimental: {
-    optimizePackageImports: ['lucide-react', '@supabase/supabase-js'],
+    // Disabled: causes `next build` to crash with `TypeError: Cannot read properties of undefined (reading 'length')`
+    // on this project (Next.js 15.5.7).
+    // optimizePackageImports: ['lucide-react', '@supabase/supabase-js'],
   },
   
   // Image optimization settings

@@ -18,6 +18,13 @@ import {
 } from 'lucide-react'
 import { Invoice } from '@/types/invoice'
 
+function derivePurchaseOrderNumberFromInvoiceNumber(invoiceNumber: string) {
+  const trimmed = invoiceNumber.trim()
+  const match = trimmed.match(/^(PO-[^-]+(?:-[^-]+)*)-(\d+)$/i)
+  if (!match) return null
+  return match[1] || null
+}
+
 interface ItemMatch {
   inventory_item_id: string
   inventory_item: {
@@ -621,7 +628,14 @@ export function InvoiceReviewInterface({ invoice, onClose, onConfirm }: InvoiceR
               Review Invoice Matches
             </h2>
             <p className="text-sm text-gray-600 mt-1">
-              {invoice.suppliers?.name} • {invoice.invoice_number} • {new Date(invoice.invoice_date).toLocaleDateString()}
+              {(() => {
+                const dateLabel = new Date(invoice.invoice_date).toLocaleDateString()
+                const derivedPo = invoice.invoice_number ? derivePurchaseOrderNumberFromInvoiceNumber(invoice.invoice_number) : null
+                if (derivedPo) {
+                  return `${invoice.suppliers?.name} • Invoice: ${invoice.invoice_number} • PO: ${derivedPo} • ${dateLabel}`
+                }
+                return `${invoice.suppliers?.name} • ${invoice.invoice_number} • ${dateLabel}`
+              })()}
             </p>
           </div>
           <button

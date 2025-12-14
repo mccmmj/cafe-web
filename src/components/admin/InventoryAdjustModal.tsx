@@ -10,6 +10,7 @@ interface InventoryItem {
   item_name: string
   current_stock: number
   unit_type: string
+  is_packaged_variant?: boolean
 }
 
 interface InventoryAdjustModalProps {
@@ -83,6 +84,8 @@ export default function InventoryAdjustModal({ item, isOpen, onClose }: Inventor
     return Math.round(targetStock) - item.current_stock
   }, [item, targetStock])
 
+  const isPackagedVariant = Boolean(item?.is_packaged_variant)
+
   const changeDescriptor = (() => {
     if (parsedChange === null) return ''
     if (parsedChange === 0) return 'No change'
@@ -98,6 +101,7 @@ export default function InventoryAdjustModal({ item, isOpen, onClose }: Inventor
 
   const isSubmitDisabled =
     !item ||
+    isPackagedVariant ||
     targetStock === null ||
     Number.isNaN(targetStock) ||
     targetStock < 0 ||
@@ -148,6 +152,19 @@ export default function InventoryAdjustModal({ item, isOpen, onClose }: Inventor
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {isPackagedVariant && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-700" />
+                <div>
+                  <p className="text-sm font-medium text-amber-900">Pack variant stock is locked</p>
+                  <p className="mt-1 text-sm text-amber-800">
+                    This item is a pack variant. Stock is tracked on the base (single-unit) item with the same Square ID.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="bg-gray-50 rounded-lg p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -177,6 +194,7 @@ export default function InventoryAdjustModal({ item, isOpen, onClose }: Inventor
                     setTargetStock(parsed)
                   }
                 }}
+                disabled={isPackagedVariant}
                 className="w-full px-3 py-2 pr-20 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 placeholder="Enter new quantity"
               />
@@ -192,6 +210,7 @@ export default function InventoryAdjustModal({ item, isOpen, onClose }: Inventor
             <select
               value={reason}
               onChange={(e) => setReason(e.target.value)}
+              disabled={isPackagedVariant}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               {ADJUSTMENT_REASONS.map(option => (
@@ -210,6 +229,7 @@ export default function InventoryAdjustModal({ item, isOpen, onClose }: Inventor
               type="text"
               value={referenceId}
               onChange={(e) => setReferenceId(e.target.value)}
+              disabled={isPackagedVariant}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               placeholder="Optional reference or ticket number"
             />
@@ -223,6 +243,7 @@ export default function InventoryAdjustModal({ item, isOpen, onClose }: Inventor
               rows={3}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
+              disabled={isPackagedVariant}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               placeholder="Add helpful context for future audits..."
             />
