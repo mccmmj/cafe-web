@@ -7,6 +7,9 @@ interface RouteContext {
   params: Promise<{ id: string }>
 }
 
+type SupplierEmbed = { id: string; name: string } | Array<{ id: string; name: string }> | null
+type InventoryItemEmbed = { id: string; item_name: string } | Array<{ id: string; item_name: string }> | null
+
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
     // Verify admin authentication
@@ -63,6 +66,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         quantity_variance,
         amount_variance,
         variance_notes,
+        created_at,
         purchase_orders (
           id,
           order_number,
@@ -174,20 +178,60 @@ export async function POST(request: NextRequest, context: RouteContext) {
       if (linkedIndex >= 0) {
         linkedMatch = orderMatches[linkedIndex]
         orderMatches.splice(linkedIndex, 1)
-      } else if (existingMatchRecord?.purchase_orders) {
-        const linkedPurchaseOrders = existingMatchRecord.purchase_orders as PurchaseOrderRow[]
-        const linkedPurchaseOrder = linkedPurchaseOrders[0]
+      } else {
+        const embeddedPurchaseOrder = extractEmbeddedPurchaseOrder(existingMatchRecord?.purchase_orders)
+        let linkedPurchaseOrder: PurchaseOrderRow | null = embeddedPurchaseOrder
+
+        if (!linkedPurchaseOrder) {
+          const { data: purchaseOrder, error: linkedOrderError } = await supabase
+            .from('purchase_orders')
+            .select(`
+              id,
+              order_number,
+              supplier_id,
+              order_date,
+              expected_delivery_date,
+              status,
+              total_amount,
+              suppliers (
+                id,
+                name
+              ),
+              purchase_order_items (
+                id,
+                inventory_item_id,
+                quantity_ordered,
+                unit_cost,
+                total_cost,
+                inventory_items (
+                  id,
+                  item_name
+                )
+              )
+            `)
+            .eq('id', linkedOrderId)
+            .maybeSingle()
+
+          if (linkedOrderError) {
+            console.error('Failed to fetch linked purchase order:', linkedOrderError)
+          } else if (purchaseOrder) {
+            linkedPurchaseOrder = purchaseOrder as unknown as PurchaseOrderRow
+          }
+        }
+
         if (linkedPurchaseOrder) {
           const formattedOrder = mapPurchaseOrder(linkedPurchaseOrder)
           linkedMatch = {
             purchase_order_id: formattedOrder.id,
             purchase_order: formattedOrder,
-            confidence: existingMatchRecord.match_confidence || 0.9,
-            match_reasons: existingMatchRecord.variance_notes
+            confidence: existingMatchRecord?.match_confidence || 0.9,
+            match_reasons: existingMatchRecord?.variance_notes
               ? [existingMatchRecord.variance_notes]
               : ['Previously linked to this purchase order'],
-            quantity_variance: existingMatchRecord.quantity_variance ?? 0,
-            amount_variance: existingMatchRecord.amount_variance ?? Math.abs(invoice.total_amount - formattedOrder.total_amount),
+            quantity_variance: existingMatchRecord?.quantity_variance ?? 0,
+            amount_variance:
+              existingMatchRecord?.amount_variance ??
+              Math.abs(invoice.total_amount - formattedOrder.total_amount),
             matched_items: formattedOrder.items.length,
             total_items: formattedOrder.items.length
           }
@@ -253,7 +297,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         invoice_id: id,
         invoice_date: invoice.invoice_date,
         invoice_total: invoice.total_amount,
-      supplier_name: supplierName,
+        supplier_name: supplierName,
         linked_match: linkedMatch,
         order_matches: orderMatches,
         auto_matches: autoMatches,
@@ -282,23 +326,25 @@ type PurchaseOrderRow = {
   expected_delivery_date: string | null
   status: string
   total_amount: number
-  suppliers: Array<{ id: string; name: string }> | null
+  suppliers: SupplierEmbed
   purchase_order_items: Array<{
     id: string
     inventory_item_id: string | null
     quantity_ordered: number
     unit_cost: number
     total_cost: number | null
-    inventory_items: Array<{ id: string; item_name: string }> | null
+    inventory_items: InventoryItemEmbed
   }>
 }
 
 function mapPurchaseOrder(order: PurchaseOrderRow) {
+  const supplier = Array.isArray(order.suppliers) ? order.suppliers[0] : order.suppliers
+
   return {
     id: order.id,
     order_number: order.order_number,
     supplier_id: order.supplier_id,
-    supplier_name: order.suppliers?.[0]?.name || '',
+    supplier_name: supplier?.name || '',
     order_date: order.order_date,
     expected_delivery_date: order.expected_delivery_date ?? undefined,
     status: order.status,
@@ -306,17 +352,26 @@ function mapPurchaseOrder(order: PurchaseOrderRow) {
     items: (order.purchase_order_items || []).map((item) => {
       const inventoryItemId = item.inventory_item_id ?? ''
       const totalCost = item.total_cost ?? item.unit_cost * item.quantity_ordered
+      const inventoryItem = Array.isArray(item.inventory_items) ? item.inventory_items[0] : item.inventory_items
 
       return {
         id: item.id,
         inventory_item_id: inventoryItemId,
-        item_name: item.inventory_items?.[0]?.item_name || 'Unknown Item',
+        item_name: inventoryItem?.item_name || 'Unknown Item',
         quantity_ordered: item.quantity_ordered,
         unit_cost: item.unit_cost,
         total_cost: totalCost
       }
     })
   }
+}
+
+function extractEmbeddedPurchaseOrder(embedded: unknown): PurchaseOrderRow | null {
+  if (!embedded) return null
+  if (Array.isArray(embedded)) {
+    return (embedded[0] as PurchaseOrderRow) || null
+  }
+  return embedded as PurchaseOrderRow
 }
 
 export async function GET(request: NextRequest, context: RouteContext) {

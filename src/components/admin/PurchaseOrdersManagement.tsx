@@ -373,12 +373,21 @@ const PurchaseOrdersManagement = ({
 
   const buildDefaultTemplatePreview = (order: PurchaseOrder) => {
     const greeting = order.supplier_contact || order.supplier_name
+    const formatDateOnly = (value?: string | null) => {
+      if (!value) return null
+      const trimmed = value.trim()
+      const date = /^\d{4}-\d{2}-\d{2}$/.test(trimmed)
+        ? new Date(`${trimmed}T00:00:00`)
+        : new Date(trimmed)
+      if (Number.isNaN(date.getTime())) return null
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      })
+    }
     const expectedDate = order.expected_delivery_date
-      ? new Date(order.expected_delivery_date).toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric'
-        })
+      ? (formatDateOnly(order.expected_delivery_date) || 'Not specified')
       : 'Not specified'
 
     return [

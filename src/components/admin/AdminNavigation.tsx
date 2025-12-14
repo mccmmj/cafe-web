@@ -14,7 +14,8 @@ import {
   Settings,
   LogOut,
   Bell,
-  FileText
+  FileText,
+  DollarSign
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { User } from '@supabase/supabase-js'
@@ -25,6 +26,7 @@ const navigation = [
   { name: 'Menu Management', href: '/admin/menu', icon: MenuIcon },
   { name: 'Inventory', href: '/admin/inventory', icon: Package },
   { name: 'Invoices', href: '/admin/invoices', icon: FileText },
+  { name: 'COGS', href: '/admin/cogs', icon: DollarSign },
   { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
   { name: 'Customers', href: '/admin/customers', icon: Users },
   { name: 'Settings', href: '/admin/settings', icon: Settings },

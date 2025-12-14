@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     // Get current inventory item
     const { data: currentItem, error: fetchError } = await supabase
       .from('inventory_items')
-      .select('id, item_name, current_stock, unit_cost')
+      .select('id, item_name, current_stock, unit_cost, square_item_id, pack_size, deleted_at')
       .eq('id', inventory_item_id)
       .single()
 
@@ -47,6 +47,24 @@ export async function POST(request: NextRequest) {
     }
 
     const previousStock = currentItem.current_stock
+
+    const packSize = Number(currentItem.pack_size) || 1
+    if (currentItem.square_item_id && packSize > 1) {
+      const { data: baseItem } = await supabase
+        .from('inventory_items')
+        .select('id')
+        .eq('square_item_id', currentItem.square_item_id)
+        .eq('pack_size', 1)
+        .is('deleted_at', null)
+        .maybeSingle()
+      if (baseItem?.id && baseItem.id !== currentItem.id) {
+        return NextResponse.json(
+          { error: 'Cannot restock pack variants. Restock the base (single-unit) item instead.', base_item_id: baseItem.id },
+          { status: 400 }
+        )
+      }
+    }
+
     const newStock = previousStock + quantity
     const restockUnitCost = unit_cost || currentItem.unit_cost
 

@@ -372,7 +372,10 @@ function buildEmailHtml(
 
 function formatForEmail(value?: string | null) {
   if (!value) return ''
-  const date = new Date(value)
+  const trimmed = value.trim()
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(trimmed)
+    ? new Date(`${trimmed}T00:00:00`)
+    : new Date(trimmed)
   if (Number.isNaN(date.getTime())) return ''
   return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',

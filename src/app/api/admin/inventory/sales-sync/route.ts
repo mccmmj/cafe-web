@@ -14,6 +14,7 @@ interface InventoryRow {
   square_item_id: string
   item_name: string
   current_stock: number
+  pack_size?: number | null
   item_type: 'ingredient' | 'prepackaged' | 'prepared' | 'supply'
   auto_decrement: boolean
 }
@@ -116,7 +117,7 @@ async function updateSyncRun(
 async function fetchInventoryMap(supabase: SupabaseClient) {
   const { data, error } = await supabase
     .from('inventory_items')
-    .select('id, square_item_id, item_name, current_stock, item_type, auto_decrement')
+    .select('id, square_item_id, item_name, current_stock, pack_size, item_type, auto_decrement')
 
   if (error) {
     throw new Error(`Failed to load inventory items: ${error.message}`)
@@ -125,7 +126,17 @@ async function fetchInventoryMap(supabase: SupabaseClient) {
   const map = new Map<string, InventoryRow>()
   for (const item of data || []) {
     if (item.square_item_id) {
-      map.set(item.square_item_id, item as InventoryRow)
+      const candidate = item as InventoryRow
+      const existing = map.get(item.square_item_id)
+      if (!existing) {
+        map.set(item.square_item_id, candidate)
+        continue
+      }
+      const existingPackSize = Number(existing.pack_size) || 1
+      const candidatePackSize = Number(candidate.pack_size) || 1
+      if (candidatePackSize === 1 && existingPackSize !== 1) {
+        map.set(item.square_item_id, candidate)
+      }
     }
   }
   return map
@@ -163,6 +174,14 @@ type SquareOrderLineItem = {
   uid?: string | null
   name?: string
   quantity?: string
+  modifiers?: Array<{
+    uid?: string | null
+    catalog_object_id?: string | null
+    name?: string
+    quantity?: string
+    base_price_money?: SquareOrderMoney
+    total_price_money?: SquareOrderMoney
+  }>
   unit_price?: {
     measurement_unit?: {
       type?: string
@@ -520,6 +539,14 @@ export async function POST(request: NextRequest) {
             original_catalog_object_id: rawCatalogId,
             variation_id: lineItem.variation_id,
             uid: lineItem.uid,
+            modifiers: (lineItem.modifiers ?? []).map(mod => ({
+              uid: mod.uid ?? null,
+              catalog_object_id: mod.catalog_object_id ?? null,
+              name: mod.name,
+              quantity: mod.quantity,
+              base_price_money: mod.base_price_money,
+              total_price_money: mod.total_price_money
+            })),
             base_price_money: lineItem.base_price_money,
             gross_sales_money: lineItem.gross_sales_money,
             total_tax_money: lineItem.total_tax_money
