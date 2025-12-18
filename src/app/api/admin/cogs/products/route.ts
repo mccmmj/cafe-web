@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
   const supabase = createServiceClient()
   let query = supabase
     .from('cogs_products')
-    .select('id, square_item_id, name, category, is_active, created_at, updated_at')
+    .select('id, square_item_id, name, category, is_active, product_code, created_at, updated_at')
     .order('name', { ascending: true })
 
   if (!includeInactive) {
@@ -67,4 +67,3 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ product: data })
 }
-

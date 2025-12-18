@@ -262,6 +262,10 @@ The system includes self-documenting API endpoints. Send GET requests to any API
 - `GET /api/square/config` - Square integration docs
 - `GET /api/webhooks/square/catalog` - Webhook documentation
 
+## COGS Recipes (Google Sheets)
+
+See `doc/cogs-recipes-sheets.md`.
+
 ## 🔐 Security Features
 
 - **Environment Variable Validation**: Runtime validation prevents build failures
