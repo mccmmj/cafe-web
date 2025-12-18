@@ -51,6 +51,7 @@ type CogsProduct = {
   name: string
   category: string | null
   is_active: boolean
+  product_code?: string | null
 }
 
 type CogsSellable = {
@@ -167,6 +168,7 @@ export default function COGSManagement() {
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
   const [recipes, setRecipes] = useState<ProductRecipe[]>([])
   const [loadingCatalog, setLoadingCatalog] = useState(false)
+  const [syncingSquareCatalog, setSyncingSquareCatalog] = useState(false)
   const [loadingRecipes, setLoadingRecipes] = useState(false)
   const [loadingModifiers, setLoadingModifiers] = useState(false)
 
@@ -234,6 +236,8 @@ export default function COGSManagement() {
     { inventory_item_id: '', qty: 1, unit: 'each', loss_pct: 0 },
   ])
 
+  const [productCodeEdits, setProductCodeEdits] = useState<Record<string, string>>({})
+
   const startAtDate = useMemo(() => new Date(startAt), [startAt])
   const endAtDate = useMemo(() => new Date(endAt), [endAt])
   const recipeProductIds = useMemo(() => new Set(recipes.map(r => r.product_id)), [recipes])
@@ -283,6 +287,13 @@ export default function COGSManagement() {
       if (!recipesRes.ok) throw new Error(recipesPayload?.error || 'Failed to load recipes')
 
       setProducts(productsPayload.products || [])
+      const nextEdits: Record<string, string> = {}
+      for (const p of productsPayload.products || []) {
+        if (p && typeof p.id === 'string') {
+          nextEdits[p.id] = typeof p.product_code === 'string' ? p.product_code : ''
+        }
+      }
+      setProductCodeEdits(nextEdits)
       setSellables(sellablesPayload.sellables || [])
       setRecipes(recipesPayload.recipes || [])
       const inventoryList: unknown[] = Array.isArray(inventoryPayload.items) ? inventoryPayload.items : []
@@ -293,6 +304,21 @@ export default function COGSManagement() {
       setError(e instanceof Error ? e.message : 'Failed to load catalog data')
     } finally {
       setLoadingCatalog(false)
+    }
+  }
+
+  async function syncCatalogFromSquare() {
+    setSyncingSquareCatalog(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/cogs/catalog/sync-square', { method: 'POST' })
+      const payload = await res.json()
+      if (!res.ok) throw new Error(payload?.error || 'Failed to sync from Square')
+      await loadCatalog()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to sync from Square')
+    } finally {
+      setSyncingSquareCatalog(false)
     }
   }
 
@@ -781,6 +807,23 @@ export default function COGSManagement() {
     }
   }
 
+  async function saveProductCode(productId: string) {
+    setError(null)
+    try {
+      const nextCode = (productCodeEdits[productId] ?? '').trim()
+      const res = await fetch(`/api/admin/cogs/products/${encodeURIComponent(productId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ product_code: nextCode ? nextCode : null }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(payload?.error || 'Failed to update product code')
+      await loadCatalog()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to update product code')
+    }
+  }
+
   async function createSellable() {
     setError(null)
     try {
@@ -889,7 +932,7 @@ export default function COGSManagement() {
           }
           onClick={() => setActiveTab('catalog')}
         >
-          Products & Sellables
+          Catalog
         </button>
         <button
           type="button"
@@ -1170,9 +1213,21 @@ export default function COGSManagement() {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">Products (Square ITEM)</h2>
-                <p className="mt-1 text-sm text-gray-600">Base recipes attach to products.</p>
+                <p className="mt-1 text-sm text-gray-600">Assign a stable product code, then import recipes from Sheets.</p>
               </div>
-              <div className="text-sm text-gray-500">{loadingCatalog ? 'Loading…' : `${products.length} products`}</div>
+              <div className="flex items-center gap-3 text-sm text-gray-500">
+                <button
+                  type="button"
+                  onClick={syncCatalogFromSquare}
+                  disabled={syncingSquareCatalog}
+                  className="inline-flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 ring-1 ring-gray-200 hover:bg-gray-50 disabled:opacity-50"
+                  title="Sync products + sellables from Square"
+                >
+                  <RefreshCw className={syncingSquareCatalog ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
+                  {syncingSquareCatalog ? 'Syncing…' : 'Sync from Square'}
+                </button>
+                <span>{loadingCatalog ? 'Loading…' : `${products.length} products`}</span>
+              </div>
             </div>
 
             <div className="mt-4 grid gap-4 md:grid-cols-3">
@@ -1216,23 +1271,42 @@ export default function COGSManagement() {
               <table className="min-w-full text-left text-sm">
                 <thead className="border-b border-gray-200 text-xs uppercase text-gray-500">
                   <tr>
+                    <th className="px-3 py-2">Code</th>
                     <th className="px-3 py-2">Name</th>
                     <th className="px-3 py-2">Square ITEM ID</th>
                     <th className="px-3 py-2">Category</th>
+                    <th className="px-3 py-2 text-right">Save</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {products.map(p => (
                     <tr key={p.id}>
+                      <td className="px-3 py-2">
+                        <input
+                          className="w-40 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm"
+                          placeholder="LATTE_12OZ"
+                          value={productCodeEdits[p.id] ?? ''}
+                          onChange={e => setProductCodeEdits(prev => ({ ...prev, [p.id]: e.target.value }))}
+                        />
+                      </td>
                       <td className="px-3 py-2 font-medium text-gray-900">{p.name}</td>
                       <td className="px-3 py-2 text-gray-700">{p.square_item_id}</td>
                       <td className="px-3 py-2 text-gray-600">{p.category || ''}</td>
+                      <td className="px-3 py-2 text-right">
+                        <button
+                          type="button"
+                          onClick={() => saveProductCode(p.id)}
+                          className="rounded-md bg-white px-3 py-2 text-xs font-semibold text-gray-900 ring-1 ring-gray-200 hover:bg-gray-50"
+                        >
+                          Save
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   {products.length === 0 && !loadingCatalog && (
                     <tr>
-                      <td colSpan={3} className="px-3 py-10 text-center text-sm text-gray-500">
-                        No products yet.
+                      <td colSpan={5} className="px-3 py-10 text-center text-sm text-gray-500">
+                        No products yet. Use “Sync from Square” above or add one manually.
                       </td>
                     </tr>
                   )}
@@ -1361,6 +1435,11 @@ export default function COGSManagement() {
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
+                {products.length === 0 && !loadingCatalog && (
+                  <p className="mt-2 text-xs text-gray-500">
+                    No products found. Switch to <button type="button" onClick={() => setActiveTab('catalog')} className="font-semibold text-gray-900 underline">Catalog</button> and sync from Square (or add one manually).
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Effective From</label>
