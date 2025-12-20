@@ -24,11 +24,14 @@ function getLocationId() {
 }
 
 // Catalog API
-export async function listCatalogObjects(types?: string[]) {
+export async function listCatalogObjects(types?: string[], cursor?: string) {
   try {
     const url = new URL(`${SQUARE_BASE_URL}/v2/catalog/list`)
     if (types) {
       url.searchParams.append('types', types.join(','))
+    }
+    if (cursor) {
+      url.searchParams.append('cursor', cursor)
     }
 
     const response = await fetch(url.toString(), {
