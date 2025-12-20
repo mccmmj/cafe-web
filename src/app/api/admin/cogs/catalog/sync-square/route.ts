@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminAuth, isAdminAuthSuccess } from '@/lib/admin/middleware'
 import { createServiceClient } from '@/lib/supabase/server'
-import { searchCatalogItems } from '@/lib/square/fetch-client'
+import { listCatalogObjects } from '@/lib/square/fetch-client'
 
 type SquareCatalogObject = {
   type?: string
@@ -11,14 +11,11 @@ type SquareCatalogObject = {
     name?: string
     category_id?: string
     product_type?: string
-    variations?: Array<{
-      type?: string
-      id?: string
-      is_deleted?: boolean
-      item_variation_data?: {
-        name?: string
-      }
-    }>
+    variations?: Array<{ id?: string }>
+  }
+  item_variation_data?: {
+    item_id?: string
+    name?: string
   }
   category_data?: {
     name?: string
@@ -32,11 +29,7 @@ async function fetchAllSquareCatalogObjects(objectTypes: string[]) {
 
   while (pages < 25) {
     pages += 1
-    const payload = (await searchCatalogItems({
-      object_types: objectTypes,
-      cursor,
-      limit: 1000,
-    })) as { objects?: unknown[]; cursor?: unknown }
+    const payload = (await listCatalogObjects(objectTypes, cursor)) as { objects?: unknown[]; cursor?: unknown }
 
     const batch = Array.isArray(payload.objects) ? (payload.objects as SquareCatalogObject[]) : []
     objects.push(...batch)
@@ -56,9 +49,17 @@ function buildSellableName(itemName: string, variationName: string) {
   return `${normalizedItem} - ${normalizedVariation}`
 }
 
+function isAllowedProductType(value: string | null) {
+  if (!value) return true
+  return value === 'REGULAR' || value === 'FOOD_AND_BEV'
+}
+
 export async function POST(request: NextRequest) {
   const authResult = await requireAdminAuth(request)
   if (!isAdminAuthSuccess(authResult)) return authResult
+
+  const url = new URL(request.url)
+  const dryRun = url.searchParams.get('dryRun') === '1'
 
   if (!process.env.SQUARE_ACCESS_TOKEN) {
     return NextResponse.json({ error: 'Missing SQUARE_ACCESS_TOKEN; Square sync is not configured.' }, { status: 500 })
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const objects = await fetchAllSquareCatalogObjects(['ITEM', 'CATEGORY'])
+    const objects = await fetchAllSquareCatalogObjects(['ITEM', 'ITEM_VARIATION', 'CATEGORY'])
 
     const categoryNameById = new Map<string, string>()
     for (const obj of objects) {
@@ -82,14 +83,46 @@ export async function POST(request: NextRequest) {
     const productsToUpsert: Array<{ square_item_id: string; name: string; category: string | null; is_active: boolean }> = []
     const variationsToUpsert: Array<{ square_variation_id: string; square_item_id: string; name: string; is_active: boolean }> = []
 
+    let itemsSeen = 0
+    let categoriesSeen = 0
+    let itemsSkippedNonRegular = 0
+    let itemsSkippedMissingName = 0
+    let variationsSeen = 0
+    let variationsSkippedMissingName = 0
+    let variationsSkippedMissingItemId = 0
+    let variationsSkippedMissingProduct = 0
+    const productTypeCounts: Record<string, number> = {}
+    const productTypeExamples: Array<{ id: string; name: string; product_type: string | null }> = []
+
+    const productNameBySquareItemId = new Map<string, string>()
+
     for (const obj of objects) {
+      if (obj.type === 'CATEGORY') {
+        categoriesSeen += 1
+        continue
+      }
       if (obj.type !== 'ITEM') continue
       if (typeof obj.id !== 'string') continue
+      itemsSeen += 1
       const itemName = typeof obj.item_data?.name === 'string' ? obj.item_data.name.trim() : ''
-      if (!itemName) continue
+      if (!itemName) {
+        itemsSkippedMissingName += 1
+        continue
+      }
 
       const productType = typeof obj.item_data?.product_type === 'string' ? obj.item_data.product_type : null
-      if (productType && productType !== 'REGULAR') continue
+      if (productType) {
+        productTypeCounts[productType] = (productTypeCounts[productType] ?? 0) + 1
+      } else {
+        productTypeCounts['(missing)'] = (productTypeCounts['(missing)'] ?? 0) + 1
+      }
+      if (productTypeExamples.length < 10) {
+        productTypeExamples.push({ id: obj.id, name: itemName, product_type: productType })
+      }
+      if (!isAllowedProductType(productType)) {
+        itemsSkippedNonRegular += 1
+        continue
+      }
 
       const categoryId = typeof obj.item_data?.category_id === 'string' ? obj.item_data.category_id : null
       const categoryName = categoryId ? (categoryNameById.get(categoryId) ?? null) : null
@@ -102,20 +135,62 @@ export async function POST(request: NextRequest) {
         is_active: isActive,
       })
 
-      const variations = Array.isArray(obj.item_data?.variations) ? obj.item_data?.variations : []
-      for (const variation of variations) {
-        if (variation?.type !== 'ITEM_VARIATION') continue
-        if (typeof variation.id !== 'string') continue
-        const variationName = typeof variation.item_variation_data?.name === 'string' ? variation.item_variation_data.name : ''
-        const sellableName = buildSellableName(itemName, variationName)
-        if (!sellableName) continue
-        variationsToUpsert.push({
-          square_variation_id: variation.id,
-          square_item_id: obj.id,
-          name: sellableName,
-          is_active: variation.is_deleted !== true,
-        })
+      productNameBySquareItemId.set(obj.id, itemName)
+    }
+
+    for (const obj of objects) {
+      if (obj.type !== 'ITEM_VARIATION') continue
+      if (typeof obj.id !== 'string') continue
+      variationsSeen += 1
+
+      const itemId = typeof obj.item_variation_data?.item_id === 'string' ? obj.item_variation_data.item_id : ''
+      if (!itemId) {
+        variationsSkippedMissingItemId += 1
+        continue
       }
+      const productName = productNameBySquareItemId.get(itemId)
+      if (!productName) {
+        variationsSkippedMissingProduct += 1
+        continue
+      }
+
+      const variationName = typeof obj.item_variation_data?.name === 'string' ? obj.item_variation_data.name : ''
+      const sellableName = buildSellableName(productName, variationName)
+      if (!sellableName) {
+        variationsSkippedMissingName += 1
+        continue
+      }
+
+      variationsToUpsert.push({
+        square_variation_id: obj.id,
+        square_item_id: itemId,
+        name: sellableName,
+        is_active: obj.is_deleted !== true,
+      })
+    }
+
+    const debug = {
+      squareObjects: objects.length,
+      itemsSeen,
+      categoriesSeen,
+      itemsSkippedNonRegular,
+      itemsSkippedMissingName,
+      variationsSeen,
+      variationsSkippedMissingName,
+      variationsSkippedMissingItemId,
+      variationsSkippedMissingProduct,
+      productTypeCounts,
+      productTypeExamples,
+    }
+
+    if (dryRun) {
+      return NextResponse.json({
+        ok: true,
+        dryRun: true,
+        productsFound: productsToUpsert.length,
+        sellablesFound: variationsToUpsert.length,
+        debug,
+      })
     }
 
     const supabase = createServiceClient()
@@ -171,6 +246,7 @@ export async function POST(request: NextRequest) {
       ok: true,
       productsUpserted: productsToUpsert.length,
       sellablesUpserted: sellablesToUpsert.length,
+      debug,
     })
   } catch (e) {
     return NextResponse.json(
@@ -179,4 +255,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-
