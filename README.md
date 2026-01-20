@@ -266,6 +266,10 @@ The system includes self-documenting API endpoints. Send GET requests to any API
 
 See `doc/cogs-recipes-sheets.md`.
 
+## COGS Product Codes (Google Sheets)
+
+See `doc/cogs-product-codes-sheets.md`.
+
 ## 🔐 Security Features
 
 - **Environment Variable Validation**: Runtime validation prevents build failures
