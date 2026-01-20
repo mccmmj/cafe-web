@@ -21,6 +21,8 @@
     "audit-square-mapping": "node scripts/audit-square-inventory-mapping.js",
     "fix-square-mapping": "node scripts/fix-square-inventory-mapping.js",
     "import-cogs-recipes": "node scripts/import-cogs-recipes-from-sheets.js",
+    "import-cogs-product-codes": "node scripts/import-cogs-product-codes-from-sheets.js",
+    "export-cogs-product-codes-template": "node scripts/export-cogs-product-code-mapping-template.js",
     "db:migrate": "npx supabase db push",
     "db:reset": "npx supabase db reset",
     "db:generate": "npx supabase gen types typescript --local",

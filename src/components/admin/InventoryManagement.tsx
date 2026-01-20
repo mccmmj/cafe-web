@@ -17,6 +17,7 @@ import {
   RefreshCw,
   CloudDownload,
   Building2,
+  Link2,
   ClipboardList,
   Settings,
   MoreVertical,
@@ -71,6 +72,7 @@ const InventoryManagement = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [stockFilter, setStockFilter] = useState('all') // all, low, critical, out_of_stock
   const [supplierFilter, setSupplierFilter] = useState('all') // all, or supplier_id
+  const [squareMatchFilter, setSquareMatchFilter] = useState('all') // all, matched, unmatched
   const [showArchived, setShowArchived] = useState(false)
   
   // Modal states
@@ -330,8 +332,18 @@ const InventoryManagement = () => {
     })()
 
     const matchesSupplierFilter = supplierFilter === 'all' || item.supplier_id === supplierFilter
+    const matchesSquareFilter = (() => {
+      switch (squareMatchFilter) {
+        case 'matched':
+          return Boolean(item.square_item_id)
+        case 'unmatched':
+          return !item.square_item_id
+        default:
+          return true
+      }
+    })()
 
-    return matchesSearch && matchesStockFilter && matchesSupplierFilter
+    return matchesSearch && matchesStockFilter && matchesSupplierFilter && matchesSquareFilter
   })
 
   // Calculate summary statistics
@@ -570,6 +582,23 @@ const InventoryManagement = () => {
                     <option value="low">Low Stock</option>
                     <option value="critical">Critical Stock</option>
                     <option value="out_of_stock">Out of Stock</option>
+                  </select>
+                  <Filter className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
+                </div>
+              </div>
+
+              {/* Square Match Filter */}
+              <div className="sm:w-56">
+                <div className="relative">
+                  <Link2 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <select
+                    value={squareMatchFilter}
+                    onChange={(e) => setSquareMatchFilter(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent appearance-none"
+                  >
+                    <option value="all">All Square Links</option>
+                    <option value="matched">Matched to Square</option>
+                    <option value="unmatched">Not Matched</option>
                   </select>
                   <Filter className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
                 </div>
