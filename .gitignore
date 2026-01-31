@@ -50,3 +50,7 @@ next-env.d.ts
 # local caches
 .cache/
 /tesseract-data/
+
+# KDS images (cafe-specific configuration)
+/public/images/kds/**
+!/public/images/kds/README.md
